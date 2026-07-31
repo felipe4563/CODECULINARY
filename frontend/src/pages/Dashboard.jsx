@@ -8,7 +8,8 @@ import { useAuthStore } from '../store/authStore';
 import { useThemeStore } from '../store/themeStore';
 import { getVentas } from '../api/ventas';
 import { getEstadoCajas } from '../api/caja';
-import { TrendingUp, ShoppingBag, Wallet, XCircle, CalendarDays } from 'lucide-react';
+import { getLibroCaja } from '../api/libroCaja';
+import { TrendingUp, TrendingDown, PiggyBank, ShoppingBag, Wallet, XCircle, CalendarDays } from 'lucide-react';
 
 /* ─── Paleta de colores ───────────────────────────────────────── */
 const PALETA = ['#6366f1','#10b981','#f59e0b','#ec4899','#3b82f6','#14b8a6','#f97316','#8b5cf6'];
@@ -19,6 +20,8 @@ const COLORES_METODO = {
   transferencia: '#f59e0b',
   otro:          '#94a3b8',
 };
+
+const COLOR_GASTOS = '#f97316';
 
 const MESES      = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const MESES_FULL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -46,15 +49,17 @@ const saludo = () => {
 };
 
 /* ─── Tooltips ────────────────────────────────────────────────── */
+const CLAVES_MONEDA = ['total', 'ingresos', 'gastos'];
+
 function TooltipVentas({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-xl px-3.5 py-2.5 text-xs min-w-[110px]">
-      <p className="font-semibold text-gray-700 dark:text-gray-200 mb-1.5 border-b border-gray-100 dark:border-gray-700 pb-1">{label}</p>
+    <div className="bg-card border border-border rounded-2xl shadow-xl px-3.5 py-2.5 text-xs min-w-[110px]">
+      <p className="font-semibold text-foreground mb-1.5 border-b border-border pb-1">{label}</p>
       {payload.map(p => (
         <p key={p.dataKey} className="flex items-center gap-1.5 mt-0.5" style={{ color: p.color }}>
           <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: p.color }} />
-          {p.name}: <span className="font-medium">{p.dataKey === 'total' ? fmt(p.value) : p.value}</span>
+          {p.name}: <span className="font-medium">{CLAVES_MONEDA.includes(p.dataKey) ? fmt(p.value) : p.value}</span>
         </p>
       ))}
     </div>
@@ -65,9 +70,9 @@ function TooltipPie({ active, payload }) {
   if (!active || !payload?.length) return null;
   const { name, value, percent } = payload[0];
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-xl px-3.5 py-2.5 text-xs">
-      <p className="font-semibold text-gray-700 dark:text-gray-200 capitalize mb-0.5">{name}</p>
-      <p className="text-gray-500 dark:text-gray-400">{fmt(value)}</p>
+    <div className="bg-card border border-border rounded-2xl shadow-xl px-3.5 py-2.5 text-xs">
+      <p className="font-semibold text-foreground capitalize mb-0.5">{name}</p>
+      <p className="text-muted-foreground">{fmt(value)}</p>
       <p className="font-bold" style={{ color: payload[0].payload.fill }}>{(percent * 100).toFixed(1)}%</p>
     </div>
   );
@@ -76,8 +81,8 @@ function TooltipPie({ active, payload }) {
 function TooltipBar({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-xl px-3.5 py-2.5 text-xs">
-      <p className="font-semibold text-gray-700 dark:text-gray-200 mb-1">{label}</p>
+    <div className="bg-card border border-border rounded-2xl shadow-xl px-3.5 py-2.5 text-xs">
+      <p className="font-semibold text-foreground mb-1">{label}</p>
       <p className="font-medium" style={{ color: payload[0].fill ?? payload[0].color }}>
         {payload[0].value} unidades
       </p>
@@ -91,13 +96,14 @@ const CARD_PALETTE = {
   emerald: { bg: 'bg-emerald-50 dark:bg-emerald-500/10', icon: 'text-emerald-600 dark:text-emerald-400', bar: 'bg-emerald-500', val: 'text-emerald-700 dark:text-emerald-300' },
   amber:   { bg: 'bg-amber-50 dark:bg-amber-500/10',  icon: 'text-amber-600 dark:text-amber-400',  bar: 'bg-amber-500',   val: 'text-amber-700 dark:text-amber-300' },
   red:     { bg: 'bg-red-50 dark:bg-red-500/10',      icon: 'text-red-500 dark:text-red-400',      bar: 'bg-red-500',     val: 'text-red-700 dark:text-red-300' },
+  orange:  { bg: 'bg-orange-50 dark:bg-orange-500/10', icon: 'text-orange-600 dark:text-orange-400', bar: 'bg-orange-500', val: 'text-orange-700 dark:text-orange-300' },
 };
 
 function StatCard({ icono: Icono, titulo, valor, sub, color, cargando, delay = 0 }) {
   const c = CARD_PALETTE[color];
   return (
     <div
-      className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4 flex items-start gap-3 shadow-sm hover:shadow-md transition-shadow overflow-hidden relative"
+      className="bg-card rounded-2xl border border-border p-4 flex items-start gap-3 shadow-sm hover:shadow-md transition-shadow overflow-hidden relative"
       style={{ animation: `dashFadeUp 0.5s ease both`, animationDelay: `${delay}ms` }}
     >
       <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl ${c.bar}`} />
@@ -105,12 +111,12 @@ function StatCard({ icono: Icono, titulo, valor, sub, color, cargando, delay = 0
         <Icono className={`w-4 h-4 sm:w-5 sm:h-5 ${c.icon}`} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{titulo}</p>
+        <p className="text-xs font-medium text-muted-foreground">{titulo}</p>
         {cargando
-          ? <div className="h-7 w-24 mt-1 rounded-lg bg-gray-100 dark:bg-gray-700 animate-pulse" />
+          ? <div className="h-7 w-24 mt-1 rounded-lg bg-muted animate-pulse" />
           : <p className={`text-xl sm:text-2xl font-bold leading-tight mt-0.5 ${c.val}`}>{valor}</p>
         }
-        {sub && !cargando && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{sub}</p>}
+        {sub && !cargando && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
       </div>
     </div>
   );
@@ -120,25 +126,25 @@ function StatCard({ icono: Icono, titulo, valor, sub, color, cargando, delay = 0
 function ChartCard({ titulo, accent = '#6366f1', children, delay = 0 }) {
   return (
     <div
-      className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4 sm:p-5 shadow-sm"
+      className="bg-card rounded-2xl border border-border p-4 sm:p-5 shadow-sm"
       style={{ animation: `dashFadeUp 0.5s ease both`, animationDelay: `${delay}ms` }}
     >
       <div className="flex items-center gap-2 mb-4">
         <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: accent }} />
-        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{titulo}</h3>
+        <h3 className="text-sm font-semibold text-foreground">{titulo}</h3>
       </div>
       {children}
     </div>
   );
 }
 
-/* ─── Legend personalizada para pie ──────────────────────────── */
+/* ─── Legend personalizada para pie ──────────────────────────– */
 function LeyendaPie({ payload }) {
   if (!payload?.length) return null;
   return (
     <ul className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-2">
       {payload.map(e => (
-        <li key={e.value} className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 capitalize">
+        <li key={e.value} className="flex items-center gap-1.5 text-xs text-muted-foreground capitalize">
           <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: e.color }} />
           {e.value}
         </li>
@@ -174,6 +180,7 @@ export default function Dashboard() {
 
   const puedeVerVentas = tiene(usuario, 'ventas', 'ver');
   const puedeVerCaja   = tiene(usuario, 'caja', 'ver');
+  const puedeVerGastos = tiene(usuario, 'libro_caja', 'ver');
 
   const hoy = new Date();
   const [tipo,   setTipo]   = useState('mes');
@@ -194,6 +201,14 @@ export default function Dashboard() {
     queryKey: ['caja-estado', usuario?.sucursal_activa?.id],
     queryFn: () => getEstadoCajas(usuario?.sucursal_activa?.id),
     enabled: puedeVerCaja && !!usuario?.sucursal_activa?.id,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  const { data: movimientosCaja = [], isLoading: cvGastos } = useQuery({
+    queryKey: ['libro-caja-dashboard'],
+    queryFn: getLibroCaja,
+    enabled: puedeVerGastos,
     refetchInterval: 60_000,
     staleTime: 30_000,
   });
@@ -235,8 +250,23 @@ export default function Dashboard() {
     }),
   [ventas, tipo, diaVal, mesVal, añoVal]);
 
+  const egresosFiltrados = useMemo(() =>
+    movimientosCaja.filter(m => {
+      if (m.tipo !== 'egreso') return false;
+      const d = new Date(m.creado_en);
+      if (tipo === 'dia') return fechaLocalYMD(d) === diaVal;
+      if (tipo === 'mes') {
+        const [y, mm] = mesVal.split('-').map(Number);
+        return d.getFullYear() === y && d.getMonth() === mm - 1;
+      }
+      return d.getFullYear() === Number(añoVal);
+    }),
+  [movimientosCaja, tipo, diaVal, mesVal, añoVal]);
+
   /* ─── métricas ──────────────────────────────────────────────── */
   const totalPeriodo = ventasFiltradas.reduce((s, v) => s + parseFloat(v.total ?? 0), 0);
+  const totalGastosPeriodo = egresosFiltrados.reduce((s, m) => s + parseFloat(m.monto ?? 0), 0);
+  const margenNeto = totalPeriodo - totalGastosPeriodo;
 
   /* ─── datosArea ─────────────────────────────────────────────── */
   const datosArea = useMemo(() => {
@@ -261,6 +291,45 @@ export default function Dashboard() {
       return { label: mes, total: vM.reduce((s, v) => s + parseFloat(v.total ?? 0), 0), pedidos: vM.length };
     });
   }, [ventasFiltradas, tipo, mesVal]);
+
+  /* ─── datosIngresosGastos ───────────────────────────────────── */
+  const datosIngresosGastos = useMemo(() => {
+    if (tipo === 'dia') {
+      return Array.from({ length: 18 }, (_, i) => {
+        const hora = i + 6;
+        const vH = ventasFiltradas.filter(v => new Date(v.creado_en).getHours() === hora);
+        const gH = egresosFiltrados.filter(m => new Date(m.creado_en).getHours() === hora);
+        return {
+          label: `${String(hora).padStart(2, '0')}:00`,
+          ingresos: vH.reduce((s, v) => s + parseFloat(v.total ?? 0), 0),
+          gastos: gH.reduce((s, m) => s + parseFloat(m.monto ?? 0), 0),
+        };
+      });
+    }
+    if (tipo === 'mes') {
+      const [y, m] = mesVal.split('-').map(Number);
+      const dias = new Date(y, m, 0).getDate();
+      return Array.from({ length: dias }, (_, i) => {
+        const dia = i + 1;
+        const vD = ventasFiltradas.filter(v => new Date(v.creado_en).getDate() === dia);
+        const gD = egresosFiltrados.filter(m => new Date(m.creado_en).getDate() === dia);
+        return {
+          label: String(dia),
+          ingresos: vD.reduce((s, v) => s + parseFloat(v.total ?? 0), 0),
+          gastos: gD.reduce((s, m) => s + parseFloat(m.monto ?? 0), 0),
+        };
+      });
+    }
+    return MESES.map((mes, i) => {
+      const vM = ventasFiltradas.filter(v => new Date(v.creado_en).getMonth() === i);
+      const gM = egresosFiltrados.filter(m => new Date(m.creado_en).getMonth() === i);
+      return {
+        label: mes,
+        ingresos: vM.reduce((s, v) => s + parseFloat(v.total ?? 0), 0),
+        gastos: gM.reduce((s, m) => s + parseFloat(m.monto ?? 0), 0),
+      };
+    });
+  }, [ventasFiltradas, egresosFiltrados, tipo, mesVal]);
 
   /* ─── datosMetodo ───────────────────────────────────────────── */
   const datosMetodo = useMemo(() => {
@@ -348,42 +417,39 @@ export default function Dashboard() {
 
         {/* ── Header ──────────────────────────────────────────── */}
         <div
-          className="rounded-2xl p-5 sm:p-6 text-white relative overflow-hidden"
-          style={{
-            background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #2563eb 100%)',
-            animation: 'dashFadeIn 0.4s ease both',
-          }}
+          className="rounded-2xl p-5 sm:p-6 bg-primary text-primary-foreground relative overflow-hidden"
+          style={{ animation: 'dashFadeIn 0.4s ease both' }}
         >
           {/* decoración fondo */}
-          <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full opacity-10 bg-white" />
-          <div className="absolute -right-2 bottom-0 w-24 h-24 rounded-full opacity-10 bg-white" />
+          <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full opacity-10 bg-primary-foreground" />
+          <div className="absolute -right-2 bottom-0 w-24 h-24 rounded-full opacity-10 bg-primary-foreground" />
 
-          <p className="text-indigo-200 text-xs sm:text-sm relative capitalize">
+          <p className="text-primary-foreground/70 text-xs sm:text-sm relative capitalize">
             {new Date().toLocaleDateString('es-BO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
           <h1 className="text-xl sm:text-2xl font-bold mt-1 relative">
             {saludo()}, {usuario?.nombre?.split(' ')[0]} 👋
           </h1>
-          <p className="text-indigo-300 text-xs sm:text-sm mt-0.5 relative">{usuario?.rol?.nombre ?? 'Panel principal'}</p>
+          <p className="text-primary-foreground/60 text-xs sm:text-sm mt-0.5 relative">{usuario?.rol?.nombre ?? 'Panel principal'}</p>
         </div>
 
         {/* ── Filtros ─────────────────────────────────────────── */}
         <div
-          className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-3 sm:p-4 shadow-sm"
+          className="bg-card rounded-2xl border border-border p-3 sm:p-4 shadow-sm"
           style={{ animation: 'dashFadeUp 0.4s ease both', animationDelay: '80ms' }}
         >
           <div className="flex flex-col gap-2.5">
             <div className="flex flex-wrap items-center gap-2">
               {/* tabs */}
-              <div className="flex gap-1 bg-gray-100 dark:bg-gray-700/60 rounded-xl p-1">
+              <div className="flex gap-1 bg-muted rounded-xl p-1">
                 {[['dia', 'Día'], ['mes', 'Mes'], ['año', 'Año']].map(([val, lbl]) => (
                   <button
                     key={val}
                     onClick={() => setTipo(val)}
                     className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 ${
                       tipo === val
-                        ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/30'
-                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                        ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/30'
+                        : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     {lbl}
@@ -393,22 +459,22 @@ export default function Dashboard() {
 
               {/* selector fecha */}
               <div className="flex items-center gap-2 flex-1 min-w-0">
-                <CalendarDays className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                <CalendarDays className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 {tipo === 'dia' && (
                   <input type="date" value={diaVal} max={fechaLocalYMD(hoy)}
                     onChange={e => setDiaVal(e.target.value)}
-                    className="flex-1 min-w-0 text-xs sm:text-sm px-2 sm:px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="flex-1 min-w-0 text-xs sm:text-sm px-2 sm:px-3 py-1.5 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                 )}
                 {tipo === 'mes' && (
                   <input type="month" value={mesVal} max={fechaLocalYM(hoy)}
                     onChange={e => setMesVal(e.target.value)}
-                    className="flex-1 min-w-0 text-xs sm:text-sm px-2 sm:px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="flex-1 min-w-0 text-xs sm:text-sm px-2 sm:px-3 py-1.5 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                 )}
                 {tipo === 'año' && (
                   <select value={añoVal} onChange={e => setAñoVal(e.target.value)}
-                    className="text-xs sm:text-sm px-2 sm:px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="text-xs sm:text-sm px-2 sm:px-3 py-1.5 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   >
                     {AÑOS.map(y => <option key={y} value={y}>{y}</option>)}
                   </select>
@@ -416,7 +482,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <span className="text-xs text-gray-400 dark:text-gray-500 capitalize font-medium">{labelPeriodo}</span>
+            <span className="text-xs text-muted-foreground capitalize font-medium">{labelPeriodo}</span>
           </div>
         </div>
 
@@ -438,15 +504,27 @@ export default function Dashboard() {
               sub={canceladasFiltradas.length > 0 ? 'En el período' : 'Sin cancelaciones'}
               color="red" cargando={cvVentas} delay={280}
             />
+            {puedeVerGastos && (
+              <>
+                <StatCard icono={TrendingDown} titulo="Gastos del período" valor={fmt(totalGastosPeriodo)}
+                  sub={`${egresosFiltrados.length} egreso${egresosFiltrados.length !== 1 ? 's' : ''}`}
+                  color="orange" cargando={cvGastos} delay={320}
+                />
+                <StatCard icono={PiggyBank} titulo="Margen neto" valor={fmt(margenNeto)}
+                  sub="Ingresos - gastos"
+                  color={margenNeto >= 0 ? 'emerald' : 'red'} cargando={cvVentas || cvGastos} delay={360}
+                />
+              </>
+            )}
           </div>
         )}
 
         {/* ── Sin datos ────────────────────────────────────────── */}
         {!cvVentas && puedeVerVentas && !haySuficientesDatos && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 py-16 flex flex-col items-center gap-2 text-gray-400 dark:text-gray-500 shadow-sm"
+          <div className="bg-card rounded-2xl border border-border py-16 flex flex-col items-center gap-2 text-muted-foreground shadow-sm"
             style={{ animation: 'dashFadeUp 0.4s ease both', animationDelay: '200ms' }}
           >
-            <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+            <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
               <ShoppingBag className="w-7 h-7 opacity-40" />
             </div>
             <p className="text-sm font-medium">Sin ventas en el período seleccionado</p>
@@ -458,15 +536,15 @@ export default function Dashboard() {
         {puedeVerVentas && haySuficientesDatos && (
           <ChartCard titulo={`Ingresos — ${labelPeriodo}`} accent="#6366f1" delay={340}>
             {cvVentas ? (
-              <div className="h-56 rounded-xl bg-gray-100 dark:bg-gray-700 animate-pulse" />
+              <div className="h-56 rounded-xl bg-muted animate-pulse" />
             ) : (
               <div className="h-44 sm:h-56 md:h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={datosArea} margin={{ top: 10, right: isSm ? 4 : 10, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="gradIngresos" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%"   stopColor="#6366f1" stopOpacity={0.35} />
-                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0.02} />
+                        <stop offset="0%"   stopColor="hsl(var(--primary))" stopOpacity={0.35} />
+                        <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.02} />
                       </linearGradient>
                       <linearGradient id="gradPedidos" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%"   stopColor="#10b981" stopOpacity={0.3} />
@@ -503,13 +581,67 @@ export default function Dashboard() {
                       formatter={v => <span style={{ fontSize: isSm ? 10 : 12, color: tickColor }}>{v === 'total' ? 'Ingresos (Bs)' : 'Pedidos'}</span>}
                     />
                     <Area yAxisId="left"  type="monotone" dataKey="total"   name="total"
-                      stroke="#6366f1" strokeWidth={2.5} fill="url(#gradIngresos)"
-                      dot={false} activeDot={{ r: 5, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }}
+                      stroke="hsl(var(--primary))" strokeWidth={2.5} fill="url(#gradIngresos)"
+                      dot={false} activeDot={{ r: 5, fill: 'hsl(var(--primary))', strokeWidth: 2, stroke: '#fff' }}
                       isAnimationActive animationDuration={900} animationEasing="ease-out"
                     />
                     <Area yAxisId={isSm ? 'left' : 'right'} type="monotone" dataKey="pedidos" name="pedidos"
                       stroke="#10b981" strokeWidth={2} fill="url(#gradPedidos)"
                       dot={false} activeDot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }}
+                      isAnimationActive animationDuration={900} animationEasing="ease-out" animationBegin={200}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </ChartCard>
+        )}
+
+        {/* ── Gráfico Ingresos vs Gastos ────────────────────────── */}
+        {puedeVerVentas && puedeVerGastos && haySuficientesDatos && (
+          <ChartCard titulo={`Ingresos vs Gastos — ${labelPeriodo}`} accent={COLOR_GASTOS} delay={380}>
+            {(cvVentas || cvGastos) ? (
+              <div className="h-56 rounded-xl bg-muted animate-pulse" />
+            ) : (
+              <div className="h-44 sm:h-56 md:h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={datosIngresosGastos} margin={{ top: 10, right: isSm ? 4 : 10, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="gradIngresosVsGastos" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                        <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.02} />
+                      </linearGradient>
+                      <linearGradient id="gradGastos" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor={COLOR_GASTOS} stopOpacity={0.3} />
+                        <stop offset="100%" stopColor={COLOR_GASTOS} stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke={gridColor} strokeDasharray="4 4" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: tickSize, fill: tickColor }}
+                      tickLine={false} axisLine={false}
+                      interval={tipo === 'dia' ? (isSm ? 3 : 1) : tipo === 'mes' ? (isSm ? 6 : 3) : 0}
+                    />
+                    <YAxis
+                      tick={{ fontSize: tickSize, fill: tickColor }}
+                      tickLine={false} axisLine={false}
+                      tickFormatter={v => v === 0 ? '' : `${v}`}
+                      width={yAxisW}
+                    />
+                    <Tooltip content={<TooltipVentas />} />
+                    <Legend
+                      iconType="circle" iconSize={8}
+                      formatter={v => <span style={{ fontSize: isSm ? 10 : 12, color: tickColor }}>{v === 'ingresos' ? 'Ingresos (Bs)' : 'Gastos (Bs)'}</span>}
+                    />
+                    <Area type="monotone" dataKey="ingresos" name="ingresos"
+                      stroke="hsl(var(--primary))" strokeWidth={2.5} fill="url(#gradIngresosVsGastos)"
+                      dot={false} activeDot={{ r: 5, fill: 'hsl(var(--primary))', strokeWidth: 2, stroke: '#fff' }}
+                      isAnimationActive animationDuration={900} animationEasing="ease-out"
+                    />
+                    <Area type="monotone" dataKey="gastos" name="gastos"
+                      stroke={COLOR_GASTOS} strokeWidth={2} fill="url(#gradGastos)"
+                      dot={false} activeDot={{ r: 4, fill: COLOR_GASTOS, strokeWidth: 2, stroke: '#fff' }}
                       isAnimationActive animationDuration={900} animationEasing="ease-out" animationBegin={200}
                     />
                   </AreaChart>
@@ -526,7 +658,7 @@ export default function Dashboard() {
             {/* Métodos de pago */}
             <ChartCard titulo="Métodos de pago" accent="#f59e0b" delay={440}>
               {datosMetodo.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-10">Sin datos de pagos</p>
+                <p className="text-xs text-muted-foreground text-center py-10">Sin datos de pagos</p>
               ) : (
                 <div className="h-44 sm:h-56 md:h-60">
                   <ResponsiveContainer width="100%" height="100%">
@@ -559,7 +691,7 @@ export default function Dashboard() {
             {/* Top productos */}
             <ChartCard titulo="Productos más vendidos" accent="#ec4899" delay={500}>
               {topProductos.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-10">Sin datos de productos</p>
+                <p className="text-xs text-muted-foreground text-center py-10">Sin datos de productos</p>
               ) : (
                 <div className="h-44 sm:h-56 md:h-60">
                   <ResponsiveContainer width="100%" height="100%">
@@ -644,7 +776,7 @@ export default function Dashboard() {
 
         {/* sin permiso */}
         {!puedeVerVentas && (
-          <div className="text-center py-16 text-gray-400 dark:text-gray-500">
+          <div className="text-center py-16 text-muted-foreground">
             <p className="text-sm">Sin permiso para ver estadísticas de ventas.</p>
           </div>
         )}
