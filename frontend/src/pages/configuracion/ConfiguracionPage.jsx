@@ -102,8 +102,8 @@ function TabNegocio({ puedeEditar }) {
       zona_horaria:   config.zona_horaria   ?? 'America/La_Paz',
       pie_ticket:     config.pie_ticket     ?? '¡Gracias por su preferencia!',
       logo:           config.logo           ?? '',
-      color_primario:   config.color_primario   ?? '#245b62',
-      color_secundario: config.color_secundario ?? '#d97706',
+      color_primario:   config.color_primario   ?? '',
+      color_secundario: config.color_secundario ?? '',
     });
   }
 
@@ -118,6 +118,13 @@ function TabNegocio({ puedeEditar }) {
 
   function set(k, v) {
     setForm(f => ({ ...f, [k]: v }));
+  }
+
+  function guardarNegocio() {
+    const datos = { ...form };
+    if (!datos.color_primario) delete datos.color_primario;
+    if (!datos.color_secundario) delete datos.color_secundario;
+    guardar.mutate(datos);
   }
 
   async function handleLogo(e) {
@@ -254,7 +261,7 @@ function TabNegocio({ puedeEditar }) {
           <div className="flex items-center gap-2">
             <input
               type="color"
-              value={form.color_primario}
+              value={form.color_primario || '#245b62'}
               onChange={e => set('color_primario', e.target.value)}
               disabled={!puedeEditar}
               className="w-10 h-10 rounded-lg border border-gray-200 dark:border-gray-600 bg-transparent disabled:opacity-60"
@@ -264,7 +271,8 @@ function TabNegocio({ puedeEditar }) {
               value={form.color_primario}
               onChange={e => set('color_primario', e.target.value)}
               disabled={!puedeEditar}
-              className="flex-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+              placeholder="#245b62"
+              className="flex-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
             />
           </div>
         </div>
@@ -275,7 +283,7 @@ function TabNegocio({ puedeEditar }) {
           <div className="flex items-center gap-2">
             <input
               type="color"
-              value={form.color_secundario}
+              value={form.color_secundario || '#d97706'}
               onChange={e => set('color_secundario', e.target.value)}
               disabled={!puedeEditar}
               className="w-10 h-10 rounded-lg border border-gray-200 dark:border-gray-600 bg-transparent disabled:opacity-60"
@@ -285,7 +293,8 @@ function TabNegocio({ puedeEditar }) {
               value={form.color_secundario}
               onChange={e => set('color_secundario', e.target.value)}
               disabled={!puedeEditar}
-              className="flex-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+              placeholder="#d97706"
+              className="flex-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
             />
           </div>
         </div>
@@ -294,7 +303,7 @@ function TabNegocio({ puedeEditar }) {
       {puedeEditar && (
         <div className="flex items-center gap-4 pt-2">
           <button
-            onClick={() => guardar.mutate(form)}
+            onClick={guardarNegocio}
             disabled={guardar.isPending}
             className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors disabled:opacity-60"
           >
