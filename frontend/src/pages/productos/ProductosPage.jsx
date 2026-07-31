@@ -434,7 +434,7 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar }) {
 function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucursales, onClose, onGuardar, guardando, error }) {
   const [form, setForm] = useState({
     categoria_id: prod?.categoria_id ?? (categorias[0]?.id ?? ''),
-    grupo_opciones_id: prod?.grupo_opciones?.id ?? '',
+    grupos_opciones: prod?.grupos_opciones?.map(g => ({ id: g.id, nombre: g.nombre, obligatorio: !!g.obligatorio })) ?? [],
     nombre:       prod?.nombre ?? '',
     precio:       prod?.precio ?? '',
     stock:        prod?.stock ?? '',
@@ -449,6 +449,33 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
   const inputFileRef = useRef(null);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  function agregarGrupo(grupoId) {
+    const grupo = gruposOpciones.find(g => g.id === parseInt(grupoId));
+    if (!grupo) return;
+    set('grupos_opciones', [...form.grupos_opciones, { id: grupo.id, nombre: grupo.nombre, obligatorio: false }]);
+  }
+
+  function quitarGrupo(i) {
+    setForm(f => ({ ...f, grupos_opciones: f.grupos_opciones.filter((_, idx) => idx !== i) }));
+  }
+
+  function moverGrupo(i, direccion) {
+    setForm(f => {
+      const destino = i + direccion;
+      if (destino < 0 || destino >= f.grupos_opciones.length) return f;
+      const copia = [...f.grupos_opciones];
+      [copia[i], copia[destino]] = [copia[destino], copia[i]];
+      return { ...f, grupos_opciones: copia };
+    });
+  }
+
+  function toggleObligatorioGrupo(i) {
+    setForm(f => ({
+      ...f,
+      grupos_opciones: f.grupos_opciones.map((g, idx) => idx === i ? { ...g, obligatorio: !g.obligatorio } : g),
+    }));
+  }
 
   async function handleArchivo(e) {
     const archivo = e.target.files?.[0];
@@ -475,7 +502,7 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
   function handleGuardar() {
     const datos = {
       categoria_id: parseInt(form.categoria_id),
-      grupo_opciones_id: form.grupo_opciones_id ? parseInt(form.grupo_opciones_id) : null,
+      grupos_opciones: form.grupos_opciones.map((g, orden) => ({ id: g.id, orden, obligatorio: g.obligatorio })),
       nombre: form.nombre,
       precio: parseFloat(form.precio),
       es_vendible: form.es_vendible,
@@ -568,15 +595,44 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
             </select>
           </div>
           <div className="col-span-2">
-            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Grupo de opciones</label>
-            <select
-              value={form.grupo_opciones_id}
-              onChange={e => set('grupo_opciones_id', e.target.value)}
-              className="w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Ninguno</option>
-              {gruposOpciones.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
-            </select>
+            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Grupos de opciones</label>
+            <div className="space-y-2">
+              {form.grupos_opciones.map((g, i) => (
+                <div key={g.id} className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-700/50 rounded-xl px-3 py-2">
+                  <span className="flex-1 text-sm text-gray-700 dark:text-gray-200 min-w-0 truncate">{i + 1}. {g.nombre}</span>
+                  <label className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={g.obligatorio}
+                      onChange={() => toggleObligatorioGrupo(i)}
+                      className="w-3.5 h-3.5 rounded accent-blue-600"
+                    />
+                    Obligatorio
+                  </label>
+                  <button type="button" onClick={() => moverGrupo(i, -1)} disabled={i === 0} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30 transition-colors">
+                    <ChevronUp className="w-4 h-4" />
+                  </button>
+                  <button type="button" onClick={() => moverGrupo(i, 1)} disabled={i === form.grupos_opciones.length - 1} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30 transition-colors">
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                  <button type="button" onClick={() => quitarGrupo(i)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            {gruposOpciones.filter(g => !form.grupos_opciones.some(fg => fg.id === g.id)).length > 0 && (
+              <select
+                value=""
+                onChange={e => { if (e.target.value) agregarGrupo(e.target.value); }}
+                className="mt-2 w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">+ Agregar grupo...</option>
+                {gruposOpciones.filter(g => !form.grupos_opciones.some(fg => fg.id === g.id)).map(g => (
+                  <option key={g.id} value={g.id}>{g.nombre}</option>
+                ))}
+              </select>
+            )}
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
@@ -775,6 +831,7 @@ function TabOpciones({ puedeCrear, puedeEditar, puedeEliminar }) {
 
 function FormGrupoOpcionesModal({ grupo, onClose, onGuardar, guardando, error }) {
   const [nombre, setNombre] = useState(grupo?.nombre ?? '');
+  const [tipoSeleccion, setTipoSeleccion] = useState(grupo?.tipo_seleccion ?? 'unica');
   const [opciones, setOpciones] = useState(
     grupo?.opciones?.length ? grupo.opciones.map(o => ({ nombre: o.nombre })) : [{ nombre: '' }]
   );
@@ -806,7 +863,7 @@ function FormGrupoOpcionesModal({ grupo, onClose, onGuardar, guardando, error })
       .map(o => o.nombre.trim())
       .filter(Boolean)
       .map((nombre, orden) => ({ nombre, orden }));
-    onGuardar({ nombre, opciones: opcionesValidas });
+    onGuardar({ nombre, tipo_seleccion: tipoSeleccion, opciones: opcionesValidas });
   }
 
   const nombreValido = nombre.trim().length > 0;
@@ -824,6 +881,26 @@ function FormGrupoOpcionesModal({ grupo, onClose, onGuardar, guardando, error })
             placeholder="Ej: Término de cocción, Sabor"
             className="w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
           />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Tipo de selección</label>
+          <div className="grid grid-cols-2 gap-2">
+            {[{ id: 'unica', label: 'Única (elige una)' }, { id: 'multiple', label: 'Múltiple (elige varias)' }].map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTipoSeleccion(t.id)}
+                className={`py-2.5 rounded-xl text-sm font-medium border transition-colors ${
+                  tipoSeleccion === t.id
+                    ? 'bg-blue-600 border-blue-600 text-white'
+                    : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-blue-400 dark:hover:border-blue-500'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div>
