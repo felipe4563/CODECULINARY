@@ -10,10 +10,10 @@ export default function CategoriasBar({ categorias, categoriaActiva, onSeleccion
             key={cat.id ?? 'todos'}
             type="button"
             onClick={() => onSeleccionar(cat.id)}
-            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-950 ${
+            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:focus-visible:ring-offset-background ${
               activa
-                ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
-                : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-blue-300 dark:hover:border-blue-600 hover:text-gray-900 dark:hover:text-gray-200'
+                ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/30'
+                : 'bg-card border border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
             }`}
           >
             {cat.nombre}
