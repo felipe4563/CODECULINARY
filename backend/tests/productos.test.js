@@ -14,7 +14,7 @@ describe('Productos API', () => {
 });
 
 const bcrypt = require('bcryptjs');
-const { Sucursal, ProductoStockSucursal, Categoria, Usuario, Rol, Producto, GrupoOpciones, Opcion } = require('../src/models');
+const { Sucursal, ProductoStockSucursal, Categoria, Usuario, Rol, Producto, GrupoOpciones, Opcion, Pedido, DetallePedido } = require('../src/models');
 
 describe('Stock de productos por sucursal', () => {
   let adminToken, categoriaId, sucursalPrincipalId;
@@ -68,6 +68,24 @@ describe('Stock de productos por sucursal', () => {
       .send({ nombre: 'Producto Editado Test' });
 
     expect(res.status).toBe(200);
+  });
+
+  it('crear un producto con es_pesable=true lo persiste y se puede editar', async () => {
+    const crearRes = await request(app)
+      .post('/api/v1/productos')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ categoria_id: categoriaId, nombre: 'Chorizo Pesable Test', precio: 27, es_pesable: true });
+
+    expect(crearRes.status).toBe(201);
+    expect(crearRes.body.datos.es_pesable).toBe(1);
+
+    const editarRes = await request(app)
+      .put(`/api/v1/productos/${crearRes.body.datos.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ es_pesable: false });
+
+    expect(editarRes.status).toBe(200);
+    expect(editarRes.body.datos.es_pesable).toBe(0);
   });
 });
 
@@ -184,5 +202,94 @@ describe('Productos — grupo de opciones', () => {
       .send({ categoria_id: categoriaId, nombre: 'Producto Sin Grupo Test', precio: 20 });
 
     expect(crear.body.datos.grupo_opciones).toBeNull();
+  });
+});
+
+describe('Productos — eliminar y filtro de inactivos', () => {
+  let adminToken, categoriaId, sucursalId, usuarioId;
+
+  beforeAll(async () => {
+    const login = await request(app).post('/api/v1/auth/login').send({ email: 'admin@restaurante.com', contrasena: process.env.ADMIN_PASSWORD || 'admin123' });
+    adminToken = login.body.datos.token;
+
+    const admin = await Usuario.findOne({ where: { email: 'admin@restaurante.com' } });
+    usuarioId = admin.id;
+    const principal = await Sucursal.findOne({ where: { nombre: 'Sucursal Principal' } });
+    sucursalId = principal.id;
+
+    const categoria = await Categoria.create({ nombre: 'Categoria Eliminar Productos Test' });
+    categoriaId = categoria.id;
+  });
+
+  afterAll(async () => {
+    await Producto.destroy({ where: { categoria_id: categoriaId } });
+    await Categoria.destroy({ where: { id: categoriaId } });
+  });
+
+  it('DELETE de un producto sin ventas lo borra de verdad', async () => {
+    const crear = await request(app)
+      .post('/api/v1/productos')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ categoria_id: categoriaId, nombre: 'Producto Sin Ventas Test', precio: 10 });
+    const productoId = crear.body.datos.id;
+
+    const res = await request(app)
+      .delete(`/api/v1/productos/${productoId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.datos.eliminado).toBe(true);
+
+    const enBd = await Producto.findByPk(productoId);
+    expect(enBd).toBeNull();
+  });
+
+  it('DELETE de un producto con ventas lo desactiva en vez de borrarlo', async () => {
+    const crear = await request(app)
+      .post('/api/v1/productos')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ categoria_id: categoriaId, nombre: 'Producto Con Ventas Test', precio: 10 });
+    const productoId = crear.body.datos.id;
+
+    const pedido = await Pedido.create({ sucursal_id: sucursalId, usuario_id: usuarioId, estado: 'completado' });
+    await DetallePedido.create({ pedido_id: pedido.id, producto_id: productoId, cantidad: 1, precio: 10 });
+
+    const res = await request(app)
+      .delete(`/api/v1/productos/${productoId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.datos.eliminado).toBe(false);
+
+    const enBd = await Producto.findByPk(productoId);
+    expect(enBd).not.toBeNull();
+    expect(enBd.activo).toBe(0);
+
+    await DetallePedido.destroy({ where: { pedido_id: pedido.id } });
+    await Pedido.destroy({ where: { id: pedido.id } });
+  });
+
+  it('GET /productos por defecto solo trae activos', async () => {
+    const activo = await Producto.create({ categoria_id: categoriaId, nombre: 'Producto Activo Filtro Test', precio: 10, activo: 1 });
+    const inactivo = await Producto.create({ categoria_id: categoriaId, nombre: 'Producto Inactivo Filtro Test', precio: 10, activo: 0 });
+
+    const res = await request(app).get('/api/v1/productos').set('Authorization', `Bearer ${adminToken}`);
+
+    const nombres = res.body.datos.map(p => p.nombre);
+    expect(nombres).toContain(activo.nombre);
+    expect(nombres).not.toContain(inactivo.nombre);
+  });
+
+  it('GET /productos?solo_inactivos=true solo trae inactivos, no mezcla con activos', async () => {
+    const activo = await Producto.create({ categoria_id: categoriaId, nombre: 'Producto Activo Filtro 2 Test', precio: 10, activo: 1 });
+    const inactivo = await Producto.create({ categoria_id: categoriaId, nombre: 'Producto Inactivo Filtro 2 Test', precio: 10, activo: 0 });
+
+    const res = await request(app)
+      .get('/api/v1/productos?solo_inactivos=true')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const nombres = res.body.datos.map(p => p.nombre);
+    expect(nombres).toContain(inactivo.nombre);
+    expect(nombres).not.toContain(activo.nombre);
   });
 });

@@ -1,4 +1,4 @@
-const { Categoria, Producto, Sucursal, GrupoOpciones, Opcion } = require('../../models');
+const { Categoria, Producto, Sucursal, GrupoOpciones, Opcion, DetallePedido } = require('../../models');
 const sequelize = require('../../config/database');
 const { ajustarStockSucursal, mezclarStockPorSucursal } = require('../inventario/stock.service');
 
@@ -89,9 +89,9 @@ async function eliminarGrupoOpciones(id) {
 
 // --- Productos ---
 
-async function listarProductos({ categoria_id, solo_vendibles, solo_disponibles, order_by, incluir_inactivos } = {}, alcance) {
+async function listarProductos({ categoria_id, solo_vendibles, solo_disponibles, order_by, solo_inactivos } = {}, alcance) {
   const where = {};
-  if (!(incluir_inactivos === 'true' || incluir_inactivos === true)) where.activo = 1;
+  where.activo = (solo_inactivos === 'true' || solo_inactivos === true) ? 0 : 1;
   if (categoria_id) where.categoria_id = categoria_id;
   if (solo_vendibles === 'true' || solo_vendibles === true) where.es_vendible = 1;
 
@@ -104,6 +104,13 @@ async function listarProductos({ categoria_id, solo_vendibles, solo_disponibles,
 
   const productos = await Producto.findAll({
     where,
+    attributes: {
+      include: [
+        // Para decidir en la UI si "Eliminar" va a borrar de verdad o solo
+        // desactivar: un producto con ventas registradas nunca se borra.
+        [sequelize.literal('EXISTS(SELECT 1 FROM detalle_pedidos WHERE producto_id = `Producto`.`id`)'), 'tiene_ventas'],
+      ],
+    },
     include: [
       { model: Categoria, as: 'categoria', attributes: ['id', 'nombre'] },
       { model: GrupoOpciones, as: 'grupo_opciones', attributes: ['id', 'nombre'],
@@ -133,7 +140,7 @@ async function obtenerProducto(id, alcance) {
   return conStock;
 }
 
-async function crearProducto({ categoria_id, nombre, codigo_barras, codigo, precio, costo, stock, sucursal_id, es_vendible, imagen, grupo_opciones_id }, alcance) {
+async function crearProducto({ categoria_id, nombre, codigo_barras, codigo, precio, costo, stock, sucursal_id, es_vendible, imagen, grupo_opciones_id, es_pesable }, alcance) {
   let sucursalDestino;
   const conStock = stock !== undefined && stock !== null;
 
@@ -148,7 +155,7 @@ async function crearProducto({ categoria_id, nombre, codigo_barras, codigo, prec
     }
   }
 
-  const producto = await Producto.create({ categoria_id, nombre, codigo_barras, codigo, precio, costo, stock: conStock ? 0 : null, es_vendible, imagen, grupo_opciones_id });
+  const producto = await Producto.create({ categoria_id, nombre, codigo_barras, codigo, precio, costo, stock: conStock ? 0 : null, es_vendible, imagen, grupo_opciones_id, es_pesable });
 
   if (conStock) {
     await ajustarStockSucursal({ producto_id: producto.id, sucursal_id: sucursalDestino, tipo: 'ajuste', cantidad: stock, usuario_id: alcance.usuario_id, nota: 'Stock inicial' });
@@ -168,7 +175,14 @@ async function actualizarProducto(id, datos, alcance) {
 async function eliminarProducto(id) {
   const p = await Producto.findByPk(id);
   if (!p) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
-  await p.update({ activo: 0 });
+
+  const tieneVentas = await DetallePedido.count({ where: { producto_id: id } });
+  if (tieneVentas > 0) {
+    await p.update({ activo: 0 });
+    return { eliminado: false };
+  }
+  await p.destroy();
+  return { eliminado: true };
 }
 
 module.exports = { listarCategorias, crearCategoria, actualizarCategoria, eliminarCategoria, listarGruposOpciones, crearGrupoOpciones, actualizarGrupoOpciones, eliminarGrupoOpciones, listarProductos, obtenerProducto, crearProducto, actualizarProducto, eliminarProducto };
