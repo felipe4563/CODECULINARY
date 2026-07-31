@@ -59,7 +59,7 @@ export default function SelectorOpcionModal({ producto, onElegir, onClose }) {
     <Modal titulo={`${producto.nombre} — ${grupoActual.nombre}`} onClose={onClose}>
       <div className="space-y-4">
         {grupos.length > 1 && (
-          <p className="text-xs text-gray-400">Paso {paso + 1} de {grupos.length}</p>
+          <p className="text-xs text-muted-foreground">Paso {paso + 1} de {grupos.length}</p>
         )}
 
         {grupoActual.tipo_seleccion === 'multiple' ? (
@@ -72,8 +72,8 @@ export default function SelectorOpcionModal({ producto, onElegir, onClose }) {
                   onClick={() => toggleMultiple(opcion.nombre)}
                   className={`px-4 py-2 rounded-full text-sm font-semibold border transition-all ${
                     multipleElegidas.includes(opcion.nombre)
-                      ? 'bg-blue-600 border-blue-600 text-white'
-                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-blue-400 dark:hover:border-blue-500'
+                      ? 'bg-primary border-primary text-primary-foreground'
+                      : 'bg-card border-border text-muted-foreground hover:border-primary/50'
                   }`}
                 >
                   {opcion.nombre}
@@ -84,7 +84,7 @@ export default function SelectorOpcionModal({ producto, onElegir, onClose }) {
               type="button"
               onClick={confirmarMultiple}
               disabled={grupoActual.obligatorio && multipleElegidas.length === 0}
-              className="w-full px-4 py-2 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-4 py-2 rounded-xl text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {esUltimoPaso ? 'Agregar' : 'Continuar'}
             </button>
@@ -96,7 +96,7 @@ export default function SelectorOpcionModal({ producto, onElegir, onClose }) {
                 key={opcion.id}
                 type="button"
                 onClick={() => elegirUnica(opcion.nombre)}
-                className="px-4 py-2 rounded-full text-sm font-semibold bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-blue-400 dark:hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition-all"
+                className="px-4 py-2 rounded-full text-sm font-semibold bg-card border border-border text-muted-foreground hover:border-primary/50 hover:text-foreground transition-all"
               >
                 {opcion.nombre}
               </button>
@@ -108,7 +108,7 @@ export default function SelectorOpcionModal({ producto, onElegir, onClose }) {
           <button
             type="button"
             onClick={saltarPaso}
-            className="text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             Saltar este paso
           </button>
