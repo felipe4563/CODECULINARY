@@ -17,7 +17,7 @@ export default function Layout() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-100 dark:bg-gray-950 overflow-hidden transition-colors">
+    <div className="flex h-screen bg-background overflow-hidden transition-colors">
       <Sidebar
         visible={sidebarVisible}
         onCerrar={() => setSidebarVisible(false)}
@@ -29,7 +29,7 @@ export default function Layout() {
         <main className="flex-1 overflow-y-auto p-6">
           <Outlet />
         </main>
-        
+
       </div>
     </div>
   );
