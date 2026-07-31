@@ -128,7 +128,7 @@ export default function VentasPage() {
       setModalPeso(prod);
       return;
     }
-    if (prod.grupo_opciones) {
+    if (prod.grupos_opciones?.length > 0) {
       setSelectorOpcion(prod);
       return;
     }
