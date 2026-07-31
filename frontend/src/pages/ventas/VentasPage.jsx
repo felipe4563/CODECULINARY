@@ -177,7 +177,7 @@ export default function VentasPage() {
 
   if (!puedeVer) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3 text-gray-400 dark:text-gray-600">
+      <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
         <AlertCircle className="w-10 h-10" />
         <p className="text-sm font-medium">No tienes permiso para ver ventas</p>
       </div>
@@ -199,22 +199,22 @@ export default function VentasPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
       {/* Header */}
-      <header className="flex items-center justify-between gap-3 pb-3 border-b border-gray-200 dark:border-gray-700 shrink-0">
-        <h1 className="font-bold text-gray-800 dark:text-gray-100">Ventas</h1>
-        <div className="flex md:hidden gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
+      <header className="flex items-center justify-between gap-3 pb-3 border-b border-border shrink-0">
+        <h1 className="font-bold text-foreground">Ventas</h1>
+        <div className="flex md:hidden gap-1 bg-muted p-1 rounded-xl">
           <button
             onClick={() => setTabMobile('productos')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tabMobile === 'productos' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500'}`}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tabMobile === 'productos' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
           >
             Menú
           </button>
           <button
             onClick={() => setTabMobile('orden')}
-            className={`relative px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tabMobile === 'orden' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500'}`}
+            className={`relative px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tabMobile === 'orden' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
           >
             Orden
             {totalItems > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-600 text-white text-[10px] rounded-full flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-primary-foreground text-[10px] rounded-full flex items-center justify-center">
                 {totalItems}
               </span>
             )}
@@ -233,11 +233,11 @@ export default function VentasPage() {
 
           <div className="flex-1 overflow-y-auto mt-2 pb-4">
             {cargandoProductos ? (
-              <div className="flex items-center justify-center h-32 gap-2 text-gray-400">
+              <div className="flex items-center justify-center h-32 gap-2 text-muted-foreground">
                 <RefreshCw className="w-4 h-4 animate-spin" /><span className="text-sm">Cargando...</span>
               </div>
             ) : productos.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-32 gap-2 text-gray-400 dark:text-gray-600">
+              <div className="flex flex-col items-center justify-center h-32 gap-2 text-muted-foreground">
                 <Package className="w-8 h-8" />
                 <p className="text-sm">No hay productos en esta categoría</p>
               </div>
@@ -254,25 +254,25 @@ export default function VentasPage() {
                         !puedeCrear
                           ? 'opacity-50 cursor-not-allowed'
                           : cantidadEnCarrito
-                          ? 'border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30'
-                          : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-sm'
+                          ? 'border-primary bg-primary/10 hover:bg-primary/15'
+                          : 'border-border bg-card hover:border-primary/50 hover:shadow-sm'
                       }`}
                     >
-                      <div className="w-full aspect-square bg-gray-100 dark:bg-gray-700 overflow-hidden">
+                      <div className="w-full aspect-square bg-muted overflow-hidden">
                         {prod.imagen ? (
                           <img src={`${BASE_URL}${prod.imagen}`} alt={prod.nombre} className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
-                            <Package className="w-10 h-10 text-gray-300 dark:text-gray-600" />
+                            <Package className="w-10 h-10 text-muted-foreground" />
                           </div>
                         )}
                       </div>
                       <div className="p-2.5">
-                        <p className="text-sm font-medium text-gray-800 dark:text-gray-100 leading-tight line-clamp-2">{prod.nombre}</p>
-                        <p className="text-sm font-bold text-blue-600 dark:text-blue-400 mt-1">Bs {parseFloat(prod.precio).toFixed(2)}{prod.es_pesable ? '/kg' : ''}</p>
+                        <p className="text-sm font-medium text-foreground leading-tight line-clamp-2">{prod.nombre}</p>
+                        <p className="text-sm font-bold text-primary mt-1">Bs {parseFloat(prod.precio).toFixed(2)}{prod.es_pesable ? '/kg' : ''}</p>
                       </div>
                       {cantidadEnCarrito && !prod.es_pesable && (
-                        <span className="absolute top-2 right-2 w-6 h-6 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center justify-center shadow">
+                        <span className="absolute top-2 right-2 w-6 h-6 bg-primary text-primary-foreground text-xs font-bold rounded-full flex items-center justify-center shadow">
                           {cantidadEnCarrito}
                         </span>
                       )}
@@ -288,19 +288,19 @@ export default function VentasPage() {
         <aside className={`flex flex-col w-full md:w-[320px] lg:w-[360px] xl:w-[400px] shrink-0 overflow-y-auto gap-4 ${tabMobile === 'productos' ? 'hidden md:flex' : 'flex'}`}>
 
           {/* Carrito */}
-          <div className="flex flex-col bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden shrink-0">
-            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+          <div className="flex flex-col bg-card border border-border rounded-2xl overflow-hidden shrink-0">
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <ShoppingCart className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                <span className="font-semibold text-sm text-gray-700 dark:text-gray-200">Orden</span>
+                <ShoppingCart className="w-4 h-4 text-muted-foreground" />
+                <span className="font-semibold text-sm text-foreground">Orden</span>
               </div>
               {carrito.length > 0 && (
-                <button onClick={limpiarTodo} className="text-xs text-red-500 hover:text-red-600">Vaciar</button>
+                <button onClick={limpiarTodo} className="text-xs text-destructive hover:text-destructive/80">Vaciar</button>
               )}
             </div>
-            <div className="max-h-64 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700">
+            <div className="max-h-64 overflow-y-auto divide-y divide-border">
               {carrito.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-24 gap-2 text-gray-300 dark:text-gray-600">
+                <div className="flex flex-col items-center justify-center h-24 gap-2 text-muted-foreground">
                   <ShoppingCart className="w-8 h-8" />
                   <p className="text-xs">Toca un producto para agregarlo</p>
                 </div>
@@ -308,44 +308,44 @@ export default function VentasPage() {
                 carrito.map((it) => (
                   <div key={it.linea_id} className="px-4 py-2.5 flex items-center gap-2">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{it.nombre}</p>
+                      <p className="text-sm font-medium text-foreground truncate">{it.nombre}</p>
                       {it.nota && <p className="text-xs text-amber-600 dark:text-amber-400 truncate">{it.nota}</p>}
                       {it.peso != null ? (
-                        <p className="text-xs text-gray-400">{it.peso.toFixed(3)} kg × Bs {it.precio_kg.toFixed(2)}/kg</p>
+                        <p className="text-xs text-muted-foreground">{it.peso.toFixed(3)} kg × Bs {it.precio_kg.toFixed(2)}/kg</p>
                       ) : (
-                        <p className="text-xs text-gray-400">Bs {it.precio.toFixed(2)} c/u</p>
+                        <p className="text-xs text-muted-foreground">Bs {it.precio.toFixed(2)} c/u</p>
                       )}
                     </div>
                     {it.peso != null ? (
-                      <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 shrink-0">{it.peso.toFixed(3)} kg</span>
+                      <span className="text-sm font-semibold text-foreground shrink-0">{it.peso.toFixed(3)} kg</span>
                     ) : (
                       <div className="flex items-center gap-1 shrink-0">
-                        <button onClick={() => decrementar(it.linea_id)} className="w-6 h-6 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center">
+                        <button onClick={() => decrementar(it.linea_id)} className="w-6 h-6 rounded-lg bg-muted hover:bg-accent hover:text-accent-foreground flex items-center justify-center">
                           <Minus className="w-3 h-3" />
                         </button>
-                        <span className="w-5 text-center text-sm font-semibold text-gray-800 dark:text-gray-100">{it.cantidad}</span>
-                        <button onClick={() => incrementar(it.linea_id)} className="w-6 h-6 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center">
+                        <span className="w-5 text-center text-sm font-semibold text-foreground">{it.cantidad}</span>
+                        <button onClick={() => incrementar(it.linea_id)} className="w-6 h-6 rounded-lg bg-muted hover:bg-accent hover:text-accent-foreground flex items-center justify-center">
                           <Plus className="w-3 h-3" />
                         </button>
                       </div>
                     )}
-                    <button onClick={() => quitar(it.linea_id)} className="shrink-0 p-1 text-gray-300 dark:text-gray-600 hover:text-red-500">
+                    <button onClick={() => quitar(it.linea_id)} className="shrink-0 p-1 text-muted-foreground hover:text-destructive">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ))
               )}
             </div>
-            <div className="px-4 py-3 flex items-center justify-between bg-gray-50 dark:bg-gray-700/40 border-t border-gray-100 dark:border-gray-700">
-              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Total</span>
-              <span className="text-xl font-bold text-gray-900 dark:text-white">Bs {total.toFixed(2)}</span>
+            <div className="px-4 py-3 flex items-center justify-between bg-muted border-t border-border">
+              <span className="text-sm font-medium text-muted-foreground">Total</span>
+              <span className="text-xl font-bold text-foreground">Bs {total.toFixed(2)}</span>
             </div>
           </div>
 
           {/* Mesa / para llevar */}
-          <div className="flex flex-col bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden shrink-0">
-            <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-              <span className="font-semibold text-sm text-gray-700 dark:text-gray-200">Mesa</span>
+          <div className="flex flex-col bg-card border border-border rounded-2xl overflow-hidden shrink-0">
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+              <span className="font-semibold text-sm text-foreground">Mesa</span>
               <button
                 onClick={() => setModalLlevar(true)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
@@ -363,29 +363,29 @@ export default function VentasPage() {
                 disabled={cargandoMesas}
                 className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl border-2 text-left transition-colors ${
                   mesaActual
-                    ? 'border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                    : 'border-dashed border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500'
+                    ? 'border-primary bg-primary/10'
+                    : 'border-dashed border-border hover:border-primary'
                 }`}
               >
-                <LayoutGrid className={`w-4.5 h-4.5 shrink-0 ${mesaActual ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400'}`} />
+                <LayoutGrid className={`w-4.5 h-4.5 shrink-0 ${mesaActual ? 'text-primary' : 'text-muted-foreground'}`} />
                 <span className="flex-1 min-w-0">
                   {mesaActual ? (
                     <>
-                      <span className="block text-sm font-semibold text-gray-800 dark:text-gray-100">{mesaActual.nombre}</span>
-                      <span className="block text-xs text-gray-400">{mesaActual.area?.nombre ?? 'Sin área'} · {mesaActual.asientos} asientos</span>
+                      <span className="block text-sm font-semibold text-foreground">{mesaActual.nombre}</span>
+                      <span className="block text-xs text-muted-foreground">{mesaActual.area?.nombre ?? 'Sin área'} · {mesaActual.asientos} asientos</span>
                     </>
                   ) : (
-                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    <span className="text-sm font-medium text-muted-foreground">
                       {cargandoMesas ? 'Cargando mesas...' : 'Elegir mesa'}
                     </span>
                   )}
                 </span>
-                <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" />
+                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
               </button>
 
               {mesasOcupadas.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1.5">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
                     Mesas ocupadas ({mesasOcupadas.length})
                   </p>
                   <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
@@ -410,7 +410,7 @@ export default function VentasPage() {
             <button
               onClick={() => setModalCobrar(true)}
               disabled={!puedeCobrarAhora}
-              className="w-full flex items-center justify-center gap-2 py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 text-white rounded-xl font-bold text-base transition-colors shadow-sm shrink-0"
+              className="w-full flex items-center justify-center gap-2 py-3.5 bg-primary hover:bg-primary/90 active:bg-primary/80 disabled:opacity-50 text-primary-foreground rounded-xl font-bold text-base transition-colors shadow-sm shrink-0"
             >
               <CreditCard className="w-5 h-5" /> Cobrar
             </button>
@@ -525,26 +525,26 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
         <div className="space-y-5 text-center">
           <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto" />
           <div>
-            <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Total cobrado</p>
-            <p className="text-3xl font-bold text-gray-900 dark:text-white">Bs {total.toFixed(2)}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Total cobrado</p>
+            <p className="text-3xl font-bold text-foreground">Bs {total.toFixed(2)}</p>
+            <p className="text-sm text-muted-foreground mt-1">
               {ventaExitosa.metodoPago === 'qr' ? 'QR / Transferencia' : 'Efectivo'}
             </p>
           </div>
           {reimprimir.isError && (
-            <p className="text-sm text-red-600">No se pudo reimprimir.</p>
+            <p className="text-sm text-destructive">No se pudo reimprimir.</p>
           )}
           <div className="flex justify-center gap-3">
             <button
               onClick={() => reimprimir.mutate()}
               disabled={reimprimir.isPending}
-              className="px-4 py-2 rounded-xl text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-60"
+              className="px-4 py-2 rounded-xl text-sm border border-border text-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-60"
             >
               {reimprimir.isPending ? 'Imprimiendo...' : '🖨 Imprimir de nuevo'}
             </button>
             <button
               onClick={onExito}
-              className="px-5 py-2 rounded-xl text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors"
+              className="px-5 py-2 rounded-xl text-sm bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-colors"
             >
               Cerrar
             </button>
@@ -569,20 +569,20 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
   return (
     <Modal titulo="Cobrar orden" onClose={onClose} ancho="max-w-sm">
       <div className="space-y-5">
-        <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 text-center">
-          <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Total a cobrar</p>
-          <p className="text-3xl font-bold text-gray-900 dark:text-white">Bs {total.toFixed(2)}</p>
+        <div className="bg-muted rounded-xl p-4 text-center">
+          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Total a cobrar</p>
+          <p className="text-3xl font-bold text-foreground">Bs {total.toFixed(2)}</p>
         </div>
 
         <div>
-          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Método de pago</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Método de pago</p>
           <div className="grid grid-cols-2 gap-2">
             {[{ id: 'efectivo', label: 'Efectivo' }, { id: 'qr', label: 'QR / Transferencia' }].map((m) => (
               <button
                 key={m.id}
                 onClick={() => { setMetodo(m.id); setError(null); }}
                 className={`py-3 rounded-xl text-sm font-medium border transition-colors ${
-                  metodo === m.id ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-blue-400 dark:hover:border-blue-500'
+                  metodo === m.id ? 'bg-primary border-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary/50'
                 }`}
               >
                 {m.label}
@@ -592,26 +592,26 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
         </div>
 
         <div>
-          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Nota del pedido (opcional)</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Nota del pedido (opcional)</p>
           <textarea
             value={notas}
             onChange={(e) => setNotas(e.target.value)}
             placeholder="Ej: entregar en recepción, para llevar en dos bolsas..."
             rows={2}
-            className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            className="w-full text-sm border border-input rounded-xl px-3 py-2 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
           />
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
         <div className="flex justify-end gap-3 pt-1">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
             Cancelar
           </button>
           <button
             onClick={() => iniciar.mutate()}
             disabled={iniciar.isPending}
-            className="px-5 py-2 rounded-xl text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors disabled:opacity-60"
+            className="px-5 py-2 rounded-xl text-sm bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-colors disabled:opacity-60"
           >
             {iniciar.isPending ? 'Procesando...' : 'Confirmar cobro'}
           </button>
