@@ -4,6 +4,7 @@ import { router } from './router/index.jsx';
 import { useTheme } from './hooks/useTheme';
 import OfflineIndicator from './components/pwa/OfflineIndicator';
 import InstallPrompt from './components/pwa/InstallPrompt';
+import BrandTheme from './components/theme/BrandTheme';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -21,6 +22,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeSync />
+      <BrandTheme />
       <OfflineIndicator />
       <InstallPrompt />
       <RouterProvider router={router} />
