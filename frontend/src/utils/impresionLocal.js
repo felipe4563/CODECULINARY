@@ -31,3 +31,5 @@ export function imprimirLocal(datosImpresion) {
     postConTimeout(`${base}/imprimir/cocina`, datosImpresion.cocina).catch(() => {});
   }
 }
+
+export const reimprimirConFallback = imprimirLocal;
