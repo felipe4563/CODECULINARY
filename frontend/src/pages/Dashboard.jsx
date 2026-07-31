@@ -123,7 +123,7 @@ function StatCard({ icono: Icono, titulo, valor, sub, color, cargando, delay = 0
 }
 
 /* ─── Chart Card ──────────────────────────────────────────────── */
-function ChartCard({ titulo, accent = '#6366f1', children, delay = 0 }) {
+function ChartCard({ titulo, accent = 'hsl(var(--primary))', children, delay = 0 }) {
   return (
     <div
       className="bg-card rounded-2xl border border-border p-4 sm:p-5 shadow-sm"
@@ -534,7 +534,7 @@ export default function Dashboard() {
 
         {/* ── Gráfico Ingresos (AreaChart) ─────────────────────── */}
         {puedeVerVentas && haySuficientesDatos && (
-          <ChartCard titulo={`Ingresos — ${labelPeriodo}`} accent="#6366f1" delay={340}>
+          <ChartCard titulo={`Ingresos — ${labelPeriodo}`} accent="hsl(var(--primary))" delay={340}>
             {cvVentas ? (
               <div className="h-56 rounded-xl bg-muted animate-pulse" />
             ) : (
