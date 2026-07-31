@@ -32,6 +32,3 @@ export const marcarListo = (pedido_id) =>
 
 export const crearVentaCompleta = (datos) =>
   api.post('/ventas/completa', datos).then((r) => r.data.datos);
-
-export const reimprimirVenta = (pedido_id) =>
-  getVenta(pedido_id);
