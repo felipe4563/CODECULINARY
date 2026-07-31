@@ -102,6 +102,8 @@ function TabNegocio({ puedeEditar }) {
       zona_horaria:   config.zona_horaria   ?? 'America/La_Paz',
       pie_ticket:     config.pie_ticket     ?? '¡Gracias por su preferencia!',
       logo:           config.logo           ?? '',
+      color_primario:   config.color_primario   ?? '#245b62',
+      color_secundario: config.color_secundario ?? '#d97706',
     });
   }
 
@@ -243,6 +245,51 @@ function TabNegocio({ puedeEditar }) {
       </div>
 
       {campo('Pie de ticket', 'pie_ticket', { textarea: true, placeholder: '¡Gracias por su preferencia!' })}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
+            Color primario
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={form.color_primario}
+              onChange={e => set('color_primario', e.target.value)}
+              disabled={!puedeEditar}
+              className="w-10 h-10 rounded-lg border border-gray-200 dark:border-gray-600 bg-transparent disabled:opacity-60"
+            />
+            <input
+              type="text"
+              value={form.color_primario}
+              onChange={e => set('color_primario', e.target.value)}
+              disabled={!puedeEditar}
+              className="flex-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
+            Color secundario
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={form.color_secundario}
+              onChange={e => set('color_secundario', e.target.value)}
+              disabled={!puedeEditar}
+              className="w-10 h-10 rounded-lg border border-gray-200 dark:border-gray-600 bg-transparent disabled:opacity-60"
+            />
+            <input
+              type="text"
+              value={form.color_secundario}
+              onChange={e => set('color_secundario', e.target.value)}
+              disabled={!puedeEditar}
+              className="flex-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
+            />
+          </div>
+        </div>
+      </div>
 
       {puedeEditar && (
         <div className="flex items-center gap-4 pt-2">
