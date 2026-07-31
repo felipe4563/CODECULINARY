@@ -1,44 +1,106 @@
+import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { usePermisos } from '../../hooks/usePermisos';
 import { getConfiguracion, logoSrc } from '../../api/configuracion';
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import {
   LayoutDashboard, UtensilsCrossed, Wallet, BookOpen,
   Package, Boxes, Truck, Users, UserCog, Shield, Settings, X,
-  BarChart2, ChefHat, ChevronLeft, Building2, Landmark,
+  BarChart2, ChefHat, ChevronLeft, ChevronDown, Building2, Landmark,
 } from 'lucide-react';
 
-const NAV_ITEMS = [
-  { to: '/',             label: 'Dashboard',     Icono: LayoutDashboard, siempre: true },
-  { to: '/ventas',       label: 'Ventas / POS',  Icono: UtensilsCrossed, modulo: 'ventas',        accion: 'ver' },
-  { to: '/cocina',       label: 'Cocina',        Icono: ChefHat,         modulo: 'cocina',        accion: 'ver' },
-  { to: '/caja',         label: 'Caja',          Icono: Wallet,          modulo: 'caja',          accion: 'ver' },
-  { to: '/libro-caja',   label: 'Libro Caja',    Icono: BookOpen,        modulo: 'libro_caja',    accion: 'ver' },
-  { to: '/productos',    label: 'Productos',     Icono: Package,         modulo: 'inventario',    accion: 'ver' },
-  { to: '/inventario',   label: 'Inventario',    Icono: Boxes,           modulo: 'inventario',    accion: 'ajustar' },
-  { to: '/compras',      label: 'Compras',       Icono: Truck,           modulo: 'compras',       accion: 'ver' },
-  { to: '/clientes',     label: 'Clientes',      Icono: Users,           modulo: 'ventas',        accion: 'ver' },
-  { to: '/reportes',     label: 'Reportes',      Icono: BarChart2,       modulo: 'reportes',      accion: 'ver' },
-  { to: '/usuarios',     label: 'Usuarios',      Icono: UserCog,         modulo: 'usuarios',      accion: 'ver' },
-  { to: '/roles',        label: 'Roles',         Icono: Shield,          modulo: 'roles',         accion: 'ver' },
-  { to: '/sucursales',   label: 'Sucursales',    Icono: Building2,       modulo: 'sucursales',    accion: 'ver' },
-  { to: '/cajas',        label: 'Cajas',         Icono: Landmark,        modulo: 'cajas',         accion: 'ver' },
-  { to: '/configuracion',label: 'Configuración', Icono: Settings,        modulo: 'configuracion', accion: 'ver' },
+const NAV_GROUPS = [
+  {
+    key: 'operacion',
+    label: 'Operación',
+    items: [
+      { to: '/',           label: 'Dashboard',    Icono: LayoutDashboard, siempre: true },
+      { to: '/ventas',     label: 'Ventas / POS',  Icono: UtensilsCrossed, modulo: 'ventas',     accion: 'ver' },
+      { to: '/cocina',     label: 'Cocina',        Icono: ChefHat,         modulo: 'cocina',     accion: 'ver' },
+      { to: '/caja',       label: 'Caja',          Icono: Wallet,          modulo: 'caja',       accion: 'ver' },
+      { to: '/libro-caja', label: 'Libro Caja',    Icono: BookOpen,        modulo: 'libro_caja', accion: 'ver' },
+    ],
+  },
+  {
+    key: 'catalogo',
+    label: 'Catálogo',
+    items: [
+      { to: '/productos',  label: 'Productos',   Icono: Package, modulo: 'inventario', accion: 'ver' },
+      { to: '/inventario', label: 'Inventario',  Icono: Boxes,   modulo: 'inventario', accion: 'ajustar' },
+      { to: '/compras',    label: 'Compras',     Icono: Truck,   modulo: 'compras',    accion: 'ver' },
+      { to: '/clientes',   label: 'Clientes',    Icono: Users,   modulo: 'ventas',     accion: 'ver' },
+    ],
+  },
+  {
+    key: 'administracion',
+    label: 'Administración',
+    items: [
+      { to: '/reportes',      label: 'Reportes',      Icono: BarChart2, modulo: 'reportes',      accion: 'ver' },
+      { to: '/usuarios',      label: 'Usuarios',      Icono: UserCog,   modulo: 'usuarios',      accion: 'ver' },
+      { to: '/roles',         label: 'Roles',         Icono: Shield,    modulo: 'roles',         accion: 'ver' },
+      { to: '/sucursales',    label: 'Sucursales',    Icono: Building2, modulo: 'sucursales',    accion: 'ver' },
+      { to: '/cajas',         label: 'Cajas',         Icono: Landmark,  modulo: 'cajas',         accion: 'ver' },
+      { to: '/configuracion', label: 'Configuración', Icono: Settings,  modulo: 'configuracion', accion: 'ver' },
+    ],
+  },
 ];
+
+const STORAGE_KEY = 'sidebar-secciones-colapsadas';
+
+function leerSeccionesColapsadas() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+// Determina si el sidebar se ve en modo "solo iconos": siempre en tablet
+// (768-1023px), y en desktop (>=1024px) según el prop `colapsado`. En
+// móvil (<768px) nunca es icon-only (es un overlay expandido).
+function useIconOnly(colapsado) {
+  const [ancho, setAncho] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setAncho(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  if (ancho < 768) return false;
+  if (ancho < 1024) return true;
+  return colapsado;
+}
 
 export default function Sidebar({ visible, onCerrar, colapsado, onToggleColapsado }) {
   const { tienePermiso } = usePermisos();
-  const { data: config = {} } = useQuery({
+  const { data: config = {}, isLoading: cargandoConfig } = useQuery({
     queryKey: ['configuracion'],
     queryFn: getConfiguracion,
     staleTime: 60_000,
   });
   const nombreNegocio = config.nombre_negocio || 'Restaurante';
   const logo = logoSrc(config.logo);
+  const iconOnly = useIconOnly(colapsado);
 
-  const itemsVisibles = NAV_ITEMS.filter(
-    (item) => item.siempre || tienePermiso(item.modulo, item.accion)
-  );
+  const [seccionesColapsadas, setSeccionesColapsadas] = useState(leerSeccionesColapsadas);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(seccionesColapsadas));
+  }, [seccionesColapsadas]);
+
+  const toggleSeccion = (key) => {
+    setSeccionesColapsadas((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const gruposVisibles = NAV_GROUPS
+    .map((grupo) => ({
+      ...grupo,
+      items: grupo.items.filter((item) => item.siempre || tienePermiso(item.modulo, item.accion)),
+    }))
+    .filter((grupo) => grupo.items.length > 0);
 
   // En tablet/desktop: ancho dinámico según estado
   // visible=false → w-0 (oculto completamente)
@@ -60,6 +122,66 @@ export default function Sidebar({ visible, onCerrar, colapsado, onToggleColapsad
   const itemAlign = colapsado
     ? 'justify-start px-3 md:justify-center md:px-0'
     : 'justify-start px-3 md:justify-center md:px-0 lg:justify-start lg:px-3';
+
+  // Header de sección: visible en móvil y desktop expandido, oculto en
+  // tablet y desktop colapsado (mismo criterio que labelClass, pero flex).
+  const headerVisibleClass = 'flex ' + (colapsado ? 'md:hidden' : 'md:hidden lg:flex');
+
+  // Separador entre grupos: inverso al header — solo visible cuando el
+  // header de sección está oculto (tablet siempre, desktop colapsado).
+  const dividerClass = 'hidden ' + (colapsado ? 'md:block' : 'md:block lg:hidden');
+
+  // Contenedor de ítems de un grupo: si el grupo NO está plegado, siempre
+  // visible. Si está plegado, se oculta en móvil y desktop expandido
+  // (donde el acordeón aplica), pero se ignora (siempre visible) en
+  // tablet y desktop colapsado, donde no hay UI para plegar/desplegar.
+  const itemsWrapperClass = (plegado) => {
+    if (!plegado) return '';
+    return colapsado ? 'hidden md:block' : 'hidden md:block lg:hidden';
+  };
+
+  const renderNavLink = (item) => {
+    const { to, label, Icono } = item;
+    const link = (
+      <NavLink
+        to={to}
+        end={to === '/'}
+        onClick={onCerrar}
+        className={({ isActive }) => `
+          relative flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+          ${itemAlign}
+          ${isActive
+            ? 'bg-primary text-primary-foreground'
+            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+          }
+        `}
+      >
+        {({ isActive }) => (
+          <>
+            {isActive && (
+              <span
+                aria-hidden
+                className="absolute left-0 top-0 bottom-0 w-[3px] bg-primary-foreground rounded-r"
+              />
+            )}
+            <Icono className="w-[18px] h-[18px] shrink-0" />
+            <span className={`truncate ${labelClass}`}>
+              {label}
+            </span>
+          </>
+        )}
+      </NavLink>
+    );
+
+    if (!iconOnly) return link;
+
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{link}</TooltipTrigger>
+        <TooltipContent side="right">{label}</TooltipContent>
+      </Tooltip>
+    );
+  };
 
   return (
     <>
@@ -98,10 +220,17 @@ export default function Sidebar({ visible, onCerrar, colapsado, onToggleColapsad
                 : <UtensilsCrossed className="w-4 h-4 text-primary-foreground" />
               }
             </div>
-            <div className={`min-w-0 md:hidden ${colapsado ? 'lg:hidden' : 'lg:block'}`}>
-              <p className="text-sm font-bold text-foreground leading-tight truncate">{nombreNegocio}</p>
-              <p className="text-[11px] text-muted-foreground leading-tight">Sistema de Gestión</p>
-            </div>
+            {cargandoConfig ? (
+              <div className={`min-w-0 space-y-1.5 md:hidden ${colapsado ? 'lg:hidden' : 'lg:block'}`}>
+                <div className="h-3.5 w-24 bg-muted rounded animate-pulse" />
+                <div className="h-2.5 w-16 bg-muted rounded animate-pulse" />
+              </div>
+            ) : (
+              <div className={`min-w-0 md:hidden ${colapsado ? 'lg:hidden' : 'lg:block'}`}>
+                <p className="text-sm font-bold text-foreground leading-tight truncate">{nombreNegocio}</p>
+                <p className="text-[11px] text-muted-foreground leading-tight">Sistema de Gestión</p>
+              </div>
+            )}
           </div>
 
           {/* X — solo en móvil */}
@@ -114,30 +243,35 @@ export default function Sidebar({ visible, onCerrar, colapsado, onToggleColapsad
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-          {itemsVisibles.map(({ to, label, Icono }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              onClick={onCerrar}
-              title={label}
-              className={({ isActive }) => `
-                flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium transition-colors
-                ${itemAlign}
-                ${isActive
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                }
-              `}
-            >
-              <Icono className="w-[18px] h-[18px] shrink-0" />
-              <span className={`truncate ${labelClass}`}>
-                {label}
-              </span>
-            </NavLink>
-          ))}
-        </nav>
+        <TooltipProvider delayDuration={200}>
+          <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
+            {gruposVisibles.map((grupo, idx) => {
+              const plegado = !!seccionesColapsadas[grupo.key];
+              return (
+                <div key={grupo.key}>
+                  {idx > 0 && <div className={`my-2 mx-1 border-t border-border ${dividerClass}`} />}
+
+                  <button
+                    type="button"
+                    onClick={() => toggleSeccion(grupo.key)}
+                    className={`w-full items-center justify-between px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors ${headerVisibleClass}`}
+                  >
+                    <span>{grupo.label}</span>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${plegado ? '-rotate-90' : ''}`} />
+                  </button>
+
+                  <div className={`space-y-0.5 ${itemsWrapperClass(plegado)}`}>
+                    {grupo.items.map((item) => (
+                      <div key={item.to}>
+                        {renderNavLink(item)}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </nav>
+        </TooltipProvider>
 
         {/* CodeWave credit — solo cuando hay espacio para texto */}
         <div className={`shrink-0 flex items-center justify-center gap-1.5 py-2.5 border-t border-border ${colapsado ? 'md:hidden' : 'md:hidden lg:flex'}`}>
