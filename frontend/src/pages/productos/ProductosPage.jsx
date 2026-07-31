@@ -228,15 +228,15 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar }) {
   const [modal, setModal] = useState(null);
   const [confirmEliminar, setConfirmEliminar] = useState(null);
   const [filtroCategoria, setFiltroCategoria] = useState('');
-  const [mostrarInactivos, setMostrarInactivos] = useState(false);
+  const [soloInactivos, setSoloInactivos] = useState(false);
 
   const { data: categorias = [] } = useQuery({ queryKey: ['categorias'], queryFn: getCategorias });
   const { data: gruposOpciones = [] } = useQuery({ queryKey: ['grupos-opciones'], queryFn: getGruposOpciones });
   const { data: productos = [], isLoading } = useQuery({
-    queryKey: ['productos', filtroCategoria, mostrarInactivos],
+    queryKey: ['productos', filtroCategoria, soloInactivos],
     queryFn: () => getProductos({
       ...(filtroCategoria ? { categoria_id: filtroCategoria } : {}),
-      ...(mostrarInactivos ? { incluir_inactivos: true } : {}),
+      ...(soloInactivos ? { solo_inactivos: true } : {}),
     }),
   });
 
@@ -265,11 +265,11 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar }) {
           <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer select-none">
             <input
               type="checkbox"
-              checked={mostrarInactivos}
-              onChange={e => setMostrarInactivos(e.target.checked)}
+              checked={soloInactivos}
+              onChange={e => setSoloInactivos(e.target.checked)}
               className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
             />
-            Mostrar inactivos
+            Ver solo inactivos
           </label>
         </div>
         {puedeCrear && (
@@ -344,7 +344,7 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar }) {
                     {prod.categoria?.nombre ?? '-'}
                   </td>
                   <td className="px-4 py-3 text-right font-semibold text-gray-800 dark:text-gray-100">
-                    Bs {parseFloat(prod.precio).toFixed(2)}
+                    Bs {parseFloat(prod.precio).toFixed(2)}{prod.es_pesable ? '/kg' : ''}
                   </td>
                   <td className="px-4 py-3 text-right text-gray-500 dark:text-gray-400 hidden md:table-cell">
                     {prod.stock === null
@@ -406,7 +406,9 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar }) {
       {confirmEliminar && (
         <Modal titulo="Eliminar Producto" onClose={() => setConfirmEliminar(null)}>
           <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-            ¿Eliminar <strong>{confirmEliminar.nombre}</strong>? El producto se desactivará.
+            {confirmEliminar.tiene_ventas
+              ? <>Este producto tiene ventas registradas: <strong>{confirmEliminar.nombre}</strong> se desactivará en vez de eliminarse.</>
+              : <>¿Eliminar <strong>{confirmEliminar.nombre}</strong>? No tiene ventas asociadas, se borrará por completo.</>}
           </p>
           {eliminar.error && (
             <p className="text-sm text-red-600 mb-3">{eliminar.error?.response?.data?.mensaje ?? 'Error al eliminar'}</p>
@@ -438,6 +440,7 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
     stock:        prod?.stock ?? '',
     sucursal_id:  '',
     es_vendible:  prod?.es_vendible ?? true,
+    es_pesable:   prod?.es_pesable ?? false,
     imagen:       prod?.imagen ?? null,
   });
   const [preview, setPreview] = useState(prod?.imagen ? `${API_BASE}${prod.imagen}` : null);
@@ -476,6 +479,7 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
       nombre: form.nombre,
       precio: parseFloat(form.precio),
       es_vendible: form.es_vendible,
+      es_pesable: form.es_pesable,
       imagen: form.imagen,
     };
     // El stock solo se define al crear el producto; en edición se maneja
@@ -575,7 +579,9 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
             </select>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Precio (Bs) *</label>
+            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
+              {form.es_pesable ? 'Precio por kg (Bs) *' : 'Precio (Bs) *'}
+            </label>
             <input
               type="number" min="1" step="0.01"
               value={form.precio}
@@ -619,6 +625,16 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
             className="w-4 h-4 rounded accent-blue-600"
           />
           <span className="text-sm text-gray-700 dark:text-gray-300">Aparece en el menú de ventas</span>
+        </label>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.es_pesable}
+            onChange={e => set('es_pesable', e.target.checked)}
+            className="w-4 h-4 rounded accent-blue-600"
+          />
+          <span className="text-sm text-gray-700 dark:text-gray-300">Se vende por peso (kg) — el precio de arriba es por kg</span>
         </label>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
