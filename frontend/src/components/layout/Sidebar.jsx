@@ -150,7 +150,7 @@ export default function Sidebar({ visible, onCerrar, colapsado, onToggleColapsad
         <button
           onClick={onToggleColapsado}
           title={colapsado ? 'Expandir menú' : 'Colapsar menú'}
-          className="hidden lg:flex items-center justify-center h-11 border-t border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
+          className="hidden lg:flex items-center justify-center h-11 border-t border-border text-muted-foreground hover:text-accent-foreground hover:bg-accent transition-colors shrink-0"
         >
           <ChevronLeft className={`w-4 h-4 transition-transform duration-300 ${colapsado ? 'rotate-180' : ''}`} />
         </button>
