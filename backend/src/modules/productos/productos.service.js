@@ -189,8 +189,11 @@ async function crearProducto({ categoria_id, nombre, codigo_barras, codigo, prec
     }
   }
 
-  const producto = await Producto.create({ categoria_id, nombre, codigo_barras, codigo, precio, costo, stock: conStock ? 0 : null, es_vendible, imagen, es_pesable });
-  await _sincronizarGruposOpciones(producto.id, grupos_opciones);
+  const producto = await sequelize.transaction(async (t) => {
+    const p = await Producto.create({ categoria_id, nombre, codigo_barras, codigo, precio, costo, stock: conStock ? 0 : null, es_vendible, imagen, es_pesable }, { transaction: t });
+    await _sincronizarGruposOpciones(p.id, grupos_opciones, t);
+    return p;
+  });
 
   if (conStock) {
     await ajustarStockSucursal({ producto_id: producto.id, sucursal_id: sucursalDestino, tipo: 'ajuste', cantidad: stock, usuario_id: alcance.usuario_id, nota: 'Stock inicial' });
@@ -203,10 +206,12 @@ async function actualizarProducto(id, datos, alcance) {
   const { stock, grupos_opciones, ...resto } = datos; // stock nunca se edita aquí — solo vía ajustarStockSucursal
   const p = await Producto.findByPk(id);
   if (!p) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
-  await p.update(resto);
-  if (grupos_opciones !== undefined) {
-    await _sincronizarGruposOpciones(id, grupos_opciones);
-  }
+  await sequelize.transaction(async (t) => {
+    await p.update(resto, { transaction: t });
+    if (grupos_opciones !== undefined) {
+      await _sincronizarGruposOpciones(id, grupos_opciones, t);
+    }
+  });
   return obtenerProducto(id, alcance);
 }
 

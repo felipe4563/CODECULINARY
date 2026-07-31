@@ -23,7 +23,9 @@ export default function SelectorOpcionModal({ producto, onElegir, onClose }) {
         return `${g.nombre}: ${elegidas.join(', ')}`;
       })
       .filter(Boolean);
-    return partes.length > 0 ? partes.join(' · ') : null;
+    if (partes.length === 0) return null;
+    const texto = partes.join(' · ');
+    return texto.length > 255 ? `${texto.slice(0, 252)}...` : texto;
   }
 
   function avanzar(seleccionesActualizadas) {
@@ -81,7 +83,8 @@ export default function SelectorOpcionModal({ producto, onElegir, onClose }) {
             <button
               type="button"
               onClick={confirmarMultiple}
-              className="w-full px-4 py-2 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+              disabled={grupoActual.obligatorio && multipleElegidas.length === 0}
+              className="w-full px-4 py-2 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {esUltimoPaso ? 'Agregar' : 'Continuar'}
             </button>
