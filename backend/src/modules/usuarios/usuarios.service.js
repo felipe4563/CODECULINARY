@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const { Usuario, Rol, Sucursal } = require('../../models');
 
-const ATTRS_PUBLICOS = { exclude: ['contrasena', 'token_recordar'] };
+const ATTRS_PUBLICOS = { exclude: ['contrasena'] };
 const INCLUDE_RELS = [
   { model: Rol, as: 'rol', attributes: ['id', 'nombre'] },
   { model: Sucursal, as: 'sucursales', attributes: ['id', 'nombre'], through: { attributes: [] } },

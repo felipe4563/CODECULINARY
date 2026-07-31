@@ -24,14 +24,3 @@ CREATE TABLE IF NOT EXISTS productos (
   UNIQUE KEY productos_barcode_unique (codigo_barras),
   FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS ingredientes_producto (
-  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  producto_id INT UNSIGNED NOT NULL,
-  ingrediente_id INT UNSIGNED NOT NULL,
-  cantidad DECIMAL(10,2) NOT NULL,
-  creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE,
-  FOREIGN KEY (ingrediente_id) REFERENCES productos(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

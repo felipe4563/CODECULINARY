@@ -3,24 +3,31 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   RefreshCw, AlertCircle, Package, ShoppingCart, ShoppingBag,
-  Plus, Minus, Trash2, CreditCard, Wallet, ChevronRight, LayoutGrid,
+  Plus, Minus, Trash2, CreditCard, Wallet, ChevronRight, LayoutGrid, CheckCircle2,
 } from 'lucide-react';
 import { getMesas } from '../../api/mesas';
-import { getVentas, crearVentaCompleta, cobrarVenta } from '../../api/ventas';
+import { getVentas, crearVentaCompleta, cobrarVenta, reimprimirVenta } from '../../api/ventas';
 import { getEstadoCajas } from '../../api/caja';
 import { getProductos } from '../../api/productos';
 import { getCategorias } from '../../api/categorias';
 import { BASE_URL } from '../../api/configuracion';
 import { usePermisos } from '../../hooks/usePermisos';
 import { useAuth } from '../../hooks/useAuth';
-import { imprimirLocal } from '../../utils/impresionLocal';
+import { imprimirLocal, reimprimirConFallback } from '../../utils/impresionLocal';
+import { calcularPrecioPesable } from '../../utils/precio';
 import ModalLlevar from './components/ModalLlevar';
 import ModalMesas from './components/ModalMesas';
 import CategoriasBar from './components/CategoriasBar';
 import ModalPagoQr from './components/ModalPagoQr';
 import SelectorOpcionModal from './components/SelectorOpcionModal';
+import ModalPeso from './components/ModalPeso';
 import Modal from '../../components/ui/Modal';
 import socket from '../../socket';
+
+function nuevoLineaId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return `linea-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
 export default function VentasPage() {
   const { tienePermiso } = usePermisos();
@@ -33,7 +40,7 @@ export default function VentasPage() {
   const puedeCobrar = tienePermiso('ventas', 'cobrar');
 
   const [categoriaActiva, setCategoriaActiva] = useState(null);
-  const [carrito, setCarrito] = useState([]); // [{producto_id, nombre, precio, cantidad, nota}]
+  const [carrito, setCarrito] = useState([]); // [{linea_id, producto_id, nombre, precio, cantidad, nota, peso?, precio_kg?}]
   const [mesaSeleccionada, setMesaSeleccionada] = useState(null); // id o null
   const [modoLlevar, setModoLlevar] = useState(null); // nombre_cliente o null
   const [modalLlevar, setModalLlevar] = useState(false);
@@ -41,6 +48,7 @@ export default function VentasPage() {
   const [modalCobrar, setModalCobrar] = useState(false);
   const [tabMobile, setTabMobile] = useState('productos'); // 'productos' | 'orden'
   const [selectorOpcion, setSelectorOpcion] = useState(null); // producto con grupo_opciones, o null
+  const [modalPeso, setModalPeso] = useState(null); // producto pesable pendiente de peso, o null
 
   const { data: mesas = [], isLoading: cargandoMesas } = useQuery({
     queryKey: ['mesas'],
@@ -102,12 +110,24 @@ export default function VentasPage() {
       if (existente) {
         return prev.map((it) => it === existente ? { ...it, cantidad: it.cantidad + 1 } : it);
       }
-      return [...prev, { producto_id: prod.id, nombre: prod.nombre, precio: parseFloat(prod.precio), cantidad: 1, nota }];
+      return [...prev, { linea_id: nuevoLineaId(), producto_id: prod.id, nombre: prod.nombre, precio: parseFloat(prod.precio), cantidad: 1, nota }];
     });
+  }
+
+  function agregarPesableAlCarrito(prod, pesoKg) {
+    const precio = calcularPrecioPesable(pesoKg, parseFloat(prod.precio));
+    setCarrito((prev) => [...prev, {
+      linea_id: nuevoLineaId(), producto_id: prod.id, nombre: prod.nombre,
+      precio, cantidad: 1, nota: null, peso: pesoKg, precio_kg: parseFloat(prod.precio),
+    }]);
   }
 
   function handleProducto(prod) {
     if (!puedeCrear) return;
+    if (prod.es_pesable) {
+      setModalPeso(prod);
+      return;
+    }
     if (prod.grupo_opciones) {
       setSelectorOpcion(prod);
       return;
@@ -120,20 +140,20 @@ export default function VentasPage() {
     setSelectorOpcion(null);
   }
 
-  function incrementar(producto_id, nota) {
-    setCarrito((prev) => prev.map((it) => it.producto_id === producto_id && it.nota === nota ? { ...it, cantidad: it.cantidad + 1 } : it));
+  function incrementar(linea_id) {
+    setCarrito((prev) => prev.map((it) => it.linea_id === linea_id ? { ...it, cantidad: it.cantidad + 1 } : it));
   }
 
-  function decrementar(producto_id, nota) {
+  function decrementar(linea_id) {
     setCarrito((prev) => {
-      const item = prev.find((it) => it.producto_id === producto_id && it.nota === nota);
+      const item = prev.find((it) => it.linea_id === linea_id);
       if (item.cantidad <= 1) return prev.filter((it) => it !== item);
       return prev.map((it) => it === item ? { ...it, cantidad: it.cantidad - 1 } : it);
     });
   }
 
-  function quitar(producto_id, nota) {
-    setCarrito((prev) => prev.filter((it) => !(it.producto_id === producto_id && it.nota === nota)));
+  function quitar(linea_id) {
+    setCarrito((prev) => prev.filter((it) => it.linea_id !== linea_id));
   }
 
   function handleClickMesaDisponible(mesa) {
@@ -249,9 +269,9 @@ export default function VentasPage() {
                       </div>
                       <div className="p-2.5">
                         <p className="text-sm font-medium text-gray-800 dark:text-gray-100 leading-tight line-clamp-2">{prod.nombre}</p>
-                        <p className="text-sm font-bold text-blue-600 dark:text-blue-400 mt-1">Bs {parseFloat(prod.precio).toFixed(2)}</p>
+                        <p className="text-sm font-bold text-blue-600 dark:text-blue-400 mt-1">Bs {parseFloat(prod.precio).toFixed(2)}{prod.es_pesable ? '/kg' : ''}</p>
                       </div>
-                      {cantidadEnCarrito && (
+                      {cantidadEnCarrito && !prod.es_pesable && (
                         <span className="absolute top-2 right-2 w-6 h-6 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center justify-center shadow">
                           {cantidadEnCarrito}
                         </span>
@@ -286,22 +306,30 @@ export default function VentasPage() {
                 </div>
               ) : (
                 carrito.map((it) => (
-                  <div key={`${it.producto_id}|${it.nota ?? ''}`} className="px-4 py-2.5 flex items-center gap-2">
+                  <div key={it.linea_id} className="px-4 py-2.5 flex items-center gap-2">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{it.nombre}</p>
                       {it.nota && <p className="text-xs text-amber-600 dark:text-amber-400 truncate">{it.nota}</p>}
-                      <p className="text-xs text-gray-400">Bs {it.precio.toFixed(2)} c/u</p>
+                      {it.peso != null ? (
+                        <p className="text-xs text-gray-400">{it.peso.toFixed(3)} kg × Bs {it.precio_kg.toFixed(2)}/kg</p>
+                      ) : (
+                        <p className="text-xs text-gray-400">Bs {it.precio.toFixed(2)} c/u</p>
+                      )}
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button onClick={() => decrementar(it.producto_id, it.nota)} className="w-6 h-6 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center">
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <span className="w-5 text-center text-sm font-semibold text-gray-800 dark:text-gray-100">{it.cantidad}</span>
-                      <button onClick={() => incrementar(it.producto_id, it.nota)} className="w-6 h-6 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center">
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <button onClick={() => quitar(it.producto_id, it.nota)} className="shrink-0 p-1 text-gray-300 dark:text-gray-600 hover:text-red-500">
+                    {it.peso != null ? (
+                      <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 shrink-0">{it.peso.toFixed(3)} kg</span>
+                    ) : (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => decrementar(it.linea_id)} className="w-6 h-6 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center">
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="w-5 text-center text-sm font-semibold text-gray-800 dark:text-gray-100">{it.cantidad}</span>
+                        <button onClick={() => incrementar(it.linea_id)} className="w-6 h-6 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center">
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                    <button onClick={() => quitar(it.linea_id)} className="shrink-0 p-1 text-gray-300 dark:text-gray-600 hover:text-red-500">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -437,6 +465,14 @@ export default function VentasPage() {
           onClose={() => setSelectorOpcion(null)}
         />
       )}
+
+      {modalPeso && (
+        <ModalPeso
+          producto={modalPeso}
+          onConfirmar={(pesoKg) => { agregarPesableAlCarrito(modalPeso, pesoKg); setModalPeso(null); }}
+          onClose={() => setModalPeso(null)}
+        />
+      )}
     </div>
   );
 }
@@ -445,15 +481,23 @@ export default function VentasPage() {
 
 function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId, onClose, onExito }) {
   const [metodo, setMetodo] = useState('efectivo');
+  const [notas, setNotas] = useState('');
   const [error, setError] = useState(null);
   const [pagoQrEstado, setPagoQrEstado] = useState(null); // { pedidoId, pagoQr } | null
+  const [ventaExitosa, setVentaExitosa] = useState(null); // { pedidoId, metodoPago } | null
+
+  const reimprimir = useMutation({
+    mutationFn: () => reimprimirVenta(ventaExitosa.pedidoId),
+    onSuccess: (datos) => reimprimirConFallback(datos),
+  });
 
   const iniciar = useMutation({
     mutationFn: () => crearVentaCompleta({
       tipo,
       mesa_id: tipo === 'mesa' ? mesaId : undefined,
       nombre_cliente: nombreCliente ?? undefined,
-      items: carrito.map((it) => ({ producto_id: it.producto_id, cantidad: it.cantidad, nota: it.nota })),
+      notas: notas.trim() || undefined,
+      items: carrito.map((it) => ({ producto_id: it.producto_id, cantidad: it.cantidad, nota: it.nota, peso: it.peso })),
       metodo_pago: metodo,
       monto_recibido: total,
       sesion_caja_id: sesionCajaId,
@@ -463,7 +507,7 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
         setPagoQrEstado({ pedidoId: resultado.pedido.id, pagoQr: resultado.pago_qr });
       } else {
         imprimirLocal(resultado.datos_impresion);
-        onExito();
+        setVentaExitosa({ pedidoId: resultado.id, metodoPago: metodo });
       }
     },
     onError: (err) => setError(err?.response?.data?.mensaje ?? 'Error al cobrar'),
@@ -475,13 +519,48 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
     onError: (err) => setError(err?.response?.data?.mensaje ?? 'Error al generar el QR'),
   });
 
+  if (ventaExitosa) {
+    return (
+      <Modal titulo="Venta cobrada" onClose={onExito} ancho="max-w-sm">
+        <div className="space-y-5 text-center">
+          <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto" />
+          <div>
+            <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Total cobrado</p>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white">Bs {total.toFixed(2)}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              {ventaExitosa.metodoPago === 'qr' ? 'QR / Transferencia' : 'Efectivo'}
+            </p>
+          </div>
+          {reimprimir.isError && (
+            <p className="text-sm text-red-600">No se pudo reimprimir.</p>
+          )}
+          <div className="flex justify-center gap-3">
+            <button
+              onClick={() => reimprimir.mutate()}
+              disabled={reimprimir.isPending}
+              className="px-4 py-2 rounded-xl text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-60"
+            >
+              {reimprimir.isPending ? 'Imprimiendo...' : '🖨 Imprimir de nuevo'}
+            </button>
+            <button
+              onClick={onExito}
+              className="px-5 py-2 rounded-xl text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
   if (pagoQrEstado) {
     return (
       <ModalPagoQr
         pedidoId={pagoQrEstado.pedidoId}
         pagoQr={pagoQrEstado.pagoQr}
         onClose={onClose}
-        onCompletado={() => onExito()}
+        onCompletado={(pedido) => setVentaExitosa({ pedidoId: pedido.id, metodoPago: 'qr' })}
         onReintentar={() => reintentar.mutate()}
       />
     );
@@ -510,6 +589,17 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
               </button>
             ))}
           </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Nota del pedido (opcional)</p>
+          <textarea
+            value={notas}
+            onChange={(e) => setNotas(e.target.value)}
+            placeholder="Ej: entregar en recepción, para llevar en dos bolsas..."
+            rows={2}
+            className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          />
         </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}

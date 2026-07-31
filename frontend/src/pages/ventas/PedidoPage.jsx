@@ -5,15 +5,16 @@ import {
   ArrowLeft, RefreshCw, Plus, Minus, Trash2, ShoppingCart,
   Package, CreditCard, XCircle, AlertCircle, CheckCircle2, ChefHat,
 } from 'lucide-react';
-import { getVenta, agregarItem, actualizarItem, eliminarItem, cobrarVenta, cancelarVenta } from '../../api/ventas';
+import { getVenta, agregarItem, actualizarItem, eliminarItem, cobrarVenta, cancelarVenta, reimprimirVenta } from '../../api/ventas';
 import { getProductos } from '../../api/productos';
 import { getCategorias } from '../../api/categorias';
 import { getConfiguracion, BASE_URL } from '../../api/configuracion';
 import { useAuth } from '../../hooks/useAuth';
-import { imprimirLocal } from '../../utils/impresionLocal';
+import { imprimirLocal, reimprimirConFallback } from '../../utils/impresionLocal';
 import { usePermisos } from '../../hooks/usePermisos';
 import Modal from '../../components/ui/Modal';
 import ModalPagoQr from './components/ModalPagoQr';
+import ModalPeso from './components/ModalPeso';
 import { imprimirTicketVenta }  from '../../utils/ticketVenta';
 
 const API_BASE = BASE_URL;
@@ -35,6 +36,7 @@ export default function PedidoPage() {
   const [tabMobile, setTabMobile] = useState('productos'); // 'productos' | 'orden'
   const [notaEditando, setNotaEditando] = useState(null); // item.id o null
   const [textoNota, setTextoNota] = useState('');
+  const [modalPeso, setModalPeso] = useState(null); // { modo: 'agregar'|'editar', producto, itemId?, pesoInicial? } | null
 
   // Pedido
   const { data: pedido, isLoading: cargandoPedido } = useQuery({
@@ -76,12 +78,12 @@ export default function PedidoPage() {
 
   // Mutaciones
   const agregar = useMutation({
-    mutationFn: ({ producto_id }) => agregarItem(id, { producto_id, cantidad: 1 }),
+    mutationFn: ({ producto_id, peso }) => agregarItem(id, { producto_id, cantidad: 1, peso }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['venta', id] }),
   });
 
   const actualizar = useMutation({
-    mutationFn: ({ item_id, cantidad }) => actualizarItem(id, item_id, { cantidad }),
+    mutationFn: ({ item_id, cantidad, peso }) => actualizarItem(id, item_id, { cantidad, peso }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['venta', id] }),
   });
 
@@ -100,6 +102,10 @@ export default function PedidoPage() {
 
   function handleProducto(prod) {
     if (!puedeCrear || !esPendiente) return;
+    if (prod.es_pesable) {
+      setModalPeso({ modo: 'agregar', producto: prod });
+      return;
+    }
     const existente = itemsPorProducto[prod.id];
     if (existente) {
       actualizar.mutate({ item_id: existente.id, cantidad: existente.cantidad + 1 });
@@ -200,6 +206,9 @@ export default function PedidoPage() {
             }`}>
               {pedido.estado === 'listo' ? '✓ Listo' : pedido.estado}
             </span>
+            {pedido.notas && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 italic mt-0.5 truncate">Nota: {pedido.notas}</p>
+            )}
           </div>
         </div>
 
@@ -310,11 +319,11 @@ export default function PedidoPage() {
                       <div className="p-2.5">
                         <p className="text-sm font-medium text-gray-800 dark:text-gray-100 leading-tight line-clamp-2">{prod.nombre}</p>
                         <p className="text-sm font-bold text-blue-600 dark:text-blue-400 mt-1">
-                          Bs {parseFloat(prod.precio).toFixed(2)}
+                          Bs {parseFloat(prod.precio).toFixed(2)}{prod.es_pesable ? '/kg' : ''}
                         </p>
                       </div>
                       {/* Badge cantidad */}
-                      {enOrden && (
+                      {enOrden && !prod.es_pesable && (
                         <span className="absolute top-2 right-2 w-6 h-6 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center justify-center shadow">
                           {enOrden.cantidad}
                         </span>
@@ -359,11 +368,28 @@ export default function PedidoPage() {
                         <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">
                           {item.producto?.nombre}
                         </p>
-                        <p className="text-xs text-gray-400">
-                          Bs {parseFloat(item.precio).toFixed(2)} c/u
-                        </p>
+                        {item.peso != null ? (
+                          <p className="text-xs text-gray-400">
+                            {parseFloat(item.peso).toFixed(3)} kg × Bs {parseFloat(item.producto.precio).toFixed(2)}/kg
+                          </p>
+                        ) : (
+                          <p className="text-xs text-gray-400">
+                            Bs {parseFloat(item.precio).toFixed(2)} c/u
+                          </p>
+                        )}
                       </div>
-                      {esPendiente && puedeCrear ? (
+                      {item.peso != null ? (
+                        esPendiente && puedeCrear ? (
+                          <button
+                            onClick={() => setModalPeso({ modo: 'editar', producto: item.producto, itemId: item.id, pesoInicial: parseFloat(item.peso) })}
+                            className="text-xs font-semibold text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors shrink-0"
+                          >
+                            Editar peso
+                          </button>
+                        ) : (
+                          <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 shrink-0">{parseFloat(item.peso).toFixed(3)} kg</span>
+                        )
+                      ) : esPendiente && puedeCrear ? (
                         <div className="flex items-center gap-1 shrink-0">
                           <button
                             onClick={() => decrementar(item)}
@@ -534,6 +560,23 @@ export default function PedidoPage() {
           }}
         />
       )}
+
+      {modalPeso && (
+        <ModalPeso
+          producto={modalPeso.producto}
+          pesoInicial={modalPeso.pesoInicial}
+          onConfirmar={(pesoKg) => {
+            if (modalPeso.modo === 'editar') {
+              actualizar.mutate({ item_id: modalPeso.itemId, peso: pesoKg });
+            } else {
+              agregar.mutate({ producto_id: modalPeso.producto.id, peso: pesoKg });
+            }
+            setModalPeso(null);
+          }}
+          onClose={() => setModalPeso(null)}
+          textoConfirmar={modalPeso.modo === 'editar' ? 'Guardar' : 'Agregar'}
+        />
+      )}
     </div>
   );
 }
@@ -544,6 +587,12 @@ function ModalCobrar({ total, pedidoId, pedido, config, onClose, onExito }) {
   const [metodo, setMetodo] = useState('efectivo');
   const [error, setError] = useState(null);
   const [pagoQr, setPagoQr] = useState(null);
+  const [ventaExitosa, setVentaExitosa] = useState(null); // { metodoPago } | null
+
+  const reimprimir = useMutation({
+    mutationFn: () => reimprimirVenta(pedidoId),
+    onSuccess: (datos) => reimprimirConFallback(datos),
+  });
 
   const cobrar = useMutation({
     mutationFn: () => cobrarVenta(pedidoId, { metodo_pago: metodo, monto_recibido: total }),
@@ -552,11 +601,46 @@ function ModalCobrar({ total, pedidoId, pedido, config, onClose, onExito }) {
         setPagoQr(resultado.pago_qr);
       } else {
         imprimirLocal(resultado.datos_impresion);
-        onExito();
+        setVentaExitosa({ metodoPago: metodo });
       }
     },
     onError: (err) => setError(err?.response?.data?.mensaje ?? 'Error al cobrar'),
   });
+
+  if (ventaExitosa) {
+    return (
+      <Modal titulo="Venta cobrada" onClose={onExito} ancho="max-w-sm">
+        <div className="space-y-5 text-center">
+          <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto" />
+          <div>
+            <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Total cobrado</p>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white">Bs {total.toFixed(2)}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              {ventaExitosa.metodoPago === 'qr' ? 'QR / Transferencia' : 'Efectivo'}
+            </p>
+          </div>
+          {reimprimir.isError && (
+            <p className="text-sm text-red-600">No se pudo reimprimir.</p>
+          )}
+          <div className="flex justify-center gap-3">
+            <button
+              onClick={() => reimprimir.mutate()}
+              disabled={reimprimir.isPending}
+              className="px-4 py-2 rounded-xl text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-60"
+            >
+              {reimprimir.isPending ? 'Imprimiendo...' : '🖨 Imprimir de nuevo'}
+            </button>
+            <button
+              onClick={onExito}
+              className="px-5 py-2 rounded-xl text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
 
   if (pagoQr) {
     return (
@@ -564,7 +648,7 @@ function ModalCobrar({ total, pedidoId, pedido, config, onClose, onExito }) {
         pedidoId={pedidoId}
         pagoQr={pagoQr}
         onClose={onClose}
-        onCompletado={() => onExito()}
+        onCompletado={() => setVentaExitosa({ metodoPago: 'qr' })}
         onReintentar={() => cobrar.mutate()}
       />
     );

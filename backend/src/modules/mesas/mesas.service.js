@@ -65,13 +65,13 @@ async function obtenerMesa(id, alcance) {
   return mesa;
 }
 
-async function crearMesa({ area_id, nombre, asientos = 4, pos_x = 0, pos_y = 0 }, sucursal_id) {
+async function crearMesa({ area_id, nombre, asientos = 4 }, sucursal_id) {
   const area = await Area.findByPk(area_id);
   if (!area) throw Object.assign(new Error('Área no encontrada'), { status: 404 });
   if (area.sucursal_id !== sucursal_id) {
     throw Object.assign(new Error('El área no pertenece a tu sucursal'), { status: 404 });
   }
-  return Mesa.create({ area_id, nombre, asientos, pos_x, pos_y });
+  return Mesa.create({ area_id, nombre, asientos });
 }
 
 async function actualizarMesa(id, datos, alcance) {
@@ -80,16 +80,10 @@ async function actualizarMesa(id, datos, alcance) {
   return obtenerMesa(id, alcance);
 }
 
-async function actualizarPosicion(id, { pos_x, pos_y }, alcance) {
-  const mesa = await obtenerMesa(id, alcance);
-  await mesa.update({ pos_x, pos_y });
-  return mesa;
-}
-
 async function eliminarMesa(id, alcance) {
   const mesa = await obtenerMesa(id, alcance);
   if (mesa.estado === 'ocupada') throw Object.assign(new Error('No se puede eliminar una mesa ocupada'), { status: 409 });
   await mesa.destroy();
 }
 
-module.exports = { listarAreas, crearArea, actualizarArea, eliminarArea, listarMesas, obtenerMesa, crearMesa, actualizarMesa, actualizarPosicion, eliminarMesa };
+module.exports = { listarAreas, crearArea, actualizarArea, eliminarArea, listarMesas, obtenerMesa, crearMesa, actualizarMesa, eliminarMesa };

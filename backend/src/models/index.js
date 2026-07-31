@@ -32,7 +32,6 @@ const Compra = require('./Compra');
 const DetalleCompra = require('./DetalleCompra');
 const RegistroInventario = require('./RegistroInventario');
 const Configuracion = require('./Configuracion');
-const Reservacion = require('./Reservacion');
 const Sucursal = require('./Sucursal');
 const ProductoStockSucursal = require('./ProductoStockSucursal');
 const Caja = require('./Caja');
@@ -106,10 +105,6 @@ RegistroInventario.belongsTo(Producto, { foreignKey: 'producto_id', as: 'product
 RegistroInventario.belongsTo(Usuario, { foreignKey: 'usuario_id', as: 'usuario' });
 Producto.hasMany(RegistroInventario, { foreignKey: 'producto_id', as: 'movimientos' });
 
-// Reservaciones
-Reservacion.belongsTo(Mesa, { foreignKey: 'mesa_id', as: 'mesa' });
-Mesa.hasMany(Reservacion, { foreignKey: 'mesa_id', as: 'reservaciones' });
-
 // Sucursal_id operativo (Fase 2)
 Area.belongsTo(Sucursal, { foreignKey: 'sucursal_id', as: 'sucursal' });
 SesionCaja.belongsTo(Sucursal, { foreignKey: 'sucursal_id', as: 'sucursal' });
@@ -145,7 +140,6 @@ module.exports = {
   Proveedor, Compra, DetalleCompra,
   RegistroInventario,
   Configuracion,
-  Reservacion,
   Sucursal,
   ProductoStockSucursal,
   Caja,

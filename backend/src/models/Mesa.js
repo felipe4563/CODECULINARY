@@ -7,8 +7,6 @@ const Mesa = sequelize.define('Mesa', {
   nombre: { type: DataTypes.STRING(100), allowNull: false },
   asientos: { type: DataTypes.INTEGER, defaultValue: 4 },
   estado: { type: DataTypes.ENUM('disponible','ocupada','reservada'), defaultValue: 'disponible' },
-  pos_x: { type: DataTypes.INTEGER, defaultValue: 0 },
-  pos_y: { type: DataTypes.INTEGER, defaultValue: 0 },
 }, {
   tableName: 'mesas',
   createdAt: 'creado_en',

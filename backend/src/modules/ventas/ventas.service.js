@@ -5,15 +5,35 @@ const {
 const { emitir } = require('../../socket');
 const { ajustarStockSucursal } = require('../inventario/stock.service');
 const codepayClient = require('../../integrations/codepay/codepay.client');
+const { calcularPrecioPesable } = require('../../utils/precio');
 
 // Rango del día calendario en hora de Bolivia (-04:00), sin depender de la
-// zona horaria del proceso de Node/VPS.
-function _rangoDiaBolivia() {
-  const fecha = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString().slice(0, 10);
+// zona horaria del proceso de Node/VPS. Por defecto usa el momento actual;
+// se puede pasar una fecha de referencia para obtener el rango del día en
+// que ocurrió esa fecha (p. ej. el día en que se creó un pedido).
+function _rangoDiaBolivia(referencia = new Date()) {
+  const fecha = new Date(referencia.getTime() - 4 * 60 * 60 * 1000).toISOString().slice(0, 10);
   return {
     inicio: new Date(`${fecha}T00:00:00-04:00`),
     fin: new Date(`${fecha}T23:59:59.999-04:00`),
   };
+}
+
+// Traduce un ítem del pedido (cantidad o peso) a los valores que se guardan
+// en detalle_pedidos, según si el producto se vende por peso o por unidad.
+function _datosLinea(item, producto) {
+  if (producto.es_pesable) {
+    const pesoCrudo = parseFloat(item.peso);
+    if (!(pesoCrudo > 0)) {
+      throw Object.assign(
+        new Error(`El producto "${producto.nombre}" se vende por peso: el peso (kg) es requerido y debe ser mayor a 0`),
+        { status: 400 }
+      );
+    }
+    const peso = Math.round(pesoCrudo * 1000) / 1000;
+    return { cantidad: 1, precio: calcularPrecioPesable(peso, parseFloat(producto.precio)), peso };
+  }
+  return { cantidad: item.cantidad ?? 1, precio: parseFloat(producto.precio), peso: null };
 }
 
 const INCLUDE_PEDIDO_COMPLETO = [
@@ -56,6 +76,47 @@ async function obtener(id, alcance) {
   if (!p) throw Object.assign(new Error('Pedido no encontrado'), { status: 404 });
   _verificarAlcance(p, alcance);
   return p;
+}
+
+async function reimprimir(id, alcance) {
+  const pedido = await obtener(id, alcance);
+  if (pedido.estado !== 'completado') {
+    throw Object.assign(new Error('Solo se puede reimprimir un pedido completado'), { status: 409 });
+  }
+  // El ticket reimpreso debe ser idéntico al original: no se puede dejar que
+  // _emitirImpresion recalcule numero_orden_diario "en vivo" (eso daría el
+  // conteo de HOY, no el que tenía el pedido al momento de venderse). Se
+  // recalcula el número que tenía ese pedido en su propio día de creación y
+  // se pasa como override.
+  const numero_orden_diario = await _numeroOrdenDiarioOriginal(pedido);
+  return _emitirImpresion(
+    pedido, pedido.metodo_pago, parseFloat(pedido.cambio || 0), pedido.sucursal_id, numero_orden_diario
+  );
+}
+
+// Cuenta cuántos pedidos no cancelados se crearon el mismo día calendario
+// (hora Bolivia) que `pedido`, hasta (e incluyendo) su propio `creado_en`.
+// Es el mismo número que _emitirImpresion le asignó cuando se imprimió por
+// primera vez, reutilizando el mismo rango de día y el mismo filtro de
+// exclusión de cancelados.
+//
+// `creado_en` es un TIMESTAMP de MySQL con precisión de segundo (ver
+// database/migrations/007_pedidos.sql), así que dos pedidos creados dentro
+// del mismo segundo comparten el mismo valor. Para desempatar sin depender
+// de sub-segundos se usa `id` (autoincremental, refleja el orden real de
+// creación) como criterio secundario.
+async function _numeroOrdenDiarioOriginal(pedido) {
+  const { inicio } = _rangoDiaBolivia(pedido.creado_en);
+  return Pedido.count({
+    where: {
+      estado: { [Op.ne]: 'cancelado' },
+      creado_en: { [Op.gte]: inicio },
+      [Op.or]: [
+        { creado_en: { [Op.lt]: pedido.creado_en } },
+        { creado_en: pedido.creado_en, id: { [Op.lte]: pedido.id } },
+      ],
+    },
+  });
 }
 
 async function _siguienteNumeroLlevar() {
@@ -148,14 +209,21 @@ async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, 
   return monto_neto;
 }
 
-async function _emitirImpresion(pedido, metodo_pago, cambio, sucursal_id) {
+async function _emitirImpresion(pedido, metodo_pago, cambio, sucursal_id, numeroOrdenDiarioOverride) {
   const cfgRows = await Configuracion.findAll({ where: { clave: ['nombre_negocio', 'simbolo_moneda', 'direccion', 'telefono', 'flujo_cocina'] } });
   const cfg = cfgRows.reduce((o, r) => { o[r.clave] = r.valor; return o; }, {});
 
-  const { inicio: inicioDia, fin: finDia } = _rangoDiaBolivia();
-  const numero_orden_diario = await Pedido.count({
-    where: { creado_en: { [Op.between]: [inicioDia, finDia] }, estado: { [Op.ne]: 'cancelado' } },
-  });
+  // Los llamadores normales (crearCompleta, cobrar, _confirmarPagoQr) no
+  // pasan override: se recalcula en vivo, como siempre. `reimprimir` sí pasa
+  // un valor explícito (el número que tenía el pedido el día que se vendió)
+  // para que el ticket reimpreso salga idéntico al original.
+  let numero_orden_diario = numeroOrdenDiarioOverride;
+  if (numero_orden_diario === undefined) {
+    const { inicio: inicioDia, fin: finDia } = _rangoDiaBolivia();
+    numero_orden_diario = await Pedido.count({
+      where: { creado_en: { [Op.between]: [inicioDia, finDia] }, estado: { [Op.ne]: 'cancelado' } },
+    });
+  }
 
   const datosCaja = { pedido: pedido.toJSON(), metodo_pago, cambio, config: cfg, numero_orden_diario };
   emitir('print:caja', datosCaja, sucursal_id);
@@ -300,7 +368,7 @@ async function procesarWebhookPagoQr({ event, order_id }) {
   }
 }
 
-async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente, tipo_documento, items, metodo_pago, monto_recibido, descuento = 0, propina = 0, sesion_caja_id, usuario_id }) {
+async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente, tipo_documento, notas, items, metodo_pago, monto_recibido, descuento = 0, propina = 0, sesion_caja_id, usuario_id }) {
   if (!sesion_caja_id) {
     throw Object.assign(new Error('No hay caja abierta. Abre la caja antes de crear una orden.'), { status: 409 });
   }
@@ -319,7 +387,8 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
     const producto = await Producto.findByPk(item.producto_id);
     if (!producto) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
     if (!producto.activo || !producto.es_vendible) throw Object.assign(new Error('Producto no disponible'), { status: 409 });
-    productos.push({ item, producto });
+    const linea = _datosLinea(item, producto);
+    productos.push({ item, producto, linea });
   }
 
   let mesa = null;
@@ -332,7 +401,7 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
     throw Object.assign(new Error("tipo debe ser 'mesa' o 'llevar'"), { status: 400 });
   }
 
-  const total = productos.reduce((sum, { item, producto }) => sum + item.cantidad * parseFloat(producto.precio), 0);
+  const total = productos.reduce((sum, { linea }) => sum + linea.cantidad * linea.precio, 0);
   const monto_neto = total - parseFloat(descuento) + parseFloat(propina);
 
   if (metodo_pago === 'efectivo') {
@@ -347,7 +416,7 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
   const pedidoId = await sequelize.transaction(async (t) => {
     const pedido = await Pedido.create({
       mesa_id: tipo === 'mesa' ? mesa_id : null,
-      tipo, numero_llevar, usuario_id, sesion_caja_id, sucursal_id,
+      tipo, numero_llevar, usuario_id, sesion_caja_id, sucursal_id, notas,
       estado: estadoInicial, total, descuento, propina, metodo_pago: 'efectivo',
       nombre_cliente: nombre_cliente || (tipo === 'llevar' ? 'Cliente' : 'Público General'),
       documento_cliente,
@@ -355,11 +424,11 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
     }, { transaction: t });
 
     const detalles = [];
-    for (const { item, producto } of productos) {
+    for (const { item, linea } of productos) {
       await DetallePedido.create({
-        pedido_id: pedido.id, producto_id: item.producto_id, cantidad: item.cantidad, precio: producto.precio, nota: item.nota,
+        pedido_id: pedido.id, producto_id: item.producto_id, cantidad: linea.cantidad, precio: linea.precio, peso: linea.peso, nota: item.nota,
       }, { transaction: t });
-      detalles.push({ producto_id: item.producto_id, cantidad: item.cantidad });
+      detalles.push({ producto_id: item.producto_id, cantidad: linea.cantidad });
     }
 
     if (metodo_pago !== 'qr') {
@@ -382,7 +451,7 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
   return { ...creado.toJSON(), datos_impresion };
 }
 
-async function agregarItem(pedido_id, { producto_id, cantidad = 1, nota }, alcance) {
+async function agregarItem(pedido_id, { producto_id, cantidad = 1, nota, peso }, alcance) {
   const pedido = await Pedido.findByPk(pedido_id);
   if (!pedido) throw Object.assign(new Error('Pedido no encontrado'), { status: 404 });
   _verificarAlcance(pedido, alcance);
@@ -392,11 +461,14 @@ async function agregarItem(pedido_id, { producto_id, cantidad = 1, nota }, alcan
   if (!producto) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
   if (!producto.activo || !producto.es_vendible) throw Object.assign(new Error('Producto no disponible'), { status: 409 });
 
+  const linea = _datosLinea({ cantidad, peso }, producto);
+
   const item = await DetallePedido.create({
     pedido_id,
     producto_id,
-    cantidad,
-    precio: producto.precio,
+    cantidad: linea.cantidad,
+    precio: linea.precio,
+    peso: linea.peso,
     nota,
   });
 
@@ -405,13 +477,21 @@ async function agregarItem(pedido_id, { producto_id, cantidad = 1, nota }, alcan
   return item;
 }
 
-async function actualizarItem(pedido_id, item_id, { cantidad, nota, estado }, alcance) {
+async function actualizarItem(pedido_id, item_id, { cantidad, nota, estado, peso }, alcance) {
   const pedido = await Pedido.findByPk(pedido_id);
   if (!pedido) throw Object.assign(new Error('Pedido no encontrado'), { status: 404 });
   _verificarAlcance(pedido, alcance);
   const item = await DetallePedido.findOne({ where: { id: item_id, pedido_id } });
   if (!item) throw Object.assign(new Error('Item no encontrado'), { status: 404 });
-  await item.update({ cantidad, nota, estado });
+
+  if (item.peso !== null && peso !== undefined) {
+    const producto = await Producto.findByPk(item.producto_id);
+    const linea = _datosLinea({ peso }, producto);
+    await item.update({ peso: linea.peso, precio: linea.precio, nota, estado });
+  } else {
+    await item.update({ cantidad, nota, estado });
+  }
+
   await _recalcularTotal(pedido_id);
   emitir('restaurante:actualizar', { tipo: 'pedido_items' });
   return item;
@@ -499,7 +579,7 @@ async function marcarListo(pedido_id, alcance) {
 }
 
 module.exports = {
-  listar, listarCocina, obtener, crear, crearCompleta, agregarItem, actualizarItem, eliminarItem,
+  listar, listarCocina, obtener, reimprimir, crear, crearCompleta, agregarItem, actualizarItem, eliminarItem,
   cobrar, cancelar, marcarListo,
   consultarEstadoPagoQr, cancelarPagoQr, procesarWebhookPagoQr,
 };

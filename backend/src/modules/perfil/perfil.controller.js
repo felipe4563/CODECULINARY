@@ -4,7 +4,7 @@ const { Usuario, Rol } = require('../../models');
 async function obtener(req, res, next) {
   try {
     const u = await Usuario.findByPk(req.usuario.id, {
-      attributes: { exclude: ['contrasena', 'token_recordar'] },
+      attributes: { exclude: ['contrasena'] },
       include: [{ model: Rol, as: 'rol', attributes: ['id', 'nombre'] }],
     });
     res.json({ ok: true, datos: u });
@@ -31,7 +31,7 @@ async function actualizar(req, res, next) {
     await u.update(datos);
     // Return updated user without sensitive fields
     const actualizado = await Usuario.findByPk(u.id, {
-      attributes: { exclude: ['contrasena', 'token_recordar'] },
+      attributes: { exclude: ['contrasena'] },
       include: [{ model: Rol, as: 'rol', attributes: ['id', 'nombre'] }],
     });
     res.json({ ok: true, datos: actualizado });

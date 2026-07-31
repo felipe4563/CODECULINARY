@@ -9,7 +9,6 @@ const Usuario = sequelize.define('Usuario', {
   email: { type: DataTypes.STRING(255), allowNull: false, unique: true },
   contrasena: { type: DataTypes.STRING(255), allowNull: false },
   activo: { type: DataTypes.TINYINT(1), defaultValue: 1 },
-  token_recordar: { type: DataTypes.STRING(255) },
 }, {
   tableName: 'usuarios',
   createdAt: 'creado_en',
