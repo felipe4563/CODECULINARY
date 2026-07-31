@@ -194,6 +194,7 @@ CREATE TABLE `gastos` (
 CREATE TABLE `grupos_opciones` (
   `id` int(10) UNSIGNED NOT NULL,
   `nombre` varchar(100) NOT NULL,
+  `tipo_seleccion` enum('unica','multiple') NOT NULL DEFAULT 'unica',
   `creado_en` timestamp NULL DEFAULT current_timestamp(),
   `actualizado_en` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -378,7 +379,6 @@ INSERT INTO `permisos` (`id`, `modulo`, `accion`, `descripcion`) VALUES
 CREATE TABLE `productos` (
   `id` int(10) UNSIGNED NOT NULL,
   `categoria_id` int(10) UNSIGNED NOT NULL,
-  `grupo_opciones_id` int(10) UNSIGNED DEFAULT NULL,
   `nombre` varchar(255) NOT NULL,
   `codigo_barras` varchar(255) DEFAULT NULL,
   `codigo` varchar(100) DEFAULT NULL,
@@ -390,6 +390,19 @@ CREATE TABLE `productos` (
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `creado_en` timestamp NOT NULL DEFAULT current_timestamp(),
   `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `producto_grupos_opciones`
+--
+
+CREATE TABLE `producto_grupos_opciones` (
+  `producto_id` int(10) UNSIGNED NOT NULL,
+  `grupo_opciones_id` int(10) UNSIGNED NOT NULL,
+  `orden` int(11) NOT NULL DEFAULT 0,
+  `obligatorio` tinyint(1) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -764,7 +777,13 @@ ALTER TABLE `permisos`
 ALTER TABLE `productos`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `productos_barcode_unique` (`codigo_barras`),
-  ADD KEY `categoria_id` (`categoria_id`),
+  ADD KEY `categoria_id` (`categoria_id`);
+
+--
+-- Indices de la tabla `producto_grupos_opciones`
+--
+ALTER TABLE `producto_grupos_opciones`
+  ADD PRIMARY KEY (`producto_id`,`grupo_opciones_id`),
   ADD KEY `grupo_opciones_id` (`grupo_opciones_id`);
 
 --
@@ -1071,8 +1090,14 @@ ALTER TABLE `pedidos`
 -- Filtros para la tabla `productos`
 --
 ALTER TABLE `productos`
-  ADD CONSTRAINT `productos_ibfk_1` FOREIGN KEY (`categoria_id`) REFERENCES `categorias` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `productos_ibfk_2` FOREIGN KEY (`grupo_opciones_id`) REFERENCES `grupos_opciones` (`id`) ON DELETE SET NULL;
+  ADD CONSTRAINT `productos_ibfk_1` FOREIGN KEY (`categoria_id`) REFERENCES `categorias` (`id`) ON DELETE CASCADE;
+
+--
+-- Filtros para la tabla `producto_grupos_opciones`
+--
+ALTER TABLE `producto_grupos_opciones`
+  ADD CONSTRAINT `producto_grupos_opciones_ibfk_1` FOREIGN KEY (`producto_id`) REFERENCES `productos` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `producto_grupos_opciones_ibfk_2` FOREIGN KEY (`grupo_opciones_id`) REFERENCES `grupos_opciones` (`id`) ON DELETE CASCADE;
 
 --
 -- Filtros para la tabla `producto_stock_sucursal`

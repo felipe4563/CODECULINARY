@@ -20,6 +20,7 @@ const Categoria = require('./Categoria');
 const Producto = require('./Producto');
 const GrupoOpciones = require('./GrupoOpciones');
 const Opcion = require('./Opcion');
+const ProductoGrupoOpciones = require('./ProductoGrupoOpciones');
 const Cliente = require('./Cliente');
 const SesionCaja = require('./SesionCaja');
 const Pedido = require('./Pedido');
@@ -64,8 +65,8 @@ Categoria.hasMany(Producto, { foreignKey: 'categoria_id', as: 'productos' });
 // Opciones de producto
 GrupoOpciones.hasMany(Opcion, { foreignKey: 'grupo_opciones_id', as: 'opciones' });
 Opcion.belongsTo(GrupoOpciones, { foreignKey: 'grupo_opciones_id', as: 'grupo' });
-Producto.belongsTo(GrupoOpciones, { foreignKey: 'grupo_opciones_id', as: 'grupo_opciones' });
-GrupoOpciones.hasMany(Producto, { foreignKey: 'grupo_opciones_id', as: 'productos' });
+Producto.belongsToMany(GrupoOpciones, { through: ProductoGrupoOpciones, foreignKey: 'producto_id', otherKey: 'grupo_opciones_id', as: 'grupos_opciones' });
+GrupoOpciones.belongsToMany(Producto, { through: ProductoGrupoOpciones, foreignKey: 'grupo_opciones_id', otherKey: 'producto_id', as: 'productos' });
 
 // Pedidos
 Pedido.belongsTo(Mesa, { foreignKey: 'mesa_id', as: 'mesa' });
@@ -133,7 +134,7 @@ module.exports = {
   Rol, Permiso, Usuario,
   Area, Mesa,
   Categoria, Producto,
-  GrupoOpciones, Opcion,
+  GrupoOpciones, Opcion, ProductoGrupoOpciones,
   Cliente,
   SesionCaja, Pedido, DetallePedido,
   DetalleArqueo, Gasto, LibroCaja,

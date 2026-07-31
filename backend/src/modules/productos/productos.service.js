@@ -1,4 +1,4 @@
-const { Categoria, Producto, Sucursal, GrupoOpciones, Opcion } = require('../../models');
+const { Categoria, Producto, Sucursal, GrupoOpciones, Opcion, ProductoGrupoOpciones } = require('../../models');
 const sequelize = require('../../config/database');
 const { ajustarStockSucursal, mezclarStockPorSucursal } = require('../inventario/stock.service');
 
@@ -51,9 +51,9 @@ async function _conOpciones(id, transaction) {
   });
 }
 
-async function crearGrupoOpciones({ nombre, opciones = [] }) {
+async function crearGrupoOpciones({ nombre, tipo_seleccion, opciones = [] }) {
   return sequelize.transaction(async (t) => {
-    const grupo = await GrupoOpciones.create({ nombre }, { transaction: t });
+    const grupo = await GrupoOpciones.create({ nombre, tipo_seleccion }, { transaction: t });
     if (opciones.length) {
       await Opcion.bulkCreate(
         opciones.map((o, i) => ({ grupo_opciones_id: grupo.id, nombre: o.nombre, orden: o.orden ?? i })),
@@ -64,11 +64,11 @@ async function crearGrupoOpciones({ nombre, opciones = [] }) {
   });
 }
 
-async function actualizarGrupoOpciones(id, { nombre, opciones = [] }) {
+async function actualizarGrupoOpciones(id, { nombre, tipo_seleccion, opciones = [] }) {
   return sequelize.transaction(async (t) => {
     const grupo = await GrupoOpciones.findByPk(id, { transaction: t });
     if (!grupo) throw Object.assign(new Error('Grupo de opciones no encontrado'), { status: 404 });
-    await grupo.update({ nombre }, { transaction: t });
+    await grupo.update({ nombre, tipo_seleccion }, { transaction: t });
     await Opcion.destroy({ where: { grupo_opciones_id: id }, transaction: t });
     if (opciones.length) {
       await Opcion.bulkCreate(
@@ -83,8 +83,39 @@ async function actualizarGrupoOpciones(id, { nombre, opciones = [] }) {
 async function eliminarGrupoOpciones(id) {
   const grupo = await GrupoOpciones.findByPk(id);
   if (!grupo) throw Object.assign(new Error('Grupo de opciones no encontrado'), { status: 404 });
-  await Producto.update({ grupo_opciones_id: null }, { where: { grupo_opciones_id: id } });
+  // producto_grupos_opciones tiene ON DELETE CASCADE en grupo_opciones_id: las
+  // asignaciones de productos a este grupo se borran solas, no hace falta tocarlas a mano.
   await grupo.destroy();
+}
+
+async function _sincronizarGruposOpciones(producto_id, grupos_opciones = [], transaction) {
+  const ids = grupos_opciones.map((g) => g.id);
+  if (new Set(ids).size !== ids.length) {
+    throw Object.assign(new Error('No se puede asignar el mismo grupo de opciones más de una vez'), { status: 400 });
+  }
+  await ProductoGrupoOpciones.destroy({ where: { producto_id }, transaction });
+  if (grupos_opciones.length) {
+    await ProductoGrupoOpciones.bulkCreate(
+      grupos_opciones.map((g, i) => ({ producto_id, grupo_opciones_id: g.id, orden: g.orden ?? i, obligatorio: !!g.obligatorio })),
+      { transaction }
+    );
+  }
+}
+
+function _normalizarGruposOpciones(producto) {
+  if (Array.isArray(producto.grupos_opciones)) {
+    producto.grupos_opciones = producto.grupos_opciones
+      .map((g) => ({
+        id: g.id,
+        nombre: g.nombre,
+        tipo_seleccion: g.tipo_seleccion,
+        orden: g.ProductoGrupoOpciones?.orden ?? 0,
+        obligatorio: !!g.ProductoGrupoOpciones?.obligatorio,
+        opciones: [...(g.opciones ?? [])].sort((a, b) => a.orden - b.orden),
+      }))
+      .sort((a, b) => a.orden - b.orden);
+  }
+  return producto;
 }
 
 // --- Productos ---
@@ -106,13 +137,15 @@ async function listarProductos({ categoria_id, solo_vendibles, solo_disponibles,
     where,
     include: [
       { model: Categoria, as: 'categoria', attributes: ['id', 'nombre'] },
-      { model: GrupoOpciones, as: 'grupo_opciones', attributes: ['id', 'nombre'],
+      { model: GrupoOpciones, as: 'grupos_opciones', attributes: ['id', 'nombre', 'tipo_seleccion'],
+        through: { attributes: ['orden', 'obligatorio'] },
         include: [{ model: Opcion, as: 'opciones', attributes: ['id', 'nombre', 'orden'] }] },
     ],
     order,
   });
 
   const conStock = await mezclarStockPorSucursal(productos, alcance);
+  conStock.forEach(_normalizarGruposOpciones);
 
   if (solo_disponibles === 'true' || solo_disponibles === true) {
     return conStock.filter((p) => p.stock === null || p.stock > 0);
@@ -124,16 +157,17 @@ async function obtenerProducto(id, alcance) {
   const p = await Producto.findByPk(id, {
     include: [
       { model: Categoria, as: 'categoria', attributes: ['id', 'nombre'] },
-      { model: GrupoOpciones, as: 'grupo_opciones', attributes: ['id', 'nombre'],
+      { model: GrupoOpciones, as: 'grupos_opciones', attributes: ['id', 'nombre', 'tipo_seleccion'],
+        through: { attributes: ['orden', 'obligatorio'] },
         include: [{ model: Opcion, as: 'opciones', attributes: ['id', 'nombre', 'orden'] }] },
     ],
   });
   if (!p) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
   const [conStock] = await mezclarStockPorSucursal([p], alcance);
-  return conStock;
+  return _normalizarGruposOpciones(conStock);
 }
 
-async function crearProducto({ categoria_id, nombre, codigo_barras, codigo, precio, costo, stock, sucursal_id, es_vendible, imagen, grupo_opciones_id }, alcance) {
+async function crearProducto({ categoria_id, nombre, codigo_barras, codigo, precio, costo, stock, sucursal_id, es_vendible, imagen, grupos_opciones }, alcance) {
   let sucursalDestino;
   const conStock = stock !== undefined && stock !== null;
 
@@ -148,7 +182,8 @@ async function crearProducto({ categoria_id, nombre, codigo_barras, codigo, prec
     }
   }
 
-  const producto = await Producto.create({ categoria_id, nombre, codigo_barras, codigo, precio, costo, stock: conStock ? 0 : null, es_vendible, imagen, grupo_opciones_id });
+  const producto = await Producto.create({ categoria_id, nombre, codigo_barras, codigo, precio, costo, stock: conStock ? 0 : null, es_vendible, imagen });
+  await _sincronizarGruposOpciones(producto.id, grupos_opciones);
 
   if (conStock) {
     await ajustarStockSucursal({ producto_id: producto.id, sucursal_id: sucursalDestino, tipo: 'ajuste', cantidad: stock, usuario_id: alcance.usuario_id, nota: 'Stock inicial' });
@@ -158,10 +193,13 @@ async function crearProducto({ categoria_id, nombre, codigo_barras, codigo, prec
 }
 
 async function actualizarProducto(id, datos, alcance) {
-  const { stock, ...resto } = datos; // stock nunca se edita aquí — solo vía ajustarStockSucursal
+  const { stock, grupos_opciones, ...resto } = datos; // stock nunca se edita aquí — solo vía ajustarStockSucursal
   const p = await Producto.findByPk(id);
   if (!p) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
   await p.update(resto);
+  if (grupos_opciones !== undefined) {
+    await _sincronizarGruposOpciones(id, grupos_opciones);
+  }
   return obtenerProducto(id, alcance);
 }
 

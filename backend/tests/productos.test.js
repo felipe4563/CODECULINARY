@@ -138,8 +138,8 @@ describe('Productos — stock inicial con acceso a todas las sucursales', () => 
   });
 });
 
-describe('Productos — grupo de opciones', () => {
-  let categoriaId, grupoId, adminToken;
+describe('Productos — grupos de opciones', () => {
+  let categoriaId, grupoSaborId, grupoExtraId, adminToken;
 
   beforeAll(async () => {
     const login = await request(app).post('/api/v1/auth/login').send({ email: 'admin@restaurante.com', contrasena: process.env.ADMIN_PASSWORD || 'admin123' });
@@ -148,41 +148,108 @@ describe('Productos — grupo de opciones', () => {
     const categoria = await Categoria.create({ nombre: 'Categoria Grupo Opciones Productos Test' });
     categoriaId = categoria.id;
 
-    const grupo = await GrupoOpciones.create({ nombre: 'Término Productos Test' });
-    await Opcion.create({ grupo_opciones_id: grupo.id, nombre: 'Jugoso', orden: 1 });
-    grupoId = grupo.id;
+    const grupoSabor = await GrupoOpciones.create({ nombre: 'Sabor Productos Test', tipo_seleccion: 'unica' });
+    await Opcion.create({ grupo_opciones_id: grupoSabor.id, nombre: 'Chocolate', orden: 0 });
+    await Opcion.create({ grupo_opciones_id: grupoSabor.id, nombre: 'Vainilla', orden: 1 });
+    grupoSaborId = grupoSabor.id;
+
+    const grupoExtra = await GrupoOpciones.create({ nombre: 'Extra Productos Test', tipo_seleccion: 'multiple' });
+    await Opcion.create({ grupo_opciones_id: grupoExtra.id, nombre: 'Maní', orden: 0 });
+    grupoExtraId = grupoExtra.id;
   });
 
   afterAll(async () => {
     await Producto.destroy({ where: { categoria_id: categoriaId } });
     await Categoria.destroy({ where: { id: categoriaId } });
-    await Opcion.destroy({ where: { grupo_opciones_id: grupoId } });
-    await GrupoOpciones.destroy({ where: { id: grupoId } });
+    await Opcion.destroy({ where: { grupo_opciones_id: [grupoSaborId, grupoExtraId] } });
+    await GrupoOpciones.destroy({ where: { id: [grupoSaborId, grupoExtraId] } });
   });
 
-  it('crea un producto con grupo_opciones_id y lo devuelve con sus opciones', async () => {
+  it('crea un producto con varios grupos ordenados y los devuelve ordenados con tipo_seleccion y obligatorio', async () => {
     const crear = await request(app)
       .post('/api/v1/productos')
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ categoria_id: categoriaId, nombre: 'Picaña Test', precio: 85, grupo_opciones_id: grupoId });
+      .send({
+        categoria_id: categoriaId, nombre: 'Bubba Test', precio: 15,
+        grupos_opciones: [
+          { id: grupoExtraId, orden: 1, obligatorio: false },
+          { id: grupoSaborId, orden: 0, obligatorio: true },
+        ],
+      });
 
     expect(crear.status).toBe(201);
-    expect(crear.body.datos.grupo_opciones.nombre).toBe('Término Productos Test');
-    expect(crear.body.datos.grupo_opciones.opciones.map(o => o.nombre)).toEqual(['Jugoso']);
+    const grupos = crear.body.datos.grupos_opciones;
+    expect(grupos.map(g => g.id)).toEqual([grupoSaborId, grupoExtraId]); // ordenado por 'orden', no por el orden en que se enviaron
+    expect(grupos[0].tipo_seleccion).toBe('unica');
+    expect(grupos[0].obligatorio).toBe(true);
+    expect(grupos[0].opciones.map(o => o.nombre)).toEqual(['Chocolate', 'Vainilla']);
+    expect(grupos[1].tipo_seleccion).toBe('multiple');
+    expect(grupos[1].obligatorio).toBe(false);
   });
 
-  it('GET /productos incluye grupo_opciones cuando está asignado', async () => {
-    const res = await request(app).get('/api/v1/productos').set('Authorization', `Bearer ${adminToken}`);
-    const creado = res.body.datos.find(p => p.nombre === 'Picaña Test');
-    expect(creado.grupo_opciones.id).toBe(grupoId);
-  });
-
-  it('un producto sin grupo asignado devuelve grupo_opciones null', async () => {
+  it('GET /productos/:id devuelve los mismos grupos ordenados', async () => {
     const crear = await request(app)
       .post('/api/v1/productos')
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ categoria_id: categoriaId, nombre: 'Producto Sin Grupo Test', precio: 20 });
+      .send({ categoria_id: categoriaId, nombre: 'Bubba Consulta Test', precio: 15, grupos_opciones: [{ id: grupoSaborId, orden: 0, obligatorio: false }] });
 
-    expect(crear.body.datos.grupo_opciones).toBeNull();
+    const obtener = await request(app)
+      .get(`/api/v1/productos/${crear.body.datos.id}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(obtener.status).toBe(200);
+    expect(obtener.body.datos.grupos_opciones.map(g => g.id)).toEqual([grupoSaborId]);
+  });
+
+  it('actualizar un producto reemplaza el set completo de grupos', async () => {
+    const crear = await request(app)
+      .post('/api/v1/productos')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ categoria_id: categoriaId, nombre: 'Producto Reemplazo Grupos Test', precio: 10, grupos_opciones: [{ id: grupoSaborId, orden: 0, obligatorio: false }] });
+
+    const editar = await request(app)
+      .put(`/api/v1/productos/${crear.body.datos.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ grupos_opciones: [{ id: grupoExtraId, orden: 0, obligatorio: true }] });
+
+    expect(editar.status).toBe(200);
+    expect(editar.body.datos.grupos_opciones.map(g => g.id)).toEqual([grupoExtraId]);
+  });
+
+  it('rechaza asignar el mismo grupo dos veces', async () => {
+    const res = await request(app)
+      .post('/api/v1/productos')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        categoria_id: categoriaId, nombre: 'Producto Grupo Duplicado Test', precio: 10,
+        grupos_opciones: [{ id: grupoSaborId, orden: 0 }, { id: grupoSaborId, orden: 1 }],
+      });
+    expect(res.status).toBe(400);
+  });
+
+  it('un producto sin grupos asignados devuelve grupos_opciones vacío', async () => {
+    const crear = await request(app)
+      .post('/api/v1/productos')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ categoria_id: categoriaId, nombre: 'Producto Sin Grupos Test', precio: 20 });
+
+    expect(crear.body.datos.grupos_opciones).toEqual([]);
+  });
+
+  it('borrar un grupo de opciones quita la asignación del producto sin borrar el producto', async () => {
+    const grupoTemp = await GrupoOpciones.create({ nombre: 'Grupo Temporal Test', tipo_seleccion: 'unica' });
+    const crear = await request(app)
+      .post('/api/v1/productos')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ categoria_id: categoriaId, nombre: 'Producto Con Grupo Temporal Test', precio: 10, grupos_opciones: [{ id: grupoTemp.id, orden: 0 }] });
+
+    await request(app).delete(`/api/v1/grupos-opciones/${grupoTemp.id}`).set('Authorization', `Bearer ${adminToken}`);
+
+    const obtener = await request(app).get(`/api/v1/productos/${crear.body.datos.id}`).set('Authorization', `Bearer ${adminToken}`);
+    expect(obtener.status).toBe(200);
+    expect(obtener.body.datos.grupos_opciones).toEqual([]);
+
+    const productoEnBd = await Producto.findByPk(crear.body.datos.id);
+    expect(productoEnBd).not.toBeNull();
   });
 });

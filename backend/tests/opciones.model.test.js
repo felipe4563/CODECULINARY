@@ -1,4 +1,4 @@
-const { GrupoOpciones, Opcion, Producto, Categoria } = require('../src/models');
+const { GrupoOpciones, Opcion, Producto, Categoria, ProductoGrupoOpciones } = require('../src/models');
 
 describe('Modelos GrupoOpciones y Opcion', () => {
   let categoriaId;
@@ -27,15 +27,16 @@ describe('Modelos GrupoOpciones y Opcion', () => {
     await grupo.destroy();
   });
 
-  it('un producto puede asignarse a un grupo de opciones, y al borrar el grupo queda sin asignar', async () => {
+  it('un producto puede asignarse a un grupo de opciones vía la tabla puente, y al borrar el grupo se quita la asignación', async () => {
     const grupo = await GrupoOpciones.create({ nombre: 'Sabor Model Test' });
-    const producto = await Producto.create({ categoria_id: categoriaId, nombre: 'Jugo Model Test', precio: 10, grupo_opciones_id: grupo.id });
+    const producto = await Producto.create({ categoria_id: categoriaId, nombre: 'Jugo Model Test', precio: 10 });
+    await ProductoGrupoOpciones.create({ producto_id: producto.id, grupo_opciones_id: grupo.id, orden: 0, obligatorio: 0 });
 
-    const recargado = await Producto.findByPk(producto.id, { include: [{ model: GrupoOpciones, as: 'grupo_opciones' }] });
-    expect(recargado.grupo_opciones.nombre).toBe('Sabor Model Test');
+    const recargado = await Producto.findByPk(producto.id, { include: [{ model: GrupoOpciones, as: 'grupos_opciones' }] });
+    expect(recargado.grupos_opciones.map((g) => g.nombre)).toEqual(['Sabor Model Test']);
 
-    await grupo.destroy(); // ON DELETE SET NULL — no debe fallar por el producto asignado
-    const productoRecargado = await Producto.findByPk(producto.id);
-    expect(productoRecargado.grupo_opciones_id).toBeNull();
+    await grupo.destroy(); // ON DELETE CASCADE en producto_grupos_opciones — no debe fallar por el producto asignado
+    const asignaciones = await ProductoGrupoOpciones.findAll({ where: { producto_id: producto.id } });
+    expect(asignaciones).toHaveLength(0);
   });
 });
