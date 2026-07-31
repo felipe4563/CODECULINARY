@@ -1,7 +1,9 @@
 # Mejoras de diseño: Sidebar
 
 **Fecha:** 2026-07-31
-**Alcance:** `frontend/src/components/layout/Sidebar.jsx`, nuevo `frontend/src/components/ui/Tooltip.jsx`, `frontend/package.json` (nueva dependencia `@radix-ui/react-tooltip`). Ningún otro archivo.
+**Alcance:** `frontend/src/components/layout/Sidebar.jsx`, nuevo `frontend/src/components/ui/tooltip.jsx`, `frontend/package.json` (nueva dependencia `@radix-ui/react-tooltip`). Ningún otro archivo.
+
+**Nota:** desde que se escribió este spec, `main` migró los primitivos shadcn a nombres de archivo en minúsculas (`ui/dialog.jsx`, `ui/button.jsx`) — el plan de implementación usa `ui/tooltip.jsx` para seguir esa convención.
 
 ## Goal
 
@@ -74,7 +76,7 @@ Para cada grupo se filtran los ítems visibles por permiso (misma lógica que ho
 
 ## 3. Tooltip en modo colapsado
 
-Se agrega la dependencia `@radix-ui/react-tooltip` (`npm install @radix-ui/react-tooltip` en `frontend/`) y se crea `frontend/src/components/ui/Tooltip.jsx`:
+Se agrega la dependencia `@radix-ui/react-tooltip` (`npm install @radix-ui/react-tooltip` en `frontend/`) y se crea `frontend/src/components/ui/tooltip.jsx`:
 
 ```jsx
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
@@ -96,7 +98,7 @@ export function TooltipContent({ className = '', sideOffset = 6, ...props }) {
 }
 ```
 
-(Sigue el mismo patrón delgado que `Dialog.jsx` ya usa sobre `@radix-ui/react-dialog` — wrapper mínimo, tokens shadcn, sin lógica propia.)
+(Sigue el mismo patrón delgado que `dialog.jsx` ya usa sobre `@radix-ui/react-dialog` — wrapper mínimo, tokens shadcn, sin lógica propia.)
 
 En `Sidebar.jsx`, todo el `<aside>` se envuelve en `<TooltipProvider delayDuration={200}>`. Cada `NavLink` se envuelve en `Tooltip` + `TooltipTrigger asChild` cuando el sidebar está en modo icon-only (mismo criterio de breakpoint que el punto 2); en modo expandido, el `NavLink` se renderiza sin el wrapper de tooltip (el label ya es visible, sería redundante). El atributo `title={label}` se elimina del `NavLink` en todos los casos — reemplazado por el `TooltipContent` con el mismo texto.
 

@@ -4,7 +4,9 @@
 
 **Goal:** Mejorar `frontend/src/components/layout/Sidebar.jsx` con indicador de ítem activo, secciones plegables con persistencia, tooltips en modo icon-only, y skeleton de carga en el header — sin cambiar rutas, permisos, ni comportamiento de navegación.
 
-**Architecture:** Un nuevo componente `ui/Tooltip.jsx` (wrapper delgado sobre `@radix-ui/react-tooltip`, mismo patrón que `ui/Dialog.jsx`) se agrega primero. Luego `Sidebar.jsx` se reescribe completo: `NAV_ITEMS` (lista plana) pasa a `NAV_GROUPS` (3 grupos), se agrega estado de secciones plegadas persistido en `localStorage`, un hook local `useIconOnly` determina vía `window.innerWidth` si el sidebar se renderiza en modo solo-iconos (para decidir si envolver cada ítem en `Tooltip`), y el header usa `isLoading` de React Query para mostrar un skeleton.
+**Architecture:** Un nuevo componente `ui/tooltip.jsx` (wrapper delgado sobre `@radix-ui/react-tooltip`, mismo patrón que `ui/dialog.jsx`) se agrega primero. Luego `Sidebar.jsx` se reescribe completo: `NAV_ITEMS` (lista plana) pasa a `NAV_GROUPS` (3 grupos), se agrega estado de secciones plegadas persistido en `localStorage`, un hook local `useIconOnly` determina vía `window.innerWidth` si el sidebar se renderiza en modo solo-iconos (para decidir si envolver cada ítem en `Tooltip`), y el header usa `isLoading` de React Query para mostrar un skeleton.
+
+**Nota de convención:** después de escribir este spec, otro trabajo en `main` migró los primitivos shadcn del proyecto a nombres de archivo en minúsculas (`ui/dialog.jsx`, `ui/button.jsx`, vía `components.json` del CLI de shadcn) — `ui/Dialog.jsx` ya no existe. Este plan usa `ui/tooltip.jsx` (minúsculas) para seguir esa convención vigente.
 
 **Tech Stack:** React 18, Tailwind 3.4 (tokens shadcn ya definidos en `index.css`/`tailwind.config.js`), `@tanstack/react-query`, `@radix-ui/react-tooltip` (nueva dependencia), `lucide-react`.
 
@@ -13,7 +15,7 @@
 - No hay test runner de frontend en este proyecto — la verificación es `npm run lint` + `npm run build` + inspección manual (documentado en specs previos).
 - Los tokens de color usados deben ser los ya definidos: `bg-card`, `text-foreground`, `text-muted-foreground`, `bg-primary`, `text-primary-foreground`, `bg-muted`, `border-border`, `bg-popover`, `text-popover-foreground`.
 - Breakpoints Tailwind por defecto (no sobreescritos en `tailwind.config.js`): `md` = 768px, `lg` = 1024px.
-- Alcance: solo `frontend/src/components/layout/Sidebar.jsx`, `frontend/src/components/ui/Tooltip.jsx` (nuevo), `frontend/package.json` y `frontend/package-lock.json`. Ningún otro archivo.
+- Alcance: solo `frontend/src/components/layout/Sidebar.jsx`, `frontend/src/components/ui/tooltip.jsx` (nuevo), `frontend/package.json` y `frontend/package-lock.json`. Ningún otro archivo.
 - Sin cambios de rutas, permisos, ni lógica de navegación — el filtrado por `tienePermiso(modulo, accion)` se mantiene idéntico, solo cambia cómo se agrupan/renderizan los ítems.
 
 ---
@@ -21,11 +23,11 @@
 ### Task 1: Componente Tooltip
 
 **Files:**
-- Create: `frontend/src/components/ui/Tooltip.jsx`
+- Create: `frontend/src/components/ui/tooltip.jsx`
 - Modify: `frontend/package.json` (nueva dependencia)
 
 **Interfaces:**
-- Produces: `Tooltip`, `TooltipProvider`, `TooltipTrigger`, `TooltipContent` — exportados desde `frontend/src/components/ui/Tooltip.jsx`, mismo patrón de uso que Radix (`<TooltipProvider><Tooltip><TooltipTrigger asChild>{child}</TooltipTrigger><TooltipContent>texto</TooltipContent></Tooltip></TooltipProvider>`).
+- Produces: `Tooltip`, `TooltipProvider`, `TooltipTrigger`, `TooltipContent` — exportados desde `frontend/src/components/ui/tooltip.jsx`, mismo patrón de uso que Radix (`<TooltipProvider><Tooltip><TooltipTrigger asChild>{child}</TooltipTrigger><TooltipContent>texto</TooltipContent></Tooltip></TooltipProvider>`).
 
 - [ ] **Step 1: Instalar la dependencia**
 
@@ -39,7 +41,7 @@ Verificar que `frontend/package.json` ahora incluye `"@radix-ui/react-tooltip"` 
 
 - [ ] **Step 2: Crear el componente Tooltip**
 
-Crear `frontend/src/components/ui/Tooltip.jsx` con exactamente este contenido (sigue el mismo patrón que `frontend/src/components/ui/Dialog.jsx`: wrapper delgado con `React.forwardRef`, `cn` para clases, `displayName` heredado del primitivo):
+Crear `frontend/src/components/ui/tooltip.jsx` con exactamente este contenido (sigue el mismo patrón que `frontend/src/components/ui/dialog.jsx`: wrapper delgado con `React.forwardRef`, `cn` para clases, `displayName` heredado del primitivo):
 
 ```jsx
 import * as React from 'react';
@@ -77,12 +79,12 @@ npm run lint
 npm run build
 ```
 
-Ambos deben terminar sin errores. `Tooltip.jsx` no se usa todavía en ningún lado en este punto — es esperado que el build pase igual (el archivo no se importa aún).
+Ambos deben terminar sin errores. `tooltip.jsx` no se usa todavía en ningún lado en este punto — es esperado que el build pase igual (el archivo no se importa aún).
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add frontend/src/components/ui/Tooltip.jsx frontend/package.json frontend/package-lock.json
+git add frontend/src/components/ui/tooltip.jsx frontend/package.json frontend/package-lock.json
 git commit -m "feat(ui): agregar componente Tooltip sobre @radix-ui/react-tooltip"
 ```
 
@@ -94,7 +96,7 @@ git commit -m "feat(ui): agregar componente Tooltip sobre @radix-ui/react-toolti
 - Modify: `frontend/src/components/layout/Sidebar.jsx` (reemplazo completo del archivo)
 
 **Interfaces:**
-- Consumes: `Tooltip`, `TooltipProvider`, `TooltipTrigger`, `TooltipContent` desde `../ui/Tooltip` (Task 1). `usePermisos()` (sin cambios), `getConfiguracion`/`logoSrc` desde `../../api/configuracion` (sin cambios).
+- Consumes: `Tooltip`, `TooltipProvider`, `TooltipTrigger`, `TooltipContent` desde `../ui/tooltip` (Task 1). `usePermisos()` (sin cambios), `getConfiguracion`/`logoSrc` desde `../../api/configuracion` (sin cambios).
 - No produce nuevas interfaces públicas — `Sidebar` sigue recibiendo las mismas props (`visible`, `onCerrar`, `colapsado`, `onToggleColapsado`) y sin cambios en cómo `Layout.jsx` lo usa.
 
 - [ ] **Step 1: Reemplazar el contenido completo de Sidebar.jsx**
@@ -107,7 +109,7 @@ import { NavLink } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { usePermisos } from '../../hooks/usePermisos';
 import { getConfiguracion, logoSrc } from '../../api/configuracion';
-import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '../ui/Tooltip';
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import {
   LayoutDashboard, UtensilsCrossed, Wallet, BookOpen,
   Package, Boxes, Truck, Users, UserCog, Shield, Settings, X,
