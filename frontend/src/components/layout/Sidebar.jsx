@@ -74,8 +74,8 @@ export default function Sidebar({ visible, onCerrar, colapsado, onToggleColapsad
       <aside
         className={`
           fixed top-0 left-0 h-full z-30 flex flex-col
-          bg-white dark:bg-gray-900
-          border-r border-gray-200 dark:border-gray-700/60
+          bg-card
+          border-r border-border
           transition-all duration-300 ease-in-out
           w-64 shrink-0
           ${visible ? 'translate-x-0' : '-translate-x-full'}
@@ -86,28 +86,28 @@ export default function Sidebar({ visible, onCerrar, colapsado, onToggleColapsad
         {/* Header */}
         <div className={`
           flex items-center py-4 min-h-[60px]
-          border-b border-gray-200 dark:border-gray-700/60
+          border-b border-border
           justify-between px-4
           md:justify-center md:px-0
           ${colapsado ? 'lg:justify-center lg:px-0' : 'lg:justify-between lg:px-5'}
         `}>
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-8 h-8 rounded-lg shrink-0 overflow-hidden bg-blue-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg shrink-0 overflow-hidden bg-primary flex items-center justify-center">
               {logo
                 ? <img src={logo} alt="Logo" className="w-full h-full object-cover" />
-                : <UtensilsCrossed className="w-4 h-4 text-white" />
+                : <UtensilsCrossed className="w-4 h-4 text-primary-foreground" />
               }
             </div>
             <div className={`min-w-0 md:hidden ${colapsado ? 'lg:hidden' : 'lg:block'}`}>
-              <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight truncate">{nombreNegocio}</p>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-tight">Sistema de Gestión</p>
+              <p className="text-sm font-bold text-foreground leading-tight truncate">{nombreNegocio}</p>
+              <p className="text-[11px] text-muted-foreground leading-tight">Sistema de Gestión</p>
             </div>
           </div>
 
           {/* X — solo en móvil */}
           <button
             onClick={onCerrar}
-            className="md:hidden p-1 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors"
+            className="md:hidden p-1 rounded-lg text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -126,8 +126,8 @@ export default function Sidebar({ visible, onCerrar, colapsado, onToggleColapsad
                 flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium transition-colors
                 ${itemAlign}
                 ${isActive
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                 }
               `}
             >
@@ -140,8 +140,8 @@ export default function Sidebar({ visible, onCerrar, colapsado, onToggleColapsad
         </nav>
 
         {/* CodeWave credit — solo cuando hay espacio para texto */}
-        <div className={`shrink-0 flex items-center justify-center gap-1.5 py-2.5 border-t border-gray-200 dark:border-gray-700/60 ${colapsado ? 'md:hidden' : 'md:hidden lg:flex'}`}>
-          <span className="text-[9px] text-gray-400 dark:text-gray-600 font-medium whitespace-nowrap">by</span>
+        <div className={`shrink-0 flex items-center justify-center gap-1.5 py-2.5 border-t border-border ${colapsado ? 'md:hidden' : 'md:hidden lg:flex'}`}>
+          <span className="text-[9px] text-muted-foreground font-medium whitespace-nowrap">by</span>
           <img src="/logo-light.png" alt="CodeWave" className="h-4 object-contain dark:hidden opacity-50" />
           <img src="/logo-dark.png"  alt="CodeWave" className="h-4 object-contain hidden dark:block opacity-50" />
         </div>
@@ -150,7 +150,7 @@ export default function Sidebar({ visible, onCerrar, colapsado, onToggleColapsad
         <button
           onClick={onToggleColapsado}
           title={colapsado ? 'Expandir menú' : 'Colapsar menú'}
-          className="hidden lg:flex items-center justify-center h-11 border-t border-gray-200 dark:border-gray-700/60 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors shrink-0"
+          className="hidden lg:flex items-center justify-center h-11 border-t border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
         >
           <ChevronLeft className={`w-4 h-4 transition-transform duration-300 ${colapsado ? 'rotate-180' : ''}`} />
         </button>
