@@ -21,6 +21,9 @@ export const eliminarItem = (pedido_id, item_id) =>
 export const cobrarVenta = (pedido_id, datos) =>
   api.post(`/ventas/${pedido_id}/cobrar`, datos).then((r) => r.data.datos);
 
+export const reimprimirVenta = (pedido_id) =>
+  api.post(`/ventas/${pedido_id}/reimprimir`).then((r) => r.data.datos);
+
 export const cancelarVenta = (pedido_id) =>
   api.post(`/ventas/${pedido_id}/cancelar`).then((r) => r.data.datos);
 

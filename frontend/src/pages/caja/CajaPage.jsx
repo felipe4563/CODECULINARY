@@ -12,6 +12,8 @@ import {
 } from '../../api/caja';
 import { getSucursales } from '../../api/sucursales';
 import { imprimirTicketCierreCaja } from '../../utils/ticketCierreCaja';
+import { reimprimirConFallback } from '../../utils/impresionLocal';
+import { reimprimirVenta } from '../../api/ventas';
 import { getConfiguracion } from '../../api/configuracion';
 import { usePermisos } from '../../hooks/usePermisos';
 import { useAuth } from '../../hooks/useAuth';
@@ -828,6 +830,22 @@ function ModalGasto({ sesionId, onClose, onExito }) {
 function ModalReporte({ reporte, config = {}, onClose }) {
   const { sesion, ventas_por_metodo = [], pedidos = [], efectivo_esperado } = reporte;
 
+  const [reimprimiendoId, setReimprimiendoId] = useState(null);
+  const [errorReimprimirId, setErrorReimprimirId] = useState(null);
+
+  async function reimprimir(pedidoId) {
+    setReimprimiendoId(pedidoId);
+    setErrorReimprimirId(null);
+    try {
+      const datos = await reimprimirVenta(pedidoId);
+      reimprimirConFallback(datos);
+    } catch {
+      setErrorReimprimirId(pedidoId);
+    } finally {
+      setReimprimiendoId(null);
+    }
+  }
+
   const totalEfectivo = ventas_por_metodo.find(v => v.metodo_pago === 'efectivo');
   const totalQR       = ventas_por_metodo.find(v => v.metodo_pago === 'qr');
   const totalVentas   = parseFloat(sesion.total_ventas);
@@ -906,18 +924,31 @@ function ModalReporte({ reporte, config = {}, onClose }) {
             </p>
             <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
               {pedidos.map(p => (
-                <div key={p.id} className="flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-700/50 rounded-lg px-3 py-2">
-                  <span className="text-gray-600 dark:text-gray-300">
-                    #{p.id} · {p.mesa?.nombre ?? 'Mesa'}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
-                      p.metodo_pago === 'efectivo'
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                    }`}>{p.metodo_pago}</span>
-                    <span className="font-semibold text-gray-800 dark:text-gray-100">Bs {parseFloat(p.total).toFixed(2)}</span>
+                <div key={p.id} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg px-3 py-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-300">
+                      #{p.id} · {p.mesa?.nombre ?? 'Mesa'}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                        p.metodo_pago === 'efectivo'
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                      }`}>{p.metodo_pago}</span>
+                      <span className="font-semibold text-gray-800 dark:text-gray-100">Bs {parseFloat(p.total).toFixed(2)}</span>
+                      <button
+                        onClick={() => reimprimir(p.id)}
+                        disabled={reimprimiendoId === p.id}
+                        title="Reimprimir ticket"
+                        className="p-1 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-60"
+                      >
+                        {reimprimiendoId === p.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : '🖨'}
+                      </button>
+                    </div>
                   </div>
+                  {errorReimprimirId === p.id && (
+                    <p className="text-right text-[11px] text-red-500 mt-1">No se pudo reimprimir</p>
+                  )}
                 </div>
               ))}
             </div>
