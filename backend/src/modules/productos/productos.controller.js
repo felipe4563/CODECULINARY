@@ -85,7 +85,7 @@ async function actualizarProducto(req, res, next) {
 }
 
 async function eliminarProducto(req, res, next) {
-  try { await svc.eliminarProducto(req.params.id); res.json({ ok: true, datos: null }); }
+  try { res.json({ ok: true, datos: await svc.eliminarProducto(req.params.id) }); }
   catch (err) { next(err); }
 }
 

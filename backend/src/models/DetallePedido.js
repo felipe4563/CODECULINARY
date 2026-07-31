@@ -6,6 +6,7 @@ const DetallePedido = sequelize.define('DetallePedido', {
   pedido_id: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
   producto_id: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
   cantidad: { type: DataTypes.INTEGER, defaultValue: 1 },
+  peso: { type: DataTypes.DECIMAL(10,3) },
   precio: { type: DataTypes.DECIMAL(10,2), allowNull: false },
   nota: { type: DataTypes.STRING(255) },
   estado: { type: DataTypes.ENUM('pendiente','preparando','servido'), defaultValue: 'pendiente' },
