@@ -38,14 +38,14 @@ async function eliminarCategoria(id) {
 
 async function listarGruposOpciones() {
   return GrupoOpciones.findAll({
-    include: [{ model: Opcion, as: 'opciones', attributes: ['id', 'nombre', 'orden'] }],
+    include: [{ model: Opcion, as: 'opciones', attributes: ['id', 'nombre', 'precio_adicional', 'orden'] }],
     order: [['nombre', 'ASC'], [{ model: Opcion, as: 'opciones' }, 'orden', 'ASC']],
   });
 }
 
 async function _conOpciones(id, transaction) {
   return GrupoOpciones.findByPk(id, {
-    include: [{ model: Opcion, as: 'opciones', attributes: ['id', 'nombre', 'orden'] }],
+    include: [{ model: Opcion, as: 'opciones', attributes: ['id', 'nombre', 'precio_adicional', 'orden'] }],
     order: [[{ model: Opcion, as: 'opciones' }, 'orden', 'ASC']],
     transaction,
   });
@@ -56,7 +56,7 @@ async function crearGrupoOpciones({ nombre, tipo_seleccion, opciones = [] }) {
     const grupo = await GrupoOpciones.create({ nombre, tipo_seleccion }, { transaction: t });
     if (opciones.length) {
       await Opcion.bulkCreate(
-        opciones.map((o, i) => ({ grupo_opciones_id: grupo.id, nombre: o.nombre, orden: o.orden ?? i })),
+        opciones.map((o, i) => ({ grupo_opciones_id: grupo.id, nombre: o.nombre, precio_adicional: o.precio_adicional || 0, orden: o.orden ?? i })),
         { transaction: t }
       );
     }
@@ -72,7 +72,7 @@ async function actualizarGrupoOpciones(id, { nombre, tipo_seleccion, opciones = 
     await Opcion.destroy({ where: { grupo_opciones_id: id }, transaction: t });
     if (opciones.length) {
       await Opcion.bulkCreate(
-        opciones.map((o, i) => ({ grupo_opciones_id: id, nombre: o.nombre, orden: o.orden ?? i })),
+        opciones.map((o, i) => ({ grupo_opciones_id: id, nombre: o.nombre, precio_adicional: o.precio_adicional || 0, orden: o.orden ?? i })),
         { transaction: t }
       );
     }
@@ -111,7 +111,9 @@ function _normalizarGruposOpciones(producto) {
         tipo_seleccion: g.tipo_seleccion,
         orden: g.ProductoGrupoOpciones?.orden ?? 0,
         obligatorio: !!g.ProductoGrupoOpciones?.obligatorio,
-        opciones: [...(g.opciones ?? [])].sort((a, b) => a.orden - b.orden),
+        opciones: [...(g.opciones ?? [])]
+          .sort((a, b) => a.orden - b.orden)
+          .map((o) => ({ id: o.id, nombre: o.nombre, precio_adicional: parseFloat(o.precio_adicional || 0), orden: o.orden })),
       }))
       .sort((a, b) => a.orden - b.orden);
   }
@@ -146,7 +148,7 @@ async function listarProductos({ categoria_id, solo_vendibles, solo_disponibles,
       { model: Categoria, as: 'categoria', attributes: ['id', 'nombre'] },
       { model: GrupoOpciones, as: 'grupos_opciones', attributes: ['id', 'nombre', 'tipo_seleccion'],
         through: { attributes: ['orden', 'obligatorio'] },
-        include: [{ model: Opcion, as: 'opciones', attributes: ['id', 'nombre', 'orden'] }] },
+        include: [{ model: Opcion, as: 'opciones', attributes: ['id', 'nombre', 'precio_adicional', 'orden'] }] },
     ],
     order,
   });
@@ -166,7 +168,7 @@ async function obtenerProducto(id, alcance) {
       { model: Categoria, as: 'categoria', attributes: ['id', 'nombre'] },
       { model: GrupoOpciones, as: 'grupos_opciones', attributes: ['id', 'nombre', 'tipo_seleccion'],
         through: { attributes: ['orden', 'obligatorio'] },
-        include: [{ model: Opcion, as: 'opciones', attributes: ['id', 'nombre', 'orden'] }] },
+        include: [{ model: Opcion, as: 'opciones', attributes: ['id', 'nombre', 'precio_adicional', 'orden'] }] },
     ],
   });
   if (!p) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });

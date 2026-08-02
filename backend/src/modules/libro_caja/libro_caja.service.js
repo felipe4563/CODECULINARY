@@ -30,7 +30,17 @@ async function listar({ sesion_caja_id } = {}, alcance) {
 async function crear(usuario_id, { sesion_caja_id, tipo, concepto, monto, metodo_pago = 'efectivo' }, alcance) {
   if (!['ingreso', 'egreso'].includes(tipo)) throw Object.assign(new Error('tipo debe ser ingreso o egreso'), { status: 400 });
   await _verificarSesionEnAlcance(sesion_caja_id, alcance);
-  return LibroCaja.create({ sesion_caja_id, usuario_id, tipo, concepto, monto, metodo_pago });
+  const entrada = await LibroCaja.create({ sesion_caja_id, usuario_id, tipo, concepto, monto, metodo_pago });
+
+  // El cierre de caja calcula "esperado en caja" restando sesion.total_gastos
+  // (no sumando egresos del libro en vivo), así que un egreso en efectivo
+  // cargado acá tiene que reflejarse ahí también — si no, el arqueo del
+  // cierre no cuadra con el efectivo real que salió de la caja.
+  if (tipo === 'egreso' && metodo_pago === 'efectivo') {
+    await SesionCaja.increment('total_gastos', { by: parseFloat(monto), where: { id: sesion_caja_id } });
+  }
+
+  return entrada;
 }
 
 module.exports = { listar, crear };

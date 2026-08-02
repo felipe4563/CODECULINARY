@@ -3,13 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   RefreshCw, AlertCircle, Package, ShoppingCart, ShoppingBag,
-  Plus, Minus, Trash2, CreditCard, Wallet, ChevronRight, LayoutGrid, CheckCircle2,
+  Plus, Minus, Trash2, CreditCard, Wallet, ChevronRight, LayoutGrid, CheckCircle2, Gift,
 } from 'lucide-react';
 import { getMesas } from '../../api/mesas';
 import { getVentas, crearVentaCompleta, cobrarVenta, reimprimirVenta } from '../../api/ventas';
 import { getEstadoCajas } from '../../api/caja';
 import { getProductos } from '../../api/productos';
 import { getCategorias } from '../../api/categorias';
+import { getCombosActivos } from '../../api/combos';
+import { getPromocionesActivas } from '../../api/promociones';
+import ClienteFidelidad from './components/ClienteFidelidad';
+import CuponInput from './components/CuponInput';
 import { BASE_URL } from '../../api/configuracion';
 import { usePermisos } from '../../hooks/usePermisos';
 import { useAuth } from '../../hooks/useAuth';
@@ -82,6 +86,32 @@ export default function VentasPage() {
     queryFn: () => getProductos({ solo_vendibles: true, solo_disponibles: true, order_by: 'mas_vendido', ...(categoriaActiva ? { categoria_id: categoriaActiva } : {}) }),
   });
 
+  const { data: combosActivos = [] } = useQuery({
+    queryKey: ['combos-activos'],
+    queryFn: getCombosActivos,
+    enabled: puedeVer,
+  });
+
+  const { data: promocionesActivas = [] } = useQuery({
+    queryKey: ['promociones-activas'],
+    queryFn: getPromocionesActivas,
+    enabled: puedeVer,
+  });
+
+  const promoPorProducto = useMemo(() => {
+    const mapa = {};
+    promocionesActivas.forEach((p) => { mapa[p.producto_id] = p; });
+    return mapa;
+  }, [promocionesActivas]);
+
+  function precioConPromo(prod) {
+    const base = parseFloat(prod.precio);
+    const promo = promoPorProducto[prod.id];
+    if (!promo) return base;
+    const descuento = promo.tipo === 'porcentaje' ? base * (parseFloat(promo.valor) / 100) : parseFloat(promo.valor);
+    return Math.max(0, base - descuento);
+  }
+
   useEffect(() => {
     function onActualizar() {
       queryClient.invalidateQueries({ queryKey: ['mesas'] });
@@ -97,29 +127,53 @@ export default function VentasPage() {
   }, {});
 
   const cantidadPorProducto = useMemo(() => {
-    return carrito.reduce((acc, it) => { acc[it.producto_id] = (acc[it.producto_id] ?? 0) + it.cantidad; return acc; }, {});
+    return carrito.reduce((acc, it) => {
+      if (it.producto_id) acc[it.producto_id] = (acc[it.producto_id] ?? 0) + it.cantidad;
+      return acc;
+    }, {});
   }, [carrito]);
 
   const total = carrito.reduce((sum, it) => sum + it.cantidad * it.precio, 0);
   const totalItems = carrito.reduce((sum, it) => sum + it.cantidad, 0);
   const puedeCobrarAhora = totalItems > 0 && (mesaSeleccionada != null || modoLlevar != null);
 
-  function agregarAlCarrito(prod, nota) {
+  function agregarAlCarrito(prod, seleccion) {
+    const nota = seleccion?.nota ?? null;
+    const opcionIds = seleccion?.opcionIds ?? [];
+    const extra = seleccion?.extra ?? 0;
+    const precioBase = precioConPromo(prod);
     setCarrito((prev) => {
       const existente = prev.find((it) => it.producto_id === prod.id && it.nota === nota);
       if (existente) {
         return prev.map((it) => it === existente ? { ...it, cantidad: it.cantidad + 1 } : it);
       }
-      return [...prev, { linea_id: nuevoLineaId(), producto_id: prod.id, nombre: prod.nombre, precio: parseFloat(prod.precio), cantidad: 1, nota }];
+      return [...prev, {
+        linea_id: nuevoLineaId(), producto_id: prod.id, nombre: prod.nombre,
+        precio: precioBase + extra, cantidad: 1, nota, opcion_ids: opcionIds,
+      }];
     });
   }
 
   function agregarPesableAlCarrito(prod, pesoKg) {
-    const precio = calcularPrecioPesable(pesoKg, parseFloat(prod.precio));
+    const precioBase = precioConPromo(prod);
+    const precio = calcularPrecioPesable(pesoKg, precioBase);
     setCarrito((prev) => [...prev, {
       linea_id: nuevoLineaId(), producto_id: prod.id, nombre: prod.nombre,
-      precio, cantidad: 1, nota: null, peso: pesoKg, precio_kg: parseFloat(prod.precio),
+      precio, cantidad: 1, nota: null, peso: pesoKg, precio_kg: precioBase,
     }]);
+  }
+
+  function agregarCombo(combo) {
+    setCarrito((prev) => {
+      const existente = prev.find((it) => it.combo_id === combo.id);
+      if (existente) {
+        return prev.map((it) => it === existente ? { ...it, cantidad: it.cantidad + 1 } : it);
+      }
+      return [...prev, {
+        linea_id: nuevoLineaId(), combo_id: combo.id, nombre: `Combo: ${combo.nombre}`,
+        precio: parseFloat(combo.precio), cantidad: 1, nota: null,
+      }];
+    });
   }
 
   function handleProducto(prod) {
@@ -135,8 +189,8 @@ export default function VentasPage() {
     agregarAlCarrito(prod, null);
   }
 
-  function elegirOpcion(nota) {
-    agregarAlCarrito(selectorOpcion, nota);
+  function elegirOpcion(seleccion) {
+    agregarAlCarrito(selectorOpcion, seleccion);
     setSelectorOpcion(null);
   }
 
@@ -231,6 +285,24 @@ export default function VentasPage() {
             onSeleccionar={setCategoriaActiva}
           />
 
+          {combosActivos.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-2 mt-2 shrink-0 scrollbar-hide">
+              {combosActivos.map((combo) => (
+                <button
+                  key={combo.id}
+                  onClick={() => puedeCrear && agregarCombo(combo)}
+                  disabled={!puedeCrear}
+                  className="shrink-0 flex flex-col items-start gap-0.5 px-3.5 py-2.5 rounded-xl border border-primary/40 bg-primary/5 hover:bg-primary/10 transition-colors text-left disabled:opacity-50"
+                >
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                    <Gift className="w-3.5 h-3.5 text-primary shrink-0" /> {combo.nombre}
+                  </span>
+                  <span className="text-xs font-bold text-primary">Bs {parseFloat(combo.precio).toFixed(2)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="flex-1 overflow-y-auto mt-2 pb-4">
             {cargandoProductos ? (
               <div className="flex items-center justify-center h-32 gap-2 text-muted-foreground">
@@ -269,7 +341,14 @@ export default function VentasPage() {
                       </div>
                       <div className="p-2.5">
                         <p className="text-sm font-medium text-foreground leading-tight line-clamp-2">{prod.nombre}</p>
-                        <p className="text-sm font-bold text-primary mt-1">Bs {parseFloat(prod.precio).toFixed(2)}{prod.es_pesable ? '/kg' : ''}</p>
+                        {promoPorProducto[prod.id] ? (
+                          <div className="mt-1">
+                            <p className="text-xs text-muted-foreground line-through">Bs {parseFloat(prod.precio).toFixed(2)}</p>
+                            <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">Bs {precioConPromo(prod).toFixed(2)}{prod.es_pesable ? '/kg' : ''}</p>
+                          </div>
+                        ) : (
+                          <p className="text-sm font-bold text-primary mt-1">Bs {parseFloat(prod.precio).toFixed(2)}{prod.es_pesable ? '/kg' : ''}</p>
+                        )}
                       </div>
                       {cantidadEnCarrito && !prod.es_pesable && (
                         <span className="absolute top-2 right-2 w-6 h-6 bg-primary text-primary-foreground text-xs font-bold rounded-full flex items-center justify-center shadow">
@@ -485,6 +564,13 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
   const [error, setError] = useState(null);
   const [pagoQrEstado, setPagoQrEstado] = useState(null); // { pedidoId, pagoQr } | null
   const [ventaExitosa, setVentaExitosa] = useState(null); // { pedidoId, metodoPago } | null
+  const [clienteFidelidad, setClienteFidelidad] = useState(null);
+  const [puntosCanjear, setPuntosCanjear] = useState(0);
+  const [descuentoPuntos, setDescuentoPuntos] = useState(0);
+  const [cuponAplicado, setCuponAplicado] = useState(null); // { codigo, descuento } | null
+
+  const descuentoCupon = cuponAplicado?.descuento ?? 0;
+  const totalFinal = metodo === 'efectivo' ? Math.max(0, total - descuentoPuntos - descuentoCupon) : total;
 
   const reimprimir = useMutation({
     mutationFn: () => reimprimirVenta(ventaExitosa.pedidoId),
@@ -497,10 +583,13 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
       mesa_id: tipo === 'mesa' ? mesaId : undefined,
       nombre_cliente: nombreCliente ?? undefined,
       notas: notas.trim() || undefined,
-      items: carrito.map((it) => ({ producto_id: it.producto_id, cantidad: it.cantidad, nota: it.nota, peso: it.peso })),
+      items: carrito.map((it) => ({ producto_id: it.producto_id, combo_id: it.combo_id, cantidad: it.cantidad, nota: it.nota, peso: it.peso, opcion_ids: it.opcion_ids })),
       metodo_pago: metodo,
-      monto_recibido: total,
+      monto_recibido: totalFinal,
       sesion_caja_id: sesionCajaId,
+      cliente_id: clienteFidelidad?.id,
+      puntos_canjear: metodo === 'efectivo' ? puntosCanjear : 0,
+      cupon_codigo: metodo === 'efectivo' ? cuponAplicado?.codigo : undefined,
     }),
     onSuccess: (resultado) => {
       if (resultado.pago_qr) {
@@ -526,7 +615,7 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
           <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto" />
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Total cobrado</p>
-            <p className="text-3xl font-bold text-foreground">Bs {total.toFixed(2)}</p>
+            <p className="text-3xl font-bold text-foreground">Bs {totalFinal.toFixed(2)}</p>
             <p className="text-sm text-muted-foreground mt-1">
               {ventaExitosa.metodoPago === 'qr' ? 'QR / Transferencia' : 'Efectivo'}
             </p>
@@ -571,8 +660,29 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
       <div className="space-y-5">
         <div className="bg-muted rounded-xl p-4 text-center">
           <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Total a cobrar</p>
-          <p className="text-3xl font-bold text-foreground">Bs {total.toFixed(2)}</p>
+          {metodo === 'efectivo' && (descuentoPuntos > 0 || descuentoCupon > 0) ? (
+            <>
+              <p className="text-sm text-muted-foreground line-through">Bs {total.toFixed(2)}</p>
+              <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">Bs {totalFinal.toFixed(2)}</p>
+            </>
+          ) : (
+            <p className="text-3xl font-bold text-foreground">Bs {total.toFixed(2)}</p>
+          )}
         </div>
+
+        <ClienteFidelidad
+          cliente={clienteFidelidad}
+          onCambiarCliente={setClienteFidelidad}
+          puntosCanjear={puntosCanjear}
+          onCambiarPuntos={(puntos, descuento) => { setPuntosCanjear(puntos); setDescuentoPuntos(descuento); }}
+        />
+
+        <CuponInput
+          subtotal={total - descuentoPuntos}
+          cupon={cuponAplicado}
+          onAplicar={(codigo, descuento) => setCuponAplicado({ codigo, descuento })}
+          onQuitar={() => setCuponAplicado(null)}
+        />
 
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Método de pago</p>

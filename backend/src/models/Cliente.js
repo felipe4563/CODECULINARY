@@ -9,6 +9,7 @@ const Cliente = sequelize.define('Cliente', {
   email: { type: DataTypes.STRING(255) },
   telefono: { type: DataTypes.STRING(50) },
   direccion: { type: DataTypes.STRING(255) },
+  puntos: { type: DataTypes.INTEGER, defaultValue: 0 },
 }, {
   tableName: 'clientes',
   createdAt: 'creado_en',

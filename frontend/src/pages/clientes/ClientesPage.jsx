@@ -4,7 +4,7 @@ import { usePermisos } from '../../hooks/usePermisos';
 import { getClientes, crearCliente, actualizarCliente } from '../../api/clientes';
 import {
   Users, Plus, Search, X, Edit2, Phone, Mail, MapPin,
-  CreditCard, UserCircle, AlertTriangle,
+  CreditCard, UserCircle, AlertTriangle, Star,
 } from 'lucide-react';
 
 /* ─── helpers ─── */
@@ -49,23 +49,18 @@ function ModalCliente({ cliente, onClose, onGuardar, loading }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md border border-border">
         {/* header */}
-        <div
-          className="px-6 py-4 rounded-t-2xl flex items-center justify-between"
-          style={{ background: esEdicion
-            ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
-            : 'linear-gradient(135deg, #3b82f6, #6366f1)' }}
-        >
+        <div className="px-6 py-4 rounded-t-2xl flex items-center justify-between bg-primary">
           <div className="flex items-center gap-3">
             {esEdicion
-              ? <Edit2 className="w-5 h-5 text-white" />
-              : <Plus className="w-5 h-5 text-white" />}
-            <h2 className="text-white font-semibold">
+              ? <Edit2 className="w-5 h-5 text-primary-foreground" />
+              : <Plus className="w-5 h-5 text-primary-foreground" />}
+            <h2 className="text-primary-foreground font-semibold">
               {esEdicion ? 'Editar Cliente' : 'Nuevo Cliente'}
             </h2>
           </div>
-          <button onClick={onClose} className="text-white/80 hover:text-white transition-colors">
+          <button onClick={onClose} className="text-primary-foreground/80 hover:text-primary-foreground transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -73,7 +68,7 @@ function ModalCliente({ cliente, onClose, onGuardar, loading }) {
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {/* nombre */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
               Nombre completo *
             </label>
             <input
@@ -81,52 +76,52 @@ function ModalCliente({ cliente, onClose, onGuardar, loading }) {
               onChange={set('nombre')}
               placeholder="Ej: Juan Pérez"
               autoFocus
-              className="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded-xl border border-input bg-background text-foreground px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
           {/* documento */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
                 Tipo doc.
               </label>
               <select
                 value={form.tipo_documento}
                 onChange={set('tipo_documento')}
-                className="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-xl border border-input bg-background text-foreground px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 {TIPOS_DOC.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
                 N° documento
               </label>
               <input
                 value={form.numero_documento}
                 onChange={set('numero_documento')}
                 placeholder="12345678"
-                className="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-xl border border-input bg-background text-foreground px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
           </div>
 
           {/* contacto */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
                 Teléfono
               </label>
               <input
                 value={form.telefono}
                 onChange={set('telefono')}
                 placeholder="+591 7XXXXXXX"
-                className="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-xl border border-input bg-background text-foreground px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
                 Email
               </label>
               <input
@@ -134,26 +129,26 @@ function ModalCliente({ cliente, onClose, onGuardar, loading }) {
                 value={form.email}
                 onChange={set('email')}
                 placeholder="correo@ejemplo.com"
-                className="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-xl border border-input bg-background text-foreground px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
           </div>
 
           {/* dirección */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
               Dirección
             </label>
             <input
               value={form.direccion}
               onChange={set('direccion')}
               placeholder="Av. Principal #123..."
-              className="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded-xl border border-input bg-background text-foreground px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
           {error && (
-            <p className="text-rose-600 text-sm flex items-center gap-1">
+            <p className="text-rose-600 dark:text-rose-400 text-sm flex items-center gap-1">
               <AlertTriangle className="w-4 h-4" />{error}
             </p>
           )}
@@ -162,14 +157,14 @@ function ModalCliente({ cliente, onClose, onGuardar, loading }) {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              className="flex-1 py-2.5 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-semibold transition-colors"
+              className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-60 text-primary-foreground text-sm font-semibold transition-colors"
             >
               {loading ? 'Guardando...' : esEdicion ? 'Actualizar' : 'Crear cliente'}
             </button>
@@ -184,18 +179,24 @@ function ModalCliente({ cliente, onClose, onGuardar, loading }) {
 function ClienteCard({ cliente, idx, puedoEditar, onEditar }) {
   return (
     <div
-      className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-4"
+      className="bg-card rounded-xl border border-border shadow-sm p-4"
       style={{ animation: 'cliFadeUp .35s ease both', animationDelay: `${idx * 30}ms` }}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <Avatar nombre={cliente.nombre} />
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{cliente.nombre}</p>
+            <p className="text-sm font-semibold text-foreground truncate">{cliente.nombre}</p>
             {cliente.numero_documento && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-0.5">
+              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                 <CreditCard className="w-3 h-3" />
                 {cliente.tipo_documento} {cliente.numero_documento}
+              </p>
+            )}
+            {cliente.puntos > 0 && (
+              <p className="text-xs text-primary flex items-center gap-1 mt-0.5 font-medium">
+                <Star className="w-3 h-3" />
+                {cliente.puntos} puntos
               </p>
             )}
           </div>
@@ -203,7 +204,7 @@ function ClienteCard({ cliente, idx, puedoEditar, onEditar }) {
         {puedoEditar && (
           <button
             onClick={() => onEditar(cliente)}
-            className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+            className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
           >
             <Edit2 className="w-4 h-4" />
           </button>
@@ -212,26 +213,26 @@ function ClienteCard({ cliente, idx, puedoEditar, onEditar }) {
 
       <div className="mt-3 grid grid-cols-2 gap-1.5 text-xs">
         {cliente.telefono && (
-          <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+          <div className="flex items-center gap-1.5 text-muted-foreground">
             <Phone className="w-3 h-3 shrink-0" />
             <span className="truncate">{cliente.telefono}</span>
           </div>
         )}
         {cliente.email && (
-          <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+          <div className="flex items-center gap-1.5 text-muted-foreground">
             <Mail className="w-3 h-3 shrink-0" />
             <span className="truncate">{cliente.email}</span>
           </div>
         )}
         {cliente.direccion && (
-          <div className="col-span-2 flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+          <div className="col-span-2 flex items-center gap-1.5 text-muted-foreground">
             <MapPin className="w-3 h-3 shrink-0" />
             <span className="truncate">{cliente.direccion}</span>
           </div>
         )}
       </div>
 
-      <div className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+      <div className="mt-2 text-xs text-muted-foreground">
         Registrado el {fmtFecha(cliente.creado_en)}
       </div>
     </div>
@@ -300,7 +301,7 @@ export default function ClientesPage() {
 
   if (!puedoVer) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3 text-gray-400">
+      <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
         <Users className="w-12 h-12" />
         <p className="text-sm">Sin acceso al módulo de clientes</p>
       </div>
@@ -337,24 +338,22 @@ export default function ClientesPage() {
 
       <div className="space-y-6">
         {/* header */}
-        <div
-          className="rounded-2xl p-6 relative overflow-hidden"
-          style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%)' }}
-        >
-          <div className="absolute -top-6 -right-6 w-32 h-32 bg-white/10 rounded-full" />
-          <div className="absolute -bottom-4 -right-16 w-48 h-48 bg-white/5 rounded-full" />
+        <div className="rounded-2xl p-5 sm:p-6 bg-primary text-primary-foreground relative overflow-hidden">
+          <div className="absolute -top-6 -right-6 w-32 h-32 bg-primary-foreground/10 rounded-full" />
+          <div className="absolute -bottom-4 -right-16 w-48 h-48 bg-primary-foreground/5 rounded-full" />
           <div className="relative flex items-center justify-between flex-wrap gap-3">
             <div>
-              <h1 className="text-2xl font-bold text-white">Clientes</h1>
-              <p className="text-blue-100 text-sm mt-0.5">Directorio de clientes registrados</p>
+              <h1 className="text-xl sm:text-2xl font-bold">Clientes</h1>
+              <p className="text-primary-foreground/70 text-sm mt-0.5">Directorio de clientes registrados</p>
             </div>
             {puedoCrear && (
               <button
                 onClick={() => setModal('nuevo')}
-                className="flex items-center gap-2 bg-white text-indigo-700 px-4 py-2 rounded-xl text-sm font-semibold shadow hover:shadow-md transition-all hover:scale-[1.02]"
+                className="flex items-center gap-2 bg-primary-foreground text-primary px-4 py-2 rounded-xl text-sm font-semibold shadow hover:shadow-md transition-all hover:scale-[1.02]"
               >
                 <Plus className="w-4 h-4" />
-                Nuevo Cliente
+                <span className="hidden sm:inline">Nuevo Cliente</span>
+                <span className="sm:hidden">Nuevo</span>
               </button>
             )}
           </div>
@@ -367,50 +366,47 @@ export default function ClientesPage() {
               label: 'Total clientes',
               value: clientes.length,
               sub: 'registrados',
-              color: 'indigo',
               delay: 100,
             },
             {
               label: 'Con documento',
               value: clientes.filter(c => c.numero_documento).length,
               sub: 'identificados',
-              color: 'blue',
               delay: 160,
             },
             {
               label: 'Con contacto',
               value: clientes.filter(c => c.telefono || c.email).length,
               sub: 'con tel. o email',
-              color: 'violet',
               delay: 220,
             },
-          ].map(({ label, value, sub, color, delay }) => (
+          ].map(({ label, value, sub, delay }) => (
             <div
               key={label}
-              className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5 relative overflow-hidden"
+              className="bg-card rounded-2xl border border-border shadow-sm p-5 relative overflow-hidden"
               style={{ animation: 'cliFadeUp .4s ease both', animationDelay: `${delay}ms` }}
             >
-              <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl bg-${color}-500`} />
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">{label}</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{sub}</p>
+              <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl bg-primary" />
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">{label}</p>
+              <p className="text-2xl font-bold text-foreground">{value}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
             </div>
           ))}
         </div>
 
         {/* buscador */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             value={buscar}
             onChange={e => setBuscar(e.target.value)}
             placeholder="Buscar por nombre, documento, teléfono o email..."
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-input bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
           {buscar && (
             <button
               onClick={() => setBuscar('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
               <X className="w-4 h-4" />
             </button>
@@ -421,11 +417,11 @@ export default function ClientesPage() {
         {isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-28 bg-gray-100 dark:bg-gray-800 rounded-xl animate-pulse" />
+              <div key={i} className="h-28 bg-muted rounded-xl animate-pulse" />
             ))}
           </div>
         ) : clientesFiltrados.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-400">
+          <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
             <UserCircle className="w-12 h-12 opacity-40" />
             <p className="text-sm">
               {buscar ? 'Sin resultados para esa búsqueda' : 'Sin clientes registrados'}
@@ -433,7 +429,7 @@ export default function ClientesPage() {
             {puedoCrear && !buscar && (
               <button
                 onClick={() => setModal('nuevo')}
-                className="text-indigo-600 text-sm font-medium hover:underline"
+                className="text-primary text-sm font-medium hover:underline"
               >
                 Registrar primer cliente
               </button>
@@ -449,83 +445,93 @@ export default function ClientesPage() {
             </div>
 
             {/* desktop: tabla */}
-            <div className="hidden sm:block bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 dark:border-gray-700">
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Cliente</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Documento</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Teléfono</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Email</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Dirección</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Registrado</th>
-                    {puedoEditar && <th className="px-4 py-3" />}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
-                  {clientesFiltrados.map((c, i) => (
-                    <tr
-                      key={c.id}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
-                      style={{ animation: 'cliFadeUp .3s ease both', animationDelay: `${i * 20}ms` }}
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <Avatar nombre={c.nombre} />
-                          <span className="font-medium text-gray-900 dark:text-white">{c.nombre}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        {c.numero_documento ? (
-                          <span className="inline-flex items-center gap-1 text-gray-700 dark:text-gray-300">
-                            <CreditCard className="w-3.5 h-3.5 text-gray-400" />
-                            <span className="text-xs text-gray-500">{c.tipo_documento}</span>
-                            {c.numero_documento}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {c.telefono ? (
-                          <span className="inline-flex items-center gap-1 text-gray-700 dark:text-gray-300">
-                            <Phone className="w-3.5 h-3.5 text-gray-400" />{c.telefono}
-                          </span>
-                        ) : <span className="text-gray-400">—</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        {c.email ? (
-                          <span className="inline-flex items-center gap-1 text-gray-700 dark:text-gray-300">
-                            <Mail className="w-3.5 h-3.5 text-gray-400" />{c.email}
-                          </span>
-                        ) : <span className="text-gray-400">—</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        {c.direccion ? (
-                          <span className="inline-flex items-center gap-1 text-gray-700 dark:text-gray-300 text-xs">
-                            <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                            <span className="truncate max-w-[140px]">{c.direccion}</span>
-                          </span>
-                        ) : <span className="text-gray-400">—</span>}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                        {fmtFecha(c.creado_en)}
-                      </td>
-                      {puedoEditar && (
-                        <td className="px-4 py-3">
-                          <button
-                            onClick={() => setModal(c)}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      )}
+            <div className="hidden sm:block bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cliente</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Documento</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Teléfono</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Email</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Dirección</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Puntos</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Registrado</th>
+                      {puedoEditar && <th className="px-4 py-3" />}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {clientesFiltrados.map((c, i) => (
+                      <tr
+                        key={c.id}
+                        className="hover:bg-muted/50 transition-colors"
+                        style={{ animation: 'cliFadeUp .3s ease both', animationDelay: `${i * 20}ms` }}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <Avatar nombre={c.nombre} />
+                            <span className="font-medium text-foreground">{c.nombre}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          {c.numero_documento ? (
+                            <span className="inline-flex items-center gap-1 text-foreground">
+                              <CreditCard className="w-3.5 h-3.5 text-muted-foreground" />
+                              <span className="text-xs text-muted-foreground">{c.tipo_documento}</span>
+                              {c.numero_documento}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {c.telefono ? (
+                            <span className="inline-flex items-center gap-1 text-foreground">
+                              <Phone className="w-3.5 h-3.5 text-muted-foreground" />{c.telefono}
+                            </span>
+                          ) : <span className="text-muted-foreground">—</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          {c.email ? (
+                            <span className="inline-flex items-center gap-1 text-foreground">
+                              <Mail className="w-3.5 h-3.5 text-muted-foreground" />{c.email}
+                            </span>
+                          ) : <span className="text-muted-foreground">—</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          {c.direccion ? (
+                            <span className="inline-flex items-center gap-1 text-foreground text-xs">
+                              <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                              <span className="truncate max-w-[140px]">{c.direccion}</span>
+                            </span>
+                          ) : <span className="text-muted-foreground">—</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          {c.puntos > 0 ? (
+                            <span className="inline-flex items-center gap-1 text-primary font-medium">
+                              <Star className="w-3.5 h-3.5" />{c.puntos}
+                            </span>
+                          ) : <span className="text-muted-foreground">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                          {fmtFecha(c.creado_en)}
+                        </td>
+                        {puedoEditar && (
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => setModal(c)}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-4 py-2 border-t border-border text-xs text-muted-foreground">
                 {clientesFiltrados.length} cliente{clientesFiltrados.length !== 1 ? 's' : ''}
                 {buscar && ` encontrado${clientesFiltrados.length !== 1 ? 's' : ''}`}
               </div>

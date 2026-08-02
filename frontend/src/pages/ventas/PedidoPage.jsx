@@ -3,19 +3,20 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, RefreshCw, Plus, Minus, Trash2, ShoppingCart,
-  Package, CreditCard, XCircle, AlertCircle, CheckCircle2, ChefHat,
+  Package, CreditCard, XCircle, AlertCircle, CheckCircle2, ChefHat, Gift,
 } from 'lucide-react';
 import { getVenta, agregarItem, actualizarItem, eliminarItem, cobrarVenta, cancelarVenta, reimprimirVenta } from '../../api/ventas';
 import { getProductos } from '../../api/productos';
 import { getCategorias } from '../../api/categorias';
-import { getConfiguracion, BASE_URL } from '../../api/configuracion';
-import { useAuth } from '../../hooks/useAuth';
+import { getCombosActivos } from '../../api/combos';
+import ClienteFidelidad from './components/ClienteFidelidad';
+import CuponInput from './components/CuponInput';
+import { BASE_URL } from '../../api/configuracion';
 import { imprimirLocal, reimprimirConFallback } from '../../utils/impresionLocal';
 import { usePermisos } from '../../hooks/usePermisos';
 import Modal from '../../components/ui/Modal';
 import ModalPagoQr from './components/ModalPagoQr';
 import ModalPeso from './components/ModalPeso';
-import { imprimirTicketVenta }  from '../../utils/ticketVenta';
 
 const API_BASE = BASE_URL;
 
@@ -23,7 +24,6 @@ export default function PedidoPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { usuario } = useAuth();
   const { tienePermiso } = usePermisos();
 
   const puedeCobrar  = tienePermiso('ventas', 'cobrar');
@@ -60,15 +60,22 @@ export default function PedidoPage() {
   // Mapa producto_id → item del pedido
   const itemsPorProducto = useMemo(() => {
     return (pedido?.detalles ?? []).reduce((acc, d) => {
-      acc[d.producto_id] = d;
+      if (d.producto_id) acc[d.producto_id] = d;
       return acc;
     }, {});
   }, [pedido]);
 
-  const { data: config = {} } = useQuery({
-    queryKey: ['configuracion'],
-    queryFn: getConfiguracion,
-    staleTime: 60_000,
+  // Mapa combo_id → item del pedido
+  const itemsPorCombo = useMemo(() => {
+    return (pedido?.detalles ?? []).reduce((acc, d) => {
+      if (d.combo_id) acc[d.combo_id] = d;
+      return acc;
+    }, {});
+  }, [pedido]);
+
+  const { data: combosActivos = [] } = useQuery({
+    queryKey: ['combos-activos'],
+    queryFn: getCombosActivos,
   });
 
   const total = parseFloat(pedido?.total ?? 0);
@@ -78,7 +85,7 @@ export default function PedidoPage() {
 
   // Mutaciones
   const agregar = useMutation({
-    mutationFn: ({ producto_id, peso }) => agregarItem(id, { producto_id, cantidad: 1, peso }),
+    mutationFn: ({ producto_id, combo_id, peso }) => agregarItem(id, { producto_id, combo_id, cantidad: 1, peso }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['venta', id] }),
   });
 
@@ -111,6 +118,16 @@ export default function PedidoPage() {
       actualizar.mutate({ item_id: existente.id, cantidad: existente.cantidad + 1 });
     } else {
       agregar.mutate({ producto_id: prod.id });
+    }
+  }
+
+  function agregarComboAPedido(combo) {
+    if (!puedeCrear || !esPendiente) return;
+    const existente = itemsPorCombo[combo.id];
+    if (existente) {
+      actualizar.mutate({ item_id: existente.id, cantidad: existente.cantidad + 1 });
+    } else {
+      agregar.mutate({ combo_id: combo.id });
     }
   }
 
@@ -273,6 +290,24 @@ export default function PedidoPage() {
             ))}
           </div>
 
+          {combosActivos.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-2 shrink-0 scrollbar-hide">
+              {combosActivos.map((combo) => (
+                <button
+                  key={combo.id}
+                  onClick={() => agregarComboAPedido(combo)}
+                  disabled={!puedeCrear || !esPendiente}
+                  className="shrink-0 flex flex-col items-start gap-0.5 px-3.5 py-2.5 rounded-xl border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors text-left disabled:opacity-50"
+                >
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-800 dark:text-gray-100">
+                    <Gift className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" /> {combo.nombre}
+                  </span>
+                  <span className="text-xs font-bold text-blue-600 dark:text-blue-400">Bs {parseFloat(combo.precio).toFixed(2)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Grid productos */}
           <div className="flex-1 overflow-y-auto mt-3 pb-20 md:pb-0">
             {cargandoProductos ? (
@@ -366,7 +401,7 @@ export default function PedidoPage() {
                     <div className="flex items-center gap-2">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">
-                          {item.producto?.nombre}
+                          {item.combo ? `Combo: ${item.combo.nombre}` : item.producto?.nombre}
                         </p>
                         {item.peso != null ? (
                           <p className="text-xs text-gray-400">
@@ -535,8 +570,6 @@ export default function PedidoPage() {
         <ModalCobrar
           total={total}
           pedidoId={id}
-          pedido={pedido}
-          config={config}
           onClose={() => setModalCobrar(false)}
           onExito={() => {
             qc.invalidateQueries({ queryKey: ['mesas'] });
@@ -583,11 +616,18 @@ export default function PedidoPage() {
 
 /* ─── Modal Cobrar ──────────────────────────────────────────────────────── */
 
-function ModalCobrar({ total, pedidoId, pedido, config, onClose, onExito }) {
+function ModalCobrar({ total, pedidoId, onClose, onExito }) {
   const [metodo, setMetodo] = useState('efectivo');
   const [error, setError] = useState(null);
   const [pagoQr, setPagoQr] = useState(null);
   const [ventaExitosa, setVentaExitosa] = useState(null); // { metodoPago } | null
+  const [clienteFidelidad, setClienteFidelidad] = useState(null);
+  const [puntosCanjear, setPuntosCanjear] = useState(0);
+  const [descuentoPuntos, setDescuentoPuntos] = useState(0);
+  const [cuponAplicado, setCuponAplicado] = useState(null); // { codigo, descuento } | null
+
+  const descuentoCupon = cuponAplicado?.descuento ?? 0;
+  const totalFinal = metodo === 'efectivo' ? Math.max(0, total - descuentoPuntos - descuentoCupon) : total;
 
   const reimprimir = useMutation({
     mutationFn: () => reimprimirVenta(pedidoId),
@@ -595,7 +635,11 @@ function ModalCobrar({ total, pedidoId, pedido, config, onClose, onExito }) {
   });
 
   const cobrar = useMutation({
-    mutationFn: () => cobrarVenta(pedidoId, { metodo_pago: metodo, monto_recibido: total }),
+    mutationFn: () => cobrarVenta(pedidoId, {
+      metodo_pago: metodo, monto_recibido: totalFinal,
+      cliente_id: clienteFidelidad?.id, puntos_canjear: metodo === 'efectivo' ? puntosCanjear : 0,
+      cupon_codigo: metodo === 'efectivo' ? cuponAplicado?.codigo : undefined,
+    }),
     onSuccess: (resultado) => {
       if (resultado.pago_qr) {
         setPagoQr(resultado.pago_qr);
@@ -614,7 +658,7 @@ function ModalCobrar({ total, pedidoId, pedido, config, onClose, onExito }) {
           <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto" />
           <div>
             <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Total cobrado</p>
-            <p className="text-3xl font-bold text-gray-900 dark:text-white">Bs {total.toFixed(2)}</p>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white">Bs {totalFinal.toFixed(2)}</p>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               {ventaExitosa.metodoPago === 'qr' ? 'QR / Transferencia' : 'Efectivo'}
             </p>
@@ -660,8 +704,29 @@ function ModalCobrar({ total, pedidoId, pedido, config, onClose, onExito }) {
         {/* Total */}
         <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 text-center">
           <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Total a cobrar</p>
-          <p className="text-3xl font-bold text-gray-900 dark:text-white">Bs {total.toFixed(2)}</p>
+          {metodo === 'efectivo' && (descuentoPuntos > 0 || descuentoCupon > 0) ? (
+            <>
+              <p className="text-sm text-gray-400 line-through">Bs {total.toFixed(2)}</p>
+              <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">Bs {totalFinal.toFixed(2)}</p>
+            </>
+          ) : (
+            <p className="text-3xl font-bold text-gray-900 dark:text-white">Bs {total.toFixed(2)}</p>
+          )}
         </div>
+
+        <ClienteFidelidad
+          cliente={clienteFidelidad}
+          onCambiarCliente={setClienteFidelidad}
+          puntosCanjear={puntosCanjear}
+          onCambiarPuntos={(puntos, descuento) => { setPuntosCanjear(puntos); setDescuentoPuntos(descuento); }}
+        />
+
+        <CuponInput
+          subtotal={total - descuentoPuntos}
+          cupon={cuponAplicado}
+          onAplicar={(codigo, descuento) => setCuponAplicado({ codigo, descuento })}
+          onQuitar={() => setCuponAplicado(null)}
+        />
 
         {/* Método de pago */}
         <div>

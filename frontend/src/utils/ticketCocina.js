@@ -1,5 +1,5 @@
-export function imprimirTicketCocina(pedido, config = {}) {
-  const nombre  = config.nombre_negocio ?? 'COCINA';
+export function imprimirTicketCocina(pedido, config = {}, numeroOrdenDiario = null) {
+  const nombre  = config.nombre_negocio ?? 'Restaurante';
   const dir     = config.direccion      ?? '';
   const tel     = config.telefono       ?? '';
   const simbolo = config.simbolo_moneda ?? 'Bs.';
@@ -9,12 +9,19 @@ export function imprimirTicketCocina(pedido, config = {}) {
   const hora  = ahora.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' });
 
   const esLlevar = pedido.tipo === 'llevar';
-  const nOrden   = String(esLlevar ? (pedido.numero_llevar ?? pedido.id) : pedido.id).padStart(3, '0');
+  const nOrden   = String(
+    numeroOrdenDiario != null ? numeroOrdenDiario : (esLlevar ? (pedido.numero_llevar ?? pedido.id) : pedido.id)
+  ).padStart(3, '0');
 
   const detalles = pedido.detalles ?? [];
   const total    = detalles.reduce((s, d) => s + parseFloat(d.precio) * d.cantidad, 0);
 
   const filas = detalles.map(d => {
+    const esPesable = d.peso != null;
+    const cantEtiqueta = esPesable ? parseFloat(d.peso).toFixed(3) : d.cantidad;
+    const precioEtiqueta = esPesable
+      ? `${parseFloat(d.producto?.precio ?? 0).toFixed(2)}/kg`
+      : parseFloat(d.precio).toFixed(2);
     const subtotal = (parseFloat(d.precio) * d.cantidad).toFixed(2);
     return `
     <tr class="fila-prod">
@@ -22,8 +29,8 @@ export function imprimirTicketCocina(pedido, config = {}) {
         <span class="prod-nombre">${d.producto?.nombre ?? ''}</span>
         ${d.nota ? `<br><span class="prod-nota">» ${d.nota}</span>` : ''}
       </td>
-      <td class="col-cant">${d.cantidad}</td>
-      <td class="col-precio">${parseFloat(d.precio).toFixed(2)}</td>
+      <td class="col-cant">${cantEtiqueta}</td>
+      <td class="col-precio">${precioEtiqueta}</td>
       <td class="col-sub">${subtotal}</td>
     </tr>`;
   }).join('');
@@ -48,9 +55,20 @@ export function imprimirTicketCocina(pedido, config = {}) {
       background: #fff;
     }
 
+    /* ── Banner "COCINA" (bien distinto del ticket de cliente) ── */
+    .cocina-banner {
+      text-align: center;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 6px;
+      padding: 5px 0;
+      border-top: 4px double #000;
+      border-bottom: 4px double #000;
+    }
+
     /* ── Header ── */
-    .header        { text-align: center; padding-bottom: 3px; }
-    .header-nombre { font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+    .header        { text-align: center; padding: 3px 0; }
+    .header-nombre { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #444; }
     .header-sub    { font-size: 9px; color: #444; margin-top: 1px; }
 
     /* ── Separadores ── */
@@ -179,9 +197,12 @@ export function imprimirTicketCocina(pedido, config = {}) {
 </head>
 <body>
 
+  <!-- Banner COCINA: bien grande y distinto al ticket de cliente -->
+  <div class="cocina-banner">COCINA</div>
+
   <!-- Header -->
   <div class="header">
-    <div class="header-nombre">★ ${nombre} ★</div>
+    <div class="header-nombre">${nombre}</div>
     ${dir ? `<div class="header-sub">${dir}</div>` : ''}
     ${tel ? `<div class="header-sub">Tel: ${tel}</div>` : ''}
   </div>

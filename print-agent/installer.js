@@ -7,6 +7,7 @@ const INSTALL_DIR       = 'C:\\AgentImpresion';
 const EXE_NAME          = 'agente-impresion.exe';
 const TASK_NAME         = 'AgenteImpresionTermica';
 const TASK_NAME_VIGIA   = 'AgenteImpresionTermica_Vigia';
+const TASK_NAME_NOTIF   = 'AgenteImpresionTermica_Notificador';
 
 // ── Tareas programadas (XML) ──────────────────────────────────────────────────
 // El CLI clásico "schtasks /create /sc ..." no permite tocar la condición de
@@ -21,7 +22,17 @@ function xmlStartBoundaryLocal(d) {
   return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
 }
 
-function crearTareaXml(nombreTarea, descripcion, triggerXml, comandoArgs) {
+// principalXml/comando por defecto = SYSTEM ejecutando el VBS del agente (sin ventana).
+// La tarea notificadora pasa su propio principal (usuario interactivo, no SYSTEM) y
+// comando (powershell), porque SYSTEM corre en la Sesión 0 y no puede mostrar UI
+// en el escritorio del usuario — ver nota en registrarTareaNotificador().
+function crearTareaXml(nombreTarea, descripcion, triggerXml, comandoArgs, opts = {}) {
+  const principalXml = opts.principalXml || `    <Principal id="Author">
+      <UserId>SYSTEM</UserId>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>`;
+  const comando = opts.comando || 'wscript.exe';
+
   const xml = `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
@@ -31,10 +42,7 @@ function crearTareaXml(nombreTarea, descripcion, triggerXml, comandoArgs) {
 ${triggerXml}
   </Triggers>
   <Principals>
-    <Principal id="Author">
-      <UserId>SYSTEM</UserId>
-      <RunLevel>HighestAvailable</RunLevel>
-    </Principal>
+${principalXml}
   </Principals>
   <Settings>
     <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
@@ -51,7 +59,7 @@ ${triggerXml}
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>wscript.exe</Command>
+      <Command>${comando}</Command>
       <Arguments>${comandoArgs}</Arguments>
     </Exec>
   </Actions>
@@ -417,6 +425,72 @@ Add-Type -AssemblyName System.Windows.Forms
   } catch {}
 }
 
+// ── Notificador de estado (globo al iniciar sesión) ──────────────────────────
+// Espera un poco, consulta el /salud local del agente con reintentos (por si
+// arrancó recién y todavía se está conectando) y muestra un globo confirmando
+// si quedó activo o no. Se registra como tarea aparte porque corre en la
+// sesión del usuario, no como SYSTEM (ver comentario en registrarTareaNotificador).
+function registrarTareaNotificador() {
+  const ps1Path = path.join(INSTALL_DIR, 'notificador.ps1');
+  const ps1 = `Start-Sleep -Seconds 30
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+# Reintenta durante ~5.5 minutos: recién arrancada la PC hay mucha competencia
+# por CPU/disco (otros programas de inicio), así que el primer intento del
+# agente puede tardar o fallar. La tarea vigía ya lo relanza sola cada 5 min
+# si hace falta — este aviso espera a que ese ciclo tenga chance de resolverlo
+# solo, en vez de alarmar de más por algo que se autocorrige.
+$ok = $false
+for ($i = 0; $i -lt 22; $i++) {
+  try {
+    $r = Invoke-RestMethod -Uri "http://127.0.0.1:4321/salud" -TimeoutSec 3
+    if ($r.ok) { $ok = $true; break }
+  } catch {}
+  Start-Sleep -Seconds 15
+}
+
+$icon = New-Object System.Windows.Forms.NotifyIcon
+$icon.Visible = $true
+if ($ok) {
+  $icon.Icon = [System.Drawing.SystemIcons]::Information
+  $icon.BalloonTipTitle = "Agente de impresion"
+  $icon.BalloonTipText  = "Activo y listo para imprimir."
+  $icon.BalloonTipIcon  = [System.Windows.Forms.ToolTipIcon]::Info
+} else {
+  $icon.Icon = [System.Drawing.SystemIcons]::Warning
+  $icon.BalloonTipTitle = "Agente de impresion"
+  $icon.BalloonTipText  = "No responde. Reinicia la PC o avisa a soporte."
+  $icon.BalloonTipIcon  = [System.Windows.Forms.ToolTipIcon]::Warning
+}
+$icon.ShowBalloonTip(8000)
+Start-Sleep -Seconds 9
+$icon.Visible = $false
+$icon.Dispose()
+`;
+  writeFileSync(ps1Path, ps1, 'utf8');
+
+  // GroupId = SID del grupo integrado "Users": hace que la tarea corra en la
+  // sesión del usuario que inicia sesión (quien sea), no como SYSTEM — por eso
+  // sí puede mostrar el globo. El LogonTrigger sin <UserId> se dispara para
+  // cualquier usuario que inicie sesión.
+  crearTareaXml(
+    TASK_NAME_NOTIF,
+    'Agente de impresion termica - aviso de estado al iniciar sesion',
+    `    <LogonTrigger>
+      <Enabled>true</Enabled>
+    </LogonTrigger>`,
+    `-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${ps1Path}"`,
+    {
+      comando: 'powershell.exe',
+      principalXml: `    <Principal id="Author">
+      <GroupId>S-1-5-32-545</GroupId>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>`,
+    }
+  );
+}
+
 // ── Instalación ───────────────────────────────────────────────────────────────
 
 function install(cfg) {
@@ -481,7 +555,15 @@ function install(cfg) {
       comandoArgs
     );
 
-    // 6. Iniciar el agente inmediatamente (detached, sin ventana)
+    // 6. Notificador visual: el agente corre como SYSTEM en la Sesión 0, así que
+    //    NO puede mostrar ninguna ventana/aviso en el escritorio (aislamiento de
+    //    sesiones de Windows) — por eso hasta ahora no había forma de saber, con
+    //    solo mirar la pantalla, si arrancó solo tras apagar/prender la PC. Esta
+    //    tarea corre en la sesión del usuario que inicia sesión (no SYSTEM), así
+    //    que sí puede mostrar un globo de notificación confirmando el estado.
+    registrarTareaNotificador();
+
+    // 7. Iniciar el agente inmediatamente (detached, sin ventana)
     spawn(dstExe, ['--service'], {
       detached: true,
       stdio:    'ignore',
@@ -490,7 +572,7 @@ function install(cfg) {
 
     showMessage(
       'Instalación completada',
-      `El agente de impresión fue instalado correctamente en:\n${INSTALL_DIR}\n\nEl servicio se iniciará automáticamente al encender o reiniciar la PC (sin necesidad de iniciar sesión), y se reactivará solo si llegara a cerrarse.`
+      `El agente de impresión fue instalado correctamente en:\n${INSTALL_DIR}\n\nEl servicio se iniciará automáticamente al encender o reiniciar la PC (sin necesidad de iniciar sesión), y se reactivará solo si llegara a cerrarse.\n\nCada vez que alguien inicie sesión en Windows, aparecerá un aviso confirmando si el agente está activo.`
     );
 
   } catch (err) {
@@ -517,7 +599,7 @@ function uninstall() {
     // 1. Eliminar las tareas del Programador de tareas PRIMERO — si se mata el
     //    proceso antes, la tarea vigía (corre cada 5 min) podría relanzarlo
     //    justo en ese hueco.
-    for (const tn of [TASK_NAME, TASK_NAME_VIGIA]) {
+    for (const tn of [TASK_NAME, TASK_NAME_VIGIA, TASK_NAME_NOTIF]) {
       try { execSync(`schtasks /delete /tn "${tn}" /f`, { stdio: 'pipe' }); } catch {}
     }
 

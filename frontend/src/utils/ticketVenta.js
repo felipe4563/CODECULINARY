@@ -1,4 +1,4 @@
-export function imprimirTicketVenta(pedido, pago, config = {}) {
+export function imprimirTicketVenta(pedido, pago, config = {}, numeroOrdenDiario = null) {
   const nombre  = config.nombre_negocio  ?? 'Restaurante';
   const dir     = config.direccion       ?? '';
   const tel     = config.telefono        ?? '';
@@ -9,18 +9,26 @@ export function imprimirTicketVenta(pedido, pago, config = {}) {
   const hora  = ahora.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' });
 
   const esLlevar = pedido.tipo === 'llevar';
-  const nOrden   = String(esLlevar ? (pedido.numero_llevar ?? pedido.id) : pedido.id).padStart(3, '0');
+  const nOrden   = String(
+    numeroOrdenDiario != null ? numeroOrdenDiario : (esLlevar ? (pedido.numero_llevar ?? pedido.id) : pedido.id)
+  ).padStart(3, '0');
+  const metodoPagoLabel = pago.metodo_pago === 'qr' ? 'QR / Transferencia' : 'Efectivo';
 
   const detalles = pedido.detalles ?? [];
   const total    = pago.total ?? detalles.reduce((s, d) => s + parseFloat(d.precio) * d.cantidad, 0);
 
   const filas = detalles.map(d => {
+    const esPesable = d.peso != null;
+    const cantEtiqueta = esPesable ? parseFloat(d.peso).toFixed(3) : d.cantidad;
+    const precioEtiqueta = esPesable
+      ? `${parseFloat(d.producto?.precio ?? 0).toFixed(2)}/kg`
+      : parseFloat(d.precio).toFixed(2);
     const subtotal = (parseFloat(d.precio) * d.cantidad).toFixed(2);
     return `
     <tr class="fila-prod">
       <td class="col-prod"><span class="prod-nombre">${d.producto?.nombre ?? ''}</span></td>
-      <td class="col-cant">${d.cantidad}</td>
-      <td class="col-precio">${parseFloat(d.precio).toFixed(2)}</td>
+      <td class="col-cant">${cantEtiqueta}</td>
+      <td class="col-precio">${precioEtiqueta}</td>
       <td class="col-sub">${subtotal}</td>
     </tr>`;
   }).join('');
@@ -48,6 +56,16 @@ export function imprimirTicketVenta(pedido, pago, config = {}) {
     .header        { text-align: center; padding-bottom: 3px; }
     .header-nombre { font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
     .header-sub    { font-size: 9px; color: #444; margin-top: 1px; }
+
+    .nota-venta {
+      text-align: center;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #333;
+      margin-top: 2px;
+    }
 
     .sep    { border: none; border-top: 1px solid #000;  margin: 3px 0; }
     .sdash  { border: none; border-top: 1px dashed #666; margin: 3px 0; }
@@ -149,6 +167,8 @@ ${['', ''].map((_, i) => `
     ${tel ? `<div class="header-sub">Tel: ${tel}</div>` : ''}
   </div>
 
+  <div class="nota-venta">Nota de venta</div>
+
   <hr class="sep"/>
 
   <div class="badge ${esLlevar ? 'llevar' : ''}">
@@ -185,6 +205,8 @@ ${['', ''].map((_, i) => `
       <span>${simbolo} ${parseFloat(total).toFixed(2)}</span>
     </div>
   </div>
+
+  <div class="info-row"><span class="info-label">Forma de pago</span><span class="info-valor">${metodoPagoLabel}</span></div>
 
   <hr class="sdash"/>
 

@@ -87,9 +87,9 @@ export default function TabCaja({ empresa, logo, direccion, telefono }) {
           <FiltroFechas desde={desde} hasta={hasta} setDesde={setDesde} setHasta={setHasta}
             onBuscar={() => setParams({ desde, hasta })} cargando={isLoading} />
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Tipo</label>
+            <label className="text-xs font-medium text-muted-foreground">Tipo</label>
             <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}
-              className="px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+              className="px-3 py-2 text-sm rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
               <option value="todos">Todos</option>
               <option value="ingreso">Ingresos</option>
               <option value="egreso">Egresos</option>
@@ -97,9 +97,9 @@ export default function TabCaja({ empresa, logo, direccion, telefono }) {
           </div>
           {accesoTodas && (
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Sucursal</label>
+              <label className="text-xs font-medium text-muted-foreground">Sucursal</label>
               <select value={filtroSucursal} onChange={e => setFiltroSucursal(e.target.value)}
-                className="px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                className="px-3 py-2 text-sm rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
                 <option value="todas">Todas</option>
                 {sucursales.map(s => (
                   <option key={s.id} value={String(s.id)}>{s.nombre}</option>
@@ -115,26 +115,26 @@ export default function TabCaja({ empresa, logo, direccion, telefono }) {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard label="Registros"      valor={stats.total}           color="violet"                             Icono={BookOpen}    idx={0} />
+        <StatCard label="Registros"      valor={stats.total}           color="primary"                            Icono={BookOpen}    idx={0} />
         <StatCard label="Total Ingresos" valor={bs(stats.ingresos)}    color="emerald"                            Icono={TrendingUp}  idx={1} />
         <StatCard label="Total Egresos"  valor={bs(stats.egresos)}     color="rose"                               Icono={TrendingDown} idx={2} />
         <StatCard label="Balance"        valor={bs(stats.balance)}     color={stats.balance >= 0 ? 'blue' : 'rose'} Icono={DollarSign} idx={3} />
       </div>
 
       {accesoTodas && resumenSucursales.length > 0 && (
-        <div className="overflow-x-auto rounded-2xl border border-gray-200 dark:border-gray-700/50">
+        <div className="overflow-x-auto rounded-2xl border border-border">
           <table className="w-full text-xs sm:text-sm">
             <thead>
-              <tr className="bg-violet-50 dark:bg-violet-900/20 border-b border-gray-200 dark:border-gray-700/50">
+              <tr className="bg-primary/10 border-b border-border">
                 {['Sucursal', 'Ingresos', 'Egresos', 'Neto'].map(h => (
-                  <th key={h} className="text-left px-3 py-2.5 sm:px-4 sm:py-3 text-xs font-semibold text-violet-700 dark:text-violet-300 uppercase tracking-wide">{h}</th>
+                  <th key={h} className="text-left px-3 py-2.5 sm:px-4 sm:py-3 text-xs font-semibold text-primary uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-700/40">
+            <tbody className="divide-y divide-border">
               {resumenSucursales.map(s => (
-                <tr key={s.id} className="bg-white dark:bg-gray-900">
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-gray-900 dark:text-white">{s.nombre}</td>
+                <tr key={s.id} className="bg-card">
+                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-foreground">{s.nombre}</td>
                   <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-semibold text-emerald-600 dark:text-emerald-400">{bs(s.ingresos)}</td>
                   <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-semibold text-rose-600 dark:text-rose-400">{bs(s.egresos)}</td>
                   <td className={`px-3 py-2.5 sm:px-4 sm:py-3 font-bold ${s.neto >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{bs(s.neto)}</td>
@@ -146,30 +146,30 @@ export default function TabCaja({ empresa, logo, direccion, telefono }) {
       )}
 
       {isLoading ? <Skeleton /> : (
-        <div className="overflow-x-auto rounded-2xl border border-gray-200 dark:border-gray-700/50">
+        <div className="overflow-x-auto rounded-2xl border border-border">
           <table className="w-full text-xs sm:text-sm">
             <thead>
-              <tr className="bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700/50">
+              <tr className="bg-muted border-b border-border">
                 {[...(accesoTodas ? ['Sucursal'] : []), 'Fecha', 'Tipo', 'Concepto', 'Método', 'Usuario', 'Monto'].map(h => (
-                  <th key={h} className="text-left px-3 py-2.5 sm:px-4 sm:py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{h}</th>
+                  <th key={h} className="text-left px-3 py-2.5 sm:px-4 sm:py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-700/40">
+            <tbody className="divide-y divide-border">
               {filtrado.length === 0 ? (
-                <tr><td colSpan={accesoTodas ? 7 : 6} className="text-center py-10 text-gray-400 dark:text-gray-500">Sin resultados</td></tr>
+                <tr><td colSpan={accesoTodas ? 7 : 6} className="text-center py-10 text-muted-foreground">Sin resultados</td></tr>
               ) : filtrado.map((r, i) => (
                 <tr key={r.id}
-                  className="bg-white dark:bg-gray-900 hover:bg-violet-50/40 dark:hover:bg-violet-900/10 transition-colors animate-[rpFadeUp_0.3s_ease_forwards] opacity-0"
+                  className="bg-card hover:bg-primary/5 transition-colors animate-[rpFadeUp_0.3s_ease_forwards] opacity-0"
                   style={{ animationDelay: `${i * 20}ms` }}>
                   {accesoTodas && (
-                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-gray-600 dark:text-gray-300">{r.sucursal?.nombre || '-'}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{r.sucursal?.nombre || '-'}</td>
                   )}
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-gray-600 dark:text-gray-300 whitespace-nowrap">{fechaHora(r.creado_en)}</td>
+                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground whitespace-nowrap">{fechaHora(r.creado_en)}</td>
                   <td className="px-3 py-2.5 sm:px-4 sm:py-3"><BadgeTipo tipo={r.tipo} /></td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-gray-700 dark:text-gray-200">{r.concepto || '-'}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-gray-600 dark:text-gray-300 capitalize">{r.metodo_pago || '-'}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-gray-600 dark:text-gray-300">{r.usuario?.nombre || '-'}</td>
+                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-foreground">{r.concepto || '-'}</td>
+                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground capitalize">{r.metodo_pago || '-'}</td>
+                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{r.usuario?.nombre || '-'}</td>
                   <td className={`px-3 py-2.5 sm:px-4 sm:py-3 font-semibold ${r.tipo === 'ingreso' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                     {r.tipo === 'egreso' ? '-' : ''}{bs(r.monto)}
                   </td>
@@ -178,8 +178,8 @@ export default function TabCaja({ empresa, logo, direccion, telefono }) {
             </tbody>
             {filtrado.length > 0 && (
               <tfoot>
-                <tr className="bg-gray-50 dark:bg-gray-800/60 border-t-2 border-violet-200 dark:border-violet-700/40">
-                  <td colSpan={accesoTodas ? 6 : 5} className="px-3 py-2.5 sm:px-4 sm:py-3 text-right font-semibold text-gray-700 dark:text-gray-300 text-sm">BALANCE</td>
+                <tr className="bg-muted border-t-2 border-primary/30">
+                  <td colSpan={accesoTodas ? 6 : 5} className="px-3 py-2.5 sm:px-4 sm:py-3 text-right font-semibold text-muted-foreground text-sm">BALANCE</td>
                   <td className={`px-3 py-2.5 sm:px-4 sm:py-3 font-bold ${stats.balance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                     {bs(stats.balance)}
                   </td>

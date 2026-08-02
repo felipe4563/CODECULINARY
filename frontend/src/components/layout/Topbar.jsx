@@ -3,6 +3,16 @@ import { useTheme } from '../../hooks/useTheme';
 import { useNavigate, Link } from 'react-router-dom';
 import { Menu, LogOut, Sun, Moon } from 'lucide-react';
 import api from '../../api/cliente';
+import { avatarSrc } from '../../api/perfil';
+
+function Iniciales(nombre) {
+  return (nombre || '')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join('') || '?';
+}
 
 export default function Topbar({ onToggleSidebar }) {
   const { usuario, logout } = useAuth();
@@ -47,15 +57,28 @@ export default function Topbar({ onToggleSidebar }) {
 
         <Link
           to="/perfil"
-          className="text-right px-1 group cursor-pointer"
+          className="flex items-center gap-2.5 px-1 group cursor-pointer"
           title="Ver mi perfil"
         >
-          <p className="text-sm font-semibold text-foreground group-hover:text-primary leading-tight transition-colors">{usuario?.nombre}</p>
-          <p className="text-xs text-muted-foreground leading-tight">
-            {usuario?.rol}
-            {usuario?.rol && usuario?.sucursal_activa && ' · '}
-            {usuario?.sucursal_activa?.nombre}
-          </p>
+          <div className="text-right">
+            <p className="text-sm font-semibold text-foreground group-hover:text-primary leading-tight transition-colors">{usuario?.nombre}</p>
+            <p className="text-xs text-muted-foreground leading-tight">
+              {usuario?.rol}
+              {usuario?.rol && usuario?.sucursal_activa && ' · '}
+              {usuario?.sucursal_activa?.nombre}
+            </p>
+          </div>
+          {usuario?.avatar ? (
+            <img
+              src={avatarSrc(usuario.avatar)}
+              alt={usuario.nombre}
+              className="w-8 h-8 rounded-full object-cover border border-border shrink-0"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-primary/10 border border-border flex items-center justify-center text-xs font-bold text-primary shrink-0">
+              {Iniciales(usuario?.nombre)}
+            </div>
+          )}
         </Link>
 
         <button

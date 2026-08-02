@@ -68,13 +68,13 @@ function ModalUsuario({ usuario, roles, sucursalesCatalogo, onClose, onGuardar, 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-xl">
+      <div className="w-full max-w-md bg-card rounded-2xl shadow-xl border border-border max-h-[90vh] overflow-y-auto">
         {/* header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <h2 className="text-base font-semibold text-foreground">
             {esNuevo ? 'Nuevo usuario' : 'Editar usuario'}
           </h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">
+          <button onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-accent hover:text-accent-foreground">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -82,32 +82,32 @@ function ModalUsuario({ usuario, roles, sucursalesCatalogo, onClose, onGuardar, 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {/* nombre */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre completo</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Nombre completo</label>
             <input
               type="text"
               value={form.nombre}
               onChange={e => set('nombre', e.target.value)}
               placeholder="Juan Pérez"
-              className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
           {/* email */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Email</label>
             <input
               type="email"
               value={form.email}
               onChange={e => set('email', e.target.value)}
               placeholder="juan@restaurante.com"
-              className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
           {/* contraseña */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Contraseña {!esNuevo && <span className="text-gray-400 font-normal">(dejar vacío para no cambiar)</span>}
+            <label className="block text-xs font-medium text-muted-foreground mb-1">
+              Contraseña {!esNuevo && <span className="text-muted-foreground font-normal">(dejar vacío para no cambiar)</span>}
             </label>
             <div className="relative">
               <input
@@ -115,12 +115,12 @@ function ModalUsuario({ usuario, roles, sucursalesCatalogo, onClose, onGuardar, 
                 value={form.contrasena}
                 onChange={e => set('contrasena', e.target.value)}
                 placeholder={esNuevo ? 'Contraseña' : '••••••••'}
-                className="w-full px-3 py-2 pr-10 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 pr-10 text-sm rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
               <button
                 type="button"
                 onClick={() => setMostrarPass(v => !v)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
               >
                 {mostrarPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -129,11 +129,11 @@ function ModalUsuario({ usuario, roles, sucursalesCatalogo, onClose, onGuardar, 
 
           {/* rol */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Rol</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Rol</label>
             <select
               value={form.rol_id}
               onChange={e => set('rol_id', e.target.value)}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">Seleccionar rol…</option>
               {roles.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
@@ -143,41 +143,41 @@ function ModalUsuario({ usuario, roles, sucursalesCatalogo, onClose, onGuardar, 
           {/* estado (solo edición) */}
           {!esNuevo && (
             <div className="flex items-center gap-3">
-              <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Estado</label>
+              <label className="text-xs font-medium text-muted-foreground">Estado</label>
               <button
                 type="button"
                 onClick={() => set('activo', form.activo ? 0 : 1)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.activo ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.activo ? 'bg-emerald-500' : 'bg-muted'}`}
               >
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${form.activo ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
-              <span className="text-xs text-gray-500 dark:text-gray-400">{form.activo ? 'Activo' : 'Inactivo'}</span>
+              <span className="text-xs text-muted-foreground">{form.activo ? 'Activo' : 'Inactivo'}</span>
             </div>
           )}
 
           {!esNuevo && (
-            <div className="pt-2 border-t border-gray-100 dark:border-gray-700 space-y-2.5">
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">Sucursales</label>
+            <div className="pt-2 border-t border-border space-y-2.5">
+              <label className="block text-xs font-medium text-muted-foreground">Sucursales</label>
 
-              <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
+              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
                 <input
                   type="checkbox"
                   checked={accesoTodas}
                   onChange={e => setAccesoTodas(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded accent-blue-600"
+                  className="w-3.5 h-3.5 rounded accent-primary"
                 />
                 Acceso a todas las sucursales
               </label>
 
               {!accesoTodas && (
-                <div className="max-h-32 overflow-y-auto space-y-1 rounded-lg border border-gray-200 dark:border-gray-600 p-2">
+                <div className="max-h-32 overflow-y-auto space-y-1 rounded-lg border border-border p-2">
                   {sucursalesCatalogo.map(s => (
-                    <label key={s.id} className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
+                    <label key={s.id} className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
                       <input
                         type="checkbox"
                         checked={sucursalIds.has(s.id)}
                         onChange={() => toggleSucursal(s.id)}
-                        className="w-3.5 h-3.5 rounded accent-blue-600"
+                        className="w-3.5 h-3.5 rounded accent-primary"
                       />
                       {s.nombre}
                     </label>
@@ -189,22 +189,22 @@ function ModalUsuario({ usuario, roles, sucursalesCatalogo, onClose, onGuardar, 
                 type="button"
                 disabled={guardandoSucursales}
                 onClick={() => onGuardarSucursales({ sucursal_ids: [...sucursalIds], acceso_todas_sucursales: accesoTodas })}
-                className="w-full py-1.5 text-xs rounded-lg border border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full py-1.5 text-xs rounded-lg border border-primary/30 text-primary hover:bg-primary/10 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {guardandoSucursales ? 'Guardando...' : 'Guardar sucursales'}
               </button>
             </div>
           )}
 
-          {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+          {error && <p className="text-xs text-destructive">{error}</p>}
 
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose}
-              className="flex-1 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+              className="flex-1 py-2 text-sm rounded-lg border border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground">
               Cancelar
             </button>
             <button type="submit"
-              className="flex-1 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium">
+              className="flex-1 py-2 text-sm rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-medium">
               {esNuevo ? 'Crear usuario' : 'Guardar cambios'}
             </button>
           </div>
@@ -218,26 +218,26 @@ function ModalUsuario({ usuario, roles, sucursalesCatalogo, onClose, onGuardar, 
 function ModalConfirmar({ usuario, onClose, onConfirmar }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="w-full max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6">
+      <div className="w-full max-w-sm bg-card rounded-2xl shadow-xl border border-border p-6">
         <div className="flex items-center gap-3 mb-4">
-          <div className="p-2.5 rounded-full bg-red-100 dark:bg-red-900/30">
-            <UserX className="w-5 h-5 text-red-600 dark:text-red-400" />
+          <div className="p-2.5 rounded-full bg-destructive/10">
+            <UserX className="w-5 h-5 text-destructive" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Desactivar usuario</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Esta acción no borra el usuario</p>
+            <h3 className="text-sm font-semibold text-foreground">Desactivar usuario</h3>
+            <p className="text-xs text-muted-foreground">Esta acción no borra el usuario</p>
           </div>
         </div>
-        <p className="text-sm text-gray-700 dark:text-gray-300 mb-5">
+        <p className="text-sm text-foreground mb-5">
           ¿Desactivar a <span className="font-medium">{usuario.nombre}</span>? No podrá iniciar sesión hasta que sea reactivado.
         </p>
         <div className="flex gap-2">
           <button onClick={onClose}
-            className="flex-1 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+            className="flex-1 py-2 text-sm rounded-lg border border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground">
             Cancelar
           </button>
           <button onClick={onConfirmar}
-            className="flex-1 py-2 text-sm rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium">
+            className="flex-1 py-2 text-sm rounded-lg bg-destructive hover:bg-destructive/90 text-destructive-foreground font-medium">
             Desactivar
           </button>
         </div>
@@ -251,39 +251,39 @@ function UsuarioCard({ u, puedoEditar, puedoEliminar, onEditar, onDesactivar, on
   const [expand, setExpand] = useState(false);
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div className="bg-card rounded-xl border border-border overflow-hidden">
       <div className="flex items-center gap-3 p-3">
         {/* avatar */}
-        <div className="flex-shrink-0 w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-700 dark:text-blue-300 font-semibold text-sm select-none">
+        <div className="flex-shrink-0 w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm select-none">
           {u.nombre.charAt(0).toUpperCase()}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{u.nombre}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{u.email}</p>
+          <p className="text-sm font-medium text-foreground truncate">{u.nombre}</p>
+          <p className="text-xs text-muted-foreground truncate">{u.email}</p>
         </div>
         <BadgeEstado activo={u.activo} />
-        <button onClick={() => setExpand(v => !v)} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+        <button onClick={() => setExpand(v => !v)} className="p-1.5 text-muted-foreground hover:text-foreground">
           {expand ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
       </div>
 
       {expand && (
-        <div className="border-t border-gray-100 dark:border-gray-700 px-3 py-3 space-y-3">
-          <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
-            <Shield className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
+        <div className="border-t border-border px-3 py-3 space-y-3">
+          <div className="flex items-center gap-2 text-xs text-foreground">
+            <Shield className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />
             <span>{u.rol?.nombre ?? '—'}</span>
           </div>
           <div className="flex gap-2">
             {puedoEditar && (
               <button onClick={() => onEditar(u)}
-                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-lg border border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20">
+                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-lg border border-primary/30 text-primary hover:bg-primary/10">
                 <Pencil className="w-3 h-3" /> Editar
               </button>
             )}
             {puedoEliminar && (
               u.activo
                 ? <button onClick={() => onDesactivar(u)}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-lg border border-red-300 dark:border-red-600 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20">
+                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10">
                     <UserX className="w-3 h-3" /> Desactivar
                   </button>
                 : <button onClick={() => onActivar(u)}
@@ -365,25 +365,25 @@ export default function UsuariosPage() {
   if (!puedoVer) {
     return (
       <div className="flex items-center justify-center h-48">
-        <p className="text-sm text-gray-500 dark:text-gray-400">Sin permiso para ver usuarios.</p>
+        <p className="text-sm text-muted-foreground">Sin permiso para ver usuarios.</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4">
+    <div className="space-y-4">
       {/* encabezado */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="flex-1">
-          <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">Usuarios</h1>
-          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+          <h1 className="text-lg sm:text-xl font-bold text-foreground">Usuarios</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">
             {usuarios.length} usuario{usuarios.length !== 1 ? 's' : ''} registrado{usuarios.length !== 1 ? 's' : ''}
           </p>
         </div>
         {puedoCrear && (
           <button
             onClick={() => setModal({})}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium"
           >
             <UserPlus className="w-4 h-4" />
             Nuevo usuario
@@ -393,7 +393,7 @@ export default function UsuariosPage() {
 
       {/* error global */}
       {errorMutation && (
-        <div className="px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300">
+        <div className="px-4 py-3 rounded-xl bg-destructive/10 border border-destructive/30 text-sm text-destructive">
           {errorMutation}
         </div>
       )}
@@ -404,16 +404,16 @@ export default function UsuariosPage() {
         value={buscar}
         onChange={e => setBuscar(e.target.value)}
         placeholder="Buscar por nombre, email o rol…"
-        className="w-full px-3 py-2 text-sm rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full px-3 py-2 text-sm rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
       />
 
       {/* contenido */}
       {isLoading ? (
         <div className="flex justify-center py-12">
-          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       ) : filtrados.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-gray-500">
+        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
           <p className="text-sm">{buscar ? 'Sin resultados para tu búsqueda.' : 'No hay usuarios registrados.'}</p>
         </div>
       ) : (
@@ -434,65 +434,67 @@ export default function UsuariosPage() {
           </div>
 
           {/* sm+: tabla */}
-          <div className="hidden sm:block overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700">
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 text-xs">Usuario</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 text-xs">Email</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 text-xs">Rol</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 text-xs">Estado</th>
-                  {(puedoEditar || puedoEliminar) && (
-                    <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-gray-400 text-xs">Acciones</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {filtrados.map(u => (
-                  <tr key={u.id} className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-700 dark:text-blue-300 font-semibold text-xs select-none flex-shrink-0">
-                          {u.nombre.charAt(0).toUpperCase()}
-                        </div>
-                        <span className="font-medium text-gray-900 dark:text-white">{u.nombre}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{u.email}</td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                        <Shield className="w-3 h-3" />
-                        {u.rol?.nombre ?? '—'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3"><BadgeEstado activo={u.activo} /></td>
+          <div className="hidden sm:block overflow-hidden rounded-xl border border-border">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted border-b border-border">
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs">Usuario</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs">Email</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs">Rol</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs">Estado</th>
                     {(puedoEditar || puedoEliminar) && (
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-2">
-                          {puedoEditar && (
-                            <button onClick={() => setModal({ usuario: u })}
-                              className="p-1.5 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 dark:hover:text-blue-400 transition-colors">
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                          )}
-                          {puedoEliminar && (
-                            u.activo
-                              ? <button onClick={() => setConfirmar(u)}
-                                  className="p-1.5 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 dark:hover:text-red-400 transition-colors">
-                                  <UserX className="w-4 h-4" />
-                                </button>
-                              : <button onClick={() => mutActivar.mutate(u.id)}
-                                  className="p-1.5 rounded-lg text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 dark:hover:text-emerald-400 transition-colors">
-                                  <UserCheck className="w-4 h-4" />
-                                </button>
-                          )}
-                        </div>
-                      </td>
+                      <th className="text-right px-4 py-3 font-medium text-muted-foreground text-xs">Acciones</th>
                     )}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filtrados.map(u => (
+                    <tr key={u.id} className="bg-card hover:bg-muted/50 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-xs select-none flex-shrink-0">
+                            {u.nombre.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="font-medium text-foreground">{u.nombre}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-foreground">{u.email}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
+                          <Shield className="w-3 h-3" />
+                          {u.rol?.nombre ?? '—'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3"><BadgeEstado activo={u.activo} /></td>
+                      {(puedoEditar || puedoEliminar) && (
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-2">
+                            {puedoEditar && (
+                              <button onClick={() => setModal({ usuario: u })}
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors">
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                            )}
+                            {puedoEliminar && (
+                              u.activo
+                                ? <button onClick={() => setConfirmar(u)}
+                                    className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+                                    <UserX className="w-4 h-4" />
+                                  </button>
+                                : <button onClick={() => mutActivar.mutate(u.id)}
+                                    className="p-1.5 rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 dark:hover:text-emerald-400 transition-colors">
+                                    <UserCheck className="w-4 h-4" />
+                                  </button>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </>
       )}

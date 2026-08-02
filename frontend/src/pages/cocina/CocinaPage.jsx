@@ -229,7 +229,7 @@ function PedidoCard({ pedido, onListo, cargando, esLlevar }) {
                 ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
                 : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
             }`}>
-              {d.cantidad}
+              {d.peso != null ? `${parseFloat(d.peso).toFixed(3)} kg` : d.cantidad}
             </span>
             <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
               {d.producto?.nombre}

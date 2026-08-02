@@ -6,8 +6,10 @@ const Usuario = sequelize.define('Usuario', {
   rol_id: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
   acceso_todas_sucursales: { type: DataTypes.TINYINT(1), defaultValue: 0 },
   nombre: { type: DataTypes.STRING(255), allowNull: false },
+  avatar: { type: DataTypes.STRING(255), allowNull: true },
   email: { type: DataTypes.STRING(255), allowNull: false, unique: true },
   contrasena: { type: DataTypes.STRING(255), allowNull: false },
+  debe_cambiar_contrasena: { type: DataTypes.TINYINT(1), defaultValue: 0 },
   activo: { type: DataTypes.TINYINT(1), defaultValue: 1 },
 }, {
   tableName: 'usuarios',

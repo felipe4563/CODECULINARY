@@ -14,6 +14,11 @@ async function obtener(req, res, next) {
   catch (err) { next(err); }
 }
 
+async function reimprimir(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.reimprimir(req.params.id, _alcance(req)) }); }
+  catch (err) { next(err); }
+}
+
 async function crear(req, res, next) {
   try {
     const { mesa_id, tipo = 'mesa' } = req.body;
@@ -36,9 +41,9 @@ async function crearCompleta(req, res, next) {
 
 async function agregarItem(req, res, next) {
   try {
-    const { producto_id, cantidad, nota } = req.body;
-    if (!producto_id) return res.status(400).json({ ok: false, mensaje: 'producto_id es requerido' });
-    res.status(201).json({ ok: true, datos: await svc.agregarItem(req.params.id, { producto_id, cantidad, nota }, _alcance(req)) });
+    const { producto_id, combo_id, cantidad, nota, peso, opcion_ids } = req.body;
+    if (!producto_id && !combo_id) return res.status(400).json({ ok: false, mensaje: 'producto_id o combo_id es requerido' });
+    res.status(201).json({ ok: true, datos: await svc.agregarItem(req.params.id, { producto_id, combo_id, cantidad, nota, peso, opcion_ids }, _alcance(req)) });
   } catch (err) { next(err); }
 }
 
@@ -85,4 +90,4 @@ async function cancelarPagoQr(req, res, next) {
   catch (err) { next(err); }
 }
 
-module.exports = { listar, obtener, crear, crearCompleta, agregarItem, actualizarItem, eliminarItem, cobrar, cancelar, listarCocina, marcarListo, estadoPagoQr, cancelarPagoQr };
+module.exports = { listar, obtener, reimprimir, crear, crearCompleta, agregarItem, actualizarItem, eliminarItem, cobrar, cancelar, listarCocina, marcarListo, estadoPagoQr, cancelarPagoQr };

@@ -110,4 +110,49 @@ describe('Libro Caja — aislamiento entre sucursales', () => {
 
     expect(res.status).toBe(400);
   });
+
+  it('un egreso en efectivo registrado por Libro de Caja suma a total_gastos de la sesión (regresión)', async () => {
+    const antes = await SesionCaja.findByPk(sesionAId);
+    const gastosAntes = parseFloat(antes.total_gastos);
+
+    const res = await request(app)
+      .post('/api/v1/libro-caja')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ sesion_caja_id: sesionAId, tipo: 'egreso', concepto: 'Pago proveedor Test', monto: 25 });
+
+    expect(res.status).toBe(201);
+
+    const despues = await SesionCaja.findByPk(sesionAId);
+    expect(parseFloat(despues.total_gastos)).toBe(gastosAntes + 25);
+  });
+
+  it('un egreso por QR no suma a total_gastos (no sale efectivo de la caja)', async () => {
+    const antes = await SesionCaja.findByPk(sesionAId);
+    const gastosAntes = parseFloat(antes.total_gastos);
+
+    const res = await request(app)
+      .post('/api/v1/libro-caja')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ sesion_caja_id: sesionAId, tipo: 'egreso', concepto: 'Egreso QR Test', monto: 15, metodo_pago: 'qr' });
+
+    expect(res.status).toBe(201);
+
+    const despues = await SesionCaja.findByPk(sesionAId);
+    expect(parseFloat(despues.total_gastos)).toBe(gastosAntes);
+  });
+
+  it('un ingreso no suma a total_gastos', async () => {
+    const antes = await SesionCaja.findByPk(sesionAId);
+    const gastosAntes = parseFloat(antes.total_gastos);
+
+    const res = await request(app)
+      .post('/api/v1/libro-caja')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ sesion_caja_id: sesionAId, tipo: 'ingreso', concepto: 'Ingreso Test', monto: 30 });
+
+    expect(res.status).toBe(201);
+
+    const despues = await SesionCaja.findByPk(sesionAId);
+    expect(parseFloat(despues.total_gastos)).toBe(gastosAntes);
+  });
 });

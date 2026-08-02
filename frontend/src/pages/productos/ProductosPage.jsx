@@ -28,7 +28,7 @@ export default function ProductosPage() {
 
   if (!puedeVer) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3 text-gray-400 dark:text-gray-600">
+      <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
         <AlertCircle className="w-10 h-10" />
         <p className="font-medium">No tienes permiso para ver productos</p>
       </div>
@@ -37,17 +37,17 @@ export default function ProductosPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100">Productos</h1>
+      <h1 className="text-lg sm:text-xl font-bold text-foreground">Productos</h1>
 
-      <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">
+      <div className="flex gap-1 bg-muted p-1 rounded-xl w-full sm:w-fit overflow-x-auto">
         {TABS.map(({ id, label, Icono }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`shrink-0 flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               tab === id
-                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <Icono className="w-4 h-4" />
@@ -85,11 +85,11 @@ function TabCategorias({ puedeCrear, puedeEditar, puedeEliminar }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500 dark:text-gray-400">{categorias.length} categoría(s)</p>
+        <p className="text-sm text-muted-foreground">{categorias.length} categoría(s)</p>
         {puedeCrear && (
           <button
             onClick={() => setModal({ modo: 'crear' })}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-sm font-medium transition-colors"
           >
             <Plus className="w-4 h-4" /> Nueva Categoría
           </button>
@@ -97,7 +97,7 @@ function TabCategorias({ puedeCrear, puedeEditar, puedeEliminar }) {
       </div>
 
       {isLoading && (
-        <div className="flex items-center gap-2 text-gray-400">
+        <div className="flex items-center gap-2 text-muted-foreground">
           <RefreshCw className="w-4 h-4 animate-spin" /><span className="text-sm">Cargando...</span>
         </div>
       )}
@@ -106,22 +106,22 @@ function TabCategorias({ puedeCrear, puedeEditar, puedeEliminar }) {
         {categorias.map(cat => (
           <div
             key={cat.id}
-            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex items-center justify-between gap-3"
+            className="bg-card border border-border rounded-xl p-4 flex items-center justify-between gap-3"
           >
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center shrink-0">
-                <Tag className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+              <div className="w-9 h-9 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
+                <Tag className="w-4 h-4 text-primary" />
               </div>
               <div className="min-w-0">
-                <p className="font-semibold text-gray-800 dark:text-gray-100 truncate">{cat.nombre}</p>
-                <p className="text-xs text-gray-400">{cat.activo ? 'Activa' : 'Inactiva'}</p>
+                <p className="font-semibold text-foreground truncate">{cat.nombre}</p>
+                <p className="text-xs text-muted-foreground">{cat.activo ? 'Activa' : 'Inactiva'}</p>
               </div>
             </div>
             <div className="flex gap-1 shrink-0">
               {puedeEditar && (
                 <button
                   onClick={() => setModal({ modo: 'editar', cat })}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                 >
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
@@ -129,7 +129,7 @@ function TabCategorias({ puedeCrear, puedeEditar, puedeEliminar }) {
               {puedeEliminar && (
                 <button
                   onClick={() => setConfirmEliminar(cat)}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -140,7 +140,7 @@ function TabCategorias({ puedeCrear, puedeEditar, puedeEliminar }) {
       </div>
 
       {!isLoading && categorias.length === 0 && (
-        <div className="flex flex-col items-center justify-center h-40 gap-2 text-gray-400 dark:text-gray-600">
+        <div className="flex flex-col items-center justify-center h-40 gap-2 text-muted-foreground">
           <Tag className="w-8 h-8" />
           <p className="text-sm">No hay categorías. Crea la primera.</p>
         </div>
@@ -158,20 +158,20 @@ function TabCategorias({ puedeCrear, puedeEditar, puedeEliminar }) {
 
       {confirmEliminar && (
         <Modal titulo="Eliminar Categoría" onClose={() => setConfirmEliminar(null)}>
-          <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+          <p className="text-sm text-muted-foreground mb-4">
             ¿Eliminar <strong>{confirmEliminar.nombre}</strong>? Solo si no tiene productos asignados.
           </p>
           {eliminar.error && (
-            <p className="text-sm text-red-600 mb-3">{eliminar.error?.response?.data?.mensaje ?? 'Error al eliminar'}</p>
+            <p className="text-sm text-destructive mb-3">{eliminar.error?.response?.data?.mensaje ?? 'Error al eliminar'}</p>
           )}
           <div className="flex justify-end gap-3">
-            <button onClick={() => setConfirmEliminar(null)} className="px-4 py-2 rounded-xl text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <button onClick={() => setConfirmEliminar(null)} className="px-4 py-2 rounded-xl text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
               Cancelar
             </button>
             <button
               onClick={() => eliminar.mutate(confirmEliminar.id)}
               disabled={eliminar.isPending}
-              className="px-4 py-2 rounded-xl text-sm bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-60"
+              className="px-4 py-2 rounded-xl text-sm bg-destructive hover:bg-destructive/90 text-destructive-foreground transition-colors disabled:opacity-60"
             >
               {eliminar.isPending ? 'Eliminando...' : 'Eliminar'}
             </button>
@@ -188,24 +188,24 @@ function FormCategoriaModal({ cat, onClose, onGuardar, guardando, error }) {
     <Modal titulo={cat ? 'Editar Categoría' : 'Nueva Categoría'} onClose={onClose}>
       <div className="space-y-4">
         <div>
-          <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Nombre</label>
+          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Nombre</label>
           <input
             autoFocus
             value={nombre}
             onChange={e => setNombre(e.target.value)}
             placeholder="Ej: Platos Principales, Bebidas, Postres"
-            className="w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+            className="w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
           />
         </div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <div className="flex justify-end gap-3 pt-2">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
             Cancelar
           </button>
           <button
             onClick={() => onGuardar({ nombre })}
             disabled={guardando || !nombre.trim()}
-            className="px-4 py-2 rounded-xl text-sm bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-60"
+            className="px-4 py-2 rounded-xl text-sm bg-primary hover:bg-primary/90 text-primary-foreground transition-colors disabled:opacity-60"
           >
             {guardando ? 'Guardando...' : 'Guardar'}
           </button>
@@ -257,17 +257,17 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar }) {
           <select
             value={filtroCategoria}
             onChange={e => setFiltroCategoria(e.target.value)}
-            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="bg-background border border-input rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           >
             <option value="">Todas las categorías</option>
             {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
-          <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer select-none">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
             <input
               type="checkbox"
               checked={soloInactivos}
               onChange={e => setSoloInactivos(e.target.checked)}
-              className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+              className="rounded border-input accent-primary focus:ring-ring"
             />
             Ver solo inactivos
           </label>
@@ -276,7 +276,7 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar }) {
           <button
             onClick={() => setModal({ modo: 'crear' })}
             disabled={categorias.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-sm font-medium transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-xl text-sm font-medium transition-colors"
             title={categorias.length === 0 ? 'Primero crea una categoría' : ''}
           >
             <Plus className="w-4 h-4" /> Nuevo Producto
@@ -285,13 +285,13 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar }) {
       </div>
 
       {isLoading && (
-        <div className="flex items-center gap-2 text-gray-400">
+        <div className="flex items-center gap-2 text-muted-foreground">
           <RefreshCw className="w-4 h-4 animate-spin" /><span className="text-sm">Cargando...</span>
         </div>
       )}
 
       {!isLoading && productos.length === 0 && (
-        <div className="flex flex-col items-center justify-center h-40 gap-2 text-gray-400 dark:text-gray-600">
+        <div className="flex flex-col items-center justify-center h-40 gap-2 text-muted-foreground">
           <Package className="w-8 h-8" />
           <p className="text-sm">
             {categorias.length === 0 ? 'Primero crea una categoría.' : 'No hay productos. Crea el primero.'}
@@ -300,93 +300,154 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar }) {
       )}
 
       {productos.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 dark:bg-gray-700/50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Producto</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide hidden sm:table-cell">Categoría</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Precio</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide hidden md:table-cell">Stock</th>
-                {(puedeEditar || puedeEliminar) && <th className="px-4 py-3 w-20" />}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-              {productos.map(prod => (
-                <tr key={prod.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      {prod.imagen ? (
-                        <img
-                          src={`${API_BASE}${prod.imagen}`}
-                          alt={prod.nombre}
-                          className="w-10 h-10 rounded-lg object-cover shrink-0 border border-gray-200 dark:border-gray-700"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center shrink-0">
-                          <Package className="w-5 h-5 text-gray-400" />
-                        </div>
-                      )}
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-gray-800 dark:text-gray-100">{prod.nombre}</p>
-                          {!prod.activo && (
-                            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">
-                              Inactivo
-                            </span>
-                          )}
-                        </div>
-                        {prod.codigo && <p className="text-xs text-gray-400">{prod.codigo}</p>}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400 hidden sm:table-cell">
+        <>
+          {/* Mobile: tarjetas */}
+          <div className="sm:hidden space-y-2">
+            {productos.map(prod => (
+              <div key={prod.id} className="bg-card border border-border rounded-xl p-3.5 flex items-center gap-3">
+                {prod.imagen ? (
+                  <img
+                    src={`${API_BASE}${prod.imagen}`}
+                    alt={prod.nombre}
+                    className="w-12 h-12 rounded-lg object-cover shrink-0 border border-border"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                    <Package className="w-6 h-6 text-muted-foreground" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-foreground truncate">{prod.nombre}</p>
+                    {!prod.activo && (
+                      <span className="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        Inactivo
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
                     {prod.categoria?.nombre ?? '-'}
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold text-gray-800 dark:text-gray-100">
+                    {prod.stock !== null && !prod.stock_por_sucursal?.length ? ` · Stock: ${prod.stock}` : ''}
+                  </p>
+                  <p className="text-sm font-semibold text-foreground mt-0.5">
                     Bs {parseFloat(prod.precio).toFixed(2)}{prod.es_pesable ? '/kg' : ''}
-                  </td>
-                  <td className="px-4 py-3 text-right text-gray-500 dark:text-gray-400 hidden md:table-cell">
-                    {prod.stock === null
-                      ? '∞'
-                      : accesoTodas && prod.stock_por_sucursal?.length
-                        ? (
-                          <div className="flex flex-col gap-0.5 text-xs">
-                            {prod.stock_por_sucursal.map(s => (
-                              <span key={s.sucursal_id}>{s.nombre}: {s.stock}</span>
-                            ))}
+                  </p>
+                </div>
+                {(puedeEditar || puedeEliminar) && (
+                  <div className="flex flex-col gap-1 shrink-0">
+                    {puedeEditar && (
+                      <button
+                        onClick={() => setModal({ modo: 'editar', prod })}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {puedeEliminar && (
+                      <button
+                        onClick={() => setConfirmEliminar(prod)}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop: tabla */}
+          <div className="hidden sm:block bg-card border border-border rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Producto</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Categoría</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Precio</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Stock</th>
+                    {(puedeEditar || puedeEliminar) && <th className="px-4 py-3 w-20" />}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {productos.map(prod => (
+                    <tr key={prod.id} className="hover:bg-muted/50 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          {prod.imagen ? (
+                            <img
+                              src={`${API_BASE}${prod.imagen}`}
+                              alt={prod.nombre}
+                              className="w-10 h-10 rounded-lg object-cover shrink-0 border border-border"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                              <Package className="w-5 h-5 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-foreground">{prod.nombre}</p>
+                              {!prod.activo && (
+                                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                                  Inactivo
+                                </span>
+                              )}
+                            </div>
+                            {prod.codigo && <p className="text-xs text-muted-foreground">{prod.codigo}</p>}
                           </div>
-                        )
-                        : prod.stock
-                    }
-                  </td>
-                  {(puedeEditar || puedeEliminar) && (
-                    <td className="px-4 py-3">
-                      <div className="flex gap-1 justify-end">
-                        {puedeEditar && (
-                          <button
-                            onClick={() => setModal({ modo: 'editar', prod })}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                        {puedeEliminar && (
-                          <button
-                            onClick={() => setConfirmEliminar(prod)}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {prod.categoria?.nombre ?? '-'}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-foreground">
+                        Bs {parseFloat(prod.precio).toFixed(2)}{prod.es_pesable ? '/kg' : ''}
+                      </td>
+                      <td className="px-4 py-3 text-right text-muted-foreground hidden md:table-cell">
+                        {prod.stock === null
+                          ? '∞'
+                          : accesoTodas && prod.stock_por_sucursal?.length
+                            ? (
+                              <div className="flex flex-col gap-0.5 text-xs">
+                                {prod.stock_por_sucursal.map(s => (
+                                  <span key={s.sucursal_id}>{s.nombre}: {s.stock}</span>
+                                ))}
+                              </div>
+                            )
+                            : prod.stock
+                        }
+                      </td>
+                      {(puedeEditar || puedeEliminar) && (
+                        <td className="px-4 py-3">
+                          <div className="flex gap-1 justify-end">
+                            {puedeEditar && (
+                              <button
+                                onClick={() => setModal({ modo: 'editar', prod })}
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {puedeEliminar && (
+                              <button
+                                onClick={() => setConfirmEliminar(prod)}
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
       )}
 
       {modal && (
@@ -405,22 +466,22 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar }) {
 
       {confirmEliminar && (
         <Modal titulo="Eliminar Producto" onClose={() => setConfirmEliminar(null)}>
-          <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+          <p className="text-sm text-muted-foreground mb-4">
             {confirmEliminar.tiene_ventas
               ? <>Este producto tiene ventas registradas: <strong>{confirmEliminar.nombre}</strong> se desactivará en vez de eliminarse.</>
               : <>¿Eliminar <strong>{confirmEliminar.nombre}</strong>? No tiene ventas asociadas, se borrará por completo.</>}
           </p>
           {eliminar.error && (
-            <p className="text-sm text-red-600 mb-3">{eliminar.error?.response?.data?.mensaje ?? 'Error al eliminar'}</p>
+            <p className="text-sm text-destructive mb-3">{eliminar.error?.response?.data?.mensaje ?? 'Error al eliminar'}</p>
           )}
           <div className="flex justify-end gap-3">
-            <button onClick={() => setConfirmEliminar(null)} className="px-4 py-2 rounded-xl text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <button onClick={() => setConfirmEliminar(null)} className="px-4 py-2 rounded-xl text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
               Cancelar
             </button>
             <button
               onClick={() => eliminar.mutate(confirmEliminar.id)}
               disabled={eliminar.isPending}
-              className="px-4 py-2 rounded-xl text-sm bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-60"
+              className="px-4 py-2 rounded-xl text-sm bg-destructive hover:bg-destructive/90 text-destructive-foreground transition-colors disabled:opacity-60"
             >
               {eliminar.isPending ? 'Eliminando...' : 'Eliminar'}
             </button>
@@ -526,13 +587,13 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
 
         {/* Imagen */}
         <div>
-          <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Imagen del producto</label>
+          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Imagen del producto</label>
           <div className="flex items-start gap-4">
-            <div className="w-24 h-24 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-600 flex items-center justify-center overflow-hidden shrink-0 bg-gray-50 dark:bg-gray-700/50">
+            <div className="w-24 h-24 rounded-xl border-2 border-dashed border-input flex items-center justify-center overflow-hidden shrink-0 bg-muted">
               {preview ? (
                 <img src={preview} alt="preview" className="w-full h-full object-cover" />
               ) : (
-                <Package className="w-8 h-8 text-gray-300 dark:text-gray-600" />
+                <Package className="w-8 h-8 text-muted-foreground" />
               )}
             </div>
             <div className="flex flex-col gap-2 justify-center min-w-0">
@@ -548,8 +609,8 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
                 htmlFor="img-producto"
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors ${
                   subiendoImg
-                    ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-wait'
-                    : 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40'
+                    ? 'bg-muted text-muted-foreground cursor-wait'
+                    : 'bg-primary/10 text-primary hover:bg-primary/20'
                 }`}
               >
                 {subiendoImg ? (
@@ -562,60 +623,60 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
                 <button
                   type="button"
                   onClick={quitarImagen}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-destructive hover:bg-destructive/10 transition-colors"
                 >
                   <X className="w-4 h-4" /> Quitar imagen
                 </button>
               )}
-              <p className="text-xs text-gray-400">JPG, PNG, WEBP · Máx 5 MB</p>
-              {errImg && <p className="text-xs text-red-600">{errImg}</p>}
+              <p className="text-xs text-muted-foreground">JPG, PNG, WEBP · Máx 5 MB</p>
+              {errImg && <p className="text-xs text-destructive">{errImg}</p>}
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="col-span-2">
-            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Nombre *</label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Nombre *</label>
             <input
               autoFocus
               value={form.nombre}
               onChange={e => set('nombre', e.target.value)}
               placeholder="Nombre del producto"
-              className="w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+              className="w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
             />
           </div>
-          <div className="col-span-2">
-            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Categoría *</label>
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Categoría *</label>
             <select
               value={form.categoria_id}
               onChange={e => set('categoria_id', e.target.value)}
-              className="w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             >
               {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
             </select>
           </div>
-          <div className="col-span-2">
-            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Grupos de opciones</label>
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Grupos de opciones</label>
             <div className="space-y-2">
               {form.grupos_opciones.map((g, i) => (
-                <div key={g.id} className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-700/50 rounded-xl px-3 py-2">
-                  <span className="flex-1 text-sm text-gray-700 dark:text-gray-200 min-w-0 truncate">{i + 1}. {g.nombre}</span>
-                  <label className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 shrink-0">
+                <div key={g.id} className="flex flex-wrap items-center gap-1.5 bg-muted rounded-xl px-3 py-2">
+                  <span className="flex-1 text-sm text-foreground min-w-0 truncate">{i + 1}. {g.nombre}</span>
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
                     <input
                       type="checkbox"
                       checked={g.obligatorio}
                       onChange={() => toggleObligatorioGrupo(i)}
-                      className="w-3.5 h-3.5 rounded accent-blue-600"
+                      className="w-3.5 h-3.5 rounded accent-primary"
                     />
                     Obligatorio
                   </label>
-                  <button type="button" onClick={() => moverGrupo(i, -1)} disabled={i === 0} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30 transition-colors">
+                  <button type="button" onClick={() => moverGrupo(i, -1)} disabled={i === 0} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors">
                     <ChevronUp className="w-4 h-4" />
                   </button>
-                  <button type="button" onClick={() => moverGrupo(i, 1)} disabled={i === form.grupos_opciones.length - 1} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30 transition-colors">
+                  <button type="button" onClick={() => moverGrupo(i, 1)} disabled={i === form.grupos_opciones.length - 1} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors">
                     <ChevronDown className="w-4 h-4" />
                   </button>
-                  <button type="button" onClick={() => quitarGrupo(i)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                  <button type="button" onClick={() => quitarGrupo(i)} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
@@ -625,7 +686,7 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
               <select
                 value=""
                 onChange={e => { if (e.target.value) agregarGrupo(e.target.value); }}
-                className="mt-2 w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="mt-2 w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="">+ Agregar grupo...</option>
                 {gruposOpciones.filter(g => !form.grupos_opciones.some(fg => fg.id === g.id)).map(g => (
@@ -635,7 +696,7 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
             )}
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
               {form.es_pesable ? 'Precio por kg (Bs) *' : 'Precio (Bs) *'}
             </label>
             <input
@@ -643,27 +704,27 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
               value={form.precio}
               onChange={e => set('precio', e.target.value)}
               placeholder="0.00"
-              className="w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+              className="w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
             />
             {form.precio !== '' && !(parseFloat(form.precio) >= 1) && (
-              <p className="text-xs text-red-600 mt-1">El precio debe ser igual o mayor a 1</p>
+              <p className="text-xs text-destructive mt-1">El precio debe ser igual o mayor a 1</p>
             )}
           </div>
           {!prod && (
             <div>
-              <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Stock inicial</label>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Stock inicial</label>
               <input
                 type="number" min="0"
                 value={form.stock}
                 onChange={e => set('stock', e.target.value)}
                 placeholder="Opcional"
-                className="w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                className="w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
               />
               {accesoTodas && form.stock !== '' && (
                 <select
                   value={form.sucursal_id}
                   onChange={e => set('sucursal_id', e.target.value)}
-                  className="w-full mt-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full mt-2 bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="">Sucursal para el stock inicial...</option>
                   {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
@@ -678,9 +739,9 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
             type="checkbox"
             checked={form.es_vendible}
             onChange={e => set('es_vendible', e.target.checked)}
-            className="w-4 h-4 rounded accent-blue-600"
+            className="w-4 h-4 rounded accent-primary"
           />
-          <span className="text-sm text-gray-700 dark:text-gray-300">Aparece en el menú de ventas</span>
+          <span className="text-sm text-foreground">Aparece en el menú de ventas</span>
         </label>
 
         <label className="flex items-center gap-3 cursor-pointer">
@@ -688,15 +749,15 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
             type="checkbox"
             checked={form.es_pesable}
             onChange={e => set('es_pesable', e.target.checked)}
-            className="w-4 h-4 rounded accent-blue-600"
+            className="w-4 h-4 rounded accent-primary"
           />
-          <span className="text-sm text-gray-700 dark:text-gray-300">Se vende por peso (kg) — el precio de arriba es por kg</span>
+          <span className="text-sm text-foreground">Se vende por peso (kg) — el precio de arriba es por kg</span>
         </label>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
         <div className="flex justify-end gap-3 pt-2">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
             Cancelar
           </button>
           <button
@@ -705,7 +766,7 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
               guardando || subiendoImg || !form.nombre.trim() || !(parseFloat(form.precio) >= 1) || !form.categoria_id ||
               (!prod && accesoTodas && form.stock !== '' && !form.sucursal_id)
             }
-            className="px-4 py-2 rounded-xl text-sm bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-60"
+            className="px-4 py-2 rounded-xl text-sm bg-primary hover:bg-primary/90 text-primary-foreground transition-colors disabled:opacity-60"
           >
             {guardando ? 'Guardando...' : 'Guardar'}
           </button>
@@ -745,11 +806,11 @@ function TabOpciones({ puedeCrear, puedeEditar, puedeEliminar }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500 dark:text-gray-400">{grupos.length} grupo(s) de opciones</p>
+        <p className="text-sm text-muted-foreground">{grupos.length} grupo(s) de opciones</p>
         {puedeCrear && (
           <button
             onClick={() => setModal({ modo: 'crear' })}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-sm font-medium transition-colors"
           >
             <Plus className="w-4 h-4" /> Nuevo Grupo
           </button>
@@ -757,29 +818,29 @@ function TabOpciones({ puedeCrear, puedeEditar, puedeEliminar }) {
       </div>
 
       {isLoading && (
-        <div className="flex items-center gap-2 text-gray-400">
+        <div className="flex items-center gap-2 text-muted-foreground">
           <RefreshCw className="w-4 h-4 animate-spin" /><span className="text-sm">Cargando...</span>
         </div>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
         {grupos.map(grupo => (
-          <div key={grupo.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+          <div key={grupo.id} className="bg-card border border-border rounded-xl p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="font-semibold text-gray-800 dark:text-gray-100 truncate">{grupo.nombre}</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {grupo.opciones.map(o => o.nombre).join(' · ') || 'Sin opciones'}
+                <p className="font-semibold text-foreground truncate">{grupo.nombre}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {grupo.opciones.map(o => o.precio_adicional > 0 ? `${o.nombre} (+Bs ${parseFloat(o.precio_adicional).toFixed(2)})` : o.nombre).join(' · ') || 'Sin opciones'}
                 </p>
               </div>
               <div className="flex gap-1 shrink-0">
                 {puedeEditar && (
-                  <button onClick={() => setModal({ modo: 'editar', grupo })} className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                  <button onClick={() => setModal({ modo: 'editar', grupo })} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors">
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                 )}
                 {puedeEliminar && (
-                  <button onClick={() => setConfirmEliminar(grupo)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                  <button onClick={() => setConfirmEliminar(grupo)} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -790,7 +851,7 @@ function TabOpciones({ puedeCrear, puedeEditar, puedeEliminar }) {
       </div>
 
       {!isLoading && grupos.length === 0 && (
-        <div className="flex flex-col items-center justify-center h-40 gap-2 text-gray-400 dark:text-gray-600">
+        <div className="flex flex-col items-center justify-center h-40 gap-2 text-muted-foreground">
           <ListChecks className="w-8 h-8" />
           <p className="text-sm">No hay grupos de opciones. Crea el primero.</p>
         </div>
@@ -808,17 +869,17 @@ function TabOpciones({ puedeCrear, puedeEditar, puedeEliminar }) {
 
       {confirmEliminar && (
         <Modal titulo="Eliminar Grupo de Opciones" onClose={() => setConfirmEliminar(null)}>
-          <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+          <p className="text-sm text-muted-foreground mb-4">
             ¿Eliminar <strong>{confirmEliminar.nombre}</strong>? Los productos que lo tengan asignado quedarán sin grupo de opciones.
           </p>
           <div className="flex justify-end gap-3">
-            <button onClick={() => setConfirmEliminar(null)} className="px-4 py-2 rounded-xl text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <button onClick={() => setConfirmEliminar(null)} className="px-4 py-2 rounded-xl text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
               Cancelar
             </button>
             <button
               onClick={() => eliminar.mutate(confirmEliminar.id)}
               disabled={eliminar.isPending}
-              className="px-4 py-2 rounded-xl text-sm bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-60"
+              className="px-4 py-2 rounded-xl text-sm bg-destructive hover:bg-destructive/90 text-destructive-foreground transition-colors disabled:opacity-60"
             >
               {eliminar.isPending ? 'Eliminando...' : 'Eliminar'}
             </button>
@@ -833,15 +894,21 @@ function FormGrupoOpcionesModal({ grupo, onClose, onGuardar, guardando, error })
   const [nombre, setNombre] = useState(grupo?.nombre ?? '');
   const [tipoSeleccion, setTipoSeleccion] = useState(grupo?.tipo_seleccion ?? 'unica');
   const [opciones, setOpciones] = useState(
-    grupo?.opciones?.length ? grupo.opciones.map(o => ({ nombre: o.nombre })) : [{ nombre: '' }]
+    grupo?.opciones?.length
+      ? grupo.opciones.map(o => ({ nombre: o.nombre, precio_adicional: o.precio_adicional ?? 0 }))
+      : [{ nombre: '', precio_adicional: 0 }]
   );
 
   function setOpcionNombre(i, valor) {
-    setOpciones(prev => prev.map((o, idx) => idx === i ? { nombre: valor } : o));
+    setOpciones(prev => prev.map((o, idx) => idx === i ? { ...o, nombre: valor } : o));
+  }
+
+  function setOpcionPrecio(i, valor) {
+    setOpciones(prev => prev.map((o, idx) => idx === i ? { ...o, precio_adicional: valor } : o));
   }
 
   function agregarOpcion() {
-    setOpciones(prev => [...prev, { nombre: '' }]);
+    setOpciones(prev => [...prev, { nombre: '', precio_adicional: 0 }]);
   }
 
   function quitarOpcion(i) {
@@ -860,9 +927,8 @@ function FormGrupoOpcionesModal({ grupo, onClose, onGuardar, guardando, error })
 
   function handleGuardar() {
     const opcionesValidas = opciones
-      .map(o => o.nombre.trim())
-      .filter(Boolean)
-      .map((nombre, orden) => ({ nombre, orden }));
+      .filter(o => o.nombre.trim())
+      .map((o, orden) => ({ nombre: o.nombre.trim(), precio_adicional: parseFloat(o.precio_adicional) || 0, orden }));
     onGuardar({ nombre, tipo_seleccion: tipoSeleccion, opciones: opcionesValidas });
   }
 
@@ -873,19 +939,19 @@ function FormGrupoOpcionesModal({ grupo, onClose, onGuardar, guardando, error })
     <Modal titulo={grupo ? 'Editar Grupo de Opciones' : 'Nuevo Grupo de Opciones'} onClose={onClose}>
       <div className="space-y-4">
         <div>
-          <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Nombre del grupo</label>
+          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Nombre del grupo</label>
           <input
             autoFocus
             value={nombre}
             onChange={e => setNombre(e.target.value)}
             placeholder="Ej: Término de cocción, Sabor"
-            className="w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+            className="w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
           />
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Tipo de selección</label>
-          <div className="grid grid-cols-2 gap-2">
+          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Tipo de selección</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {[{ id: 'unica', label: 'Única (elige una)' }, { id: 'multiple', label: 'Múltiple (elige varias)' }].map((t) => (
               <button
                 key={t.id}
@@ -893,8 +959,8 @@ function FormGrupoOpcionesModal({ grupo, onClose, onGuardar, guardando, error })
                 onClick={() => setTipoSeleccion(t.id)}
                 className={`py-2.5 rounded-xl text-sm font-medium border transition-colors ${
                   tipoSeleccion === t.id
-                    ? 'bg-blue-600 border-blue-600 text-white'
-                    : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-blue-400 dark:hover:border-blue-500'
+                    ? 'bg-primary border-primary text-primary-foreground'
+                    : 'border-input text-muted-foreground hover:border-primary/50'
                 }`}
               >
                 {t.label}
@@ -904,7 +970,7 @@ function FormGrupoOpcionesModal({ grupo, onClose, onGuardar, guardando, error })
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Opciones</label>
+          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Opciones</label>
           <div className="space-y-2">
             {opciones.map((o, i) => (
               <div key={i} className="flex items-center gap-1.5">
@@ -912,35 +978,48 @@ function FormGrupoOpcionesModal({ grupo, onClose, onGuardar, guardando, error })
                   value={o.nombre}
                   onChange={e => setOpcionNombre(i, e.target.value)}
                   placeholder={`Opción ${i + 1}`}
-                  className="flex-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2 text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                  className="flex-1 bg-background border border-input rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
                 />
-                <button type="button" onClick={() => moverOpcion(i, -1)} disabled={i === 0} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30 transition-colors">
+                <div className="relative shrink-0 w-24">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">+Bs</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={o.precio_adicional}
+                    onChange={e => setOpcionPrecio(i, e.target.value)}
+                    placeholder="0.00"
+                    title="Precio adicional"
+                    className="w-full bg-background border border-input rounded-xl pl-8 pr-2 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
+                  />
+                </div>
+                <button type="button" onClick={() => moverOpcion(i, -1)} disabled={i === 0} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors">
                   <ChevronUp className="w-4 h-4" />
                 </button>
-                <button type="button" onClick={() => moverOpcion(i, 1)} disabled={i === opciones.length - 1} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30 transition-colors">
+                <button type="button" onClick={() => moverOpcion(i, 1)} disabled={i === opciones.length - 1} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors">
                   <ChevronDown className="w-4 h-4" />
                 </button>
-                <button type="button" onClick={() => quitarOpcion(i)} disabled={opciones.length === 1} className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-30 transition-colors">
+                <button type="button" onClick={() => quitarOpcion(i)} disabled={opciones.length === 1} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-30 transition-colors">
                   <X className="w-4 h-4" />
                 </button>
               </div>
             ))}
           </div>
-          <button type="button" onClick={agregarOpcion} className="mt-2 flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors">
+          <button type="button" onClick={agregarOpcion} className="mt-2 flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors">
             <Plus className="w-4 h-4" /> Agregar opción
           </button>
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
         <div className="flex justify-end gap-3 pt-2">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
             Cancelar
           </button>
           <button
             onClick={handleGuardar}
             disabled={guardando || !nombreValido || !hayOpcionValida}
-            className="px-4 py-2 rounded-xl text-sm bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-60"
+            className="px-4 py-2 rounded-xl text-sm bg-primary hover:bg-primary/90 text-primary-foreground transition-colors disabled:opacity-60"
           >
             {guardando ? 'Guardando...' : 'Guardar'}
           </button>

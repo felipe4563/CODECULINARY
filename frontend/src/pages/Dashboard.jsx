@@ -169,7 +169,7 @@ export default function Dashboard() {
   const { usuario } = useAuthStore();
   const { modo }    = useThemeStore();
   const isDark      = modo === 'dark';
-  const { isXs, isSm, isMd } = useScreenSize();
+  const { isXs, isSm } = useScreenSize();
 
   const gridColor  = isDark ? '#1f2937' : '#f9fafb';
   const tickColor  = isDark ? '#9ca3af' : '#6b7280';
@@ -413,7 +413,7 @@ export default function Dashboard() {
         }
       `}</style>
 
-      <div className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4">
+      <div className="space-y-4">
 
         {/* ── Header ──────────────────────────────────────────── */}
         <div

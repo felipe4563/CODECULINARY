@@ -5,6 +5,7 @@ const Opcion = sequelize.define('Opcion', {
   id: { type: DataTypes.INTEGER.UNSIGNED, primaryKey: true, autoIncrement: true },
   grupo_opciones_id: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
   nombre: { type: DataTypes.STRING(100), allowNull: false },
+  precio_adicional: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
   orden: { type: DataTypes.INTEGER, defaultValue: 0 },
 }, {
   tableName: 'opciones',

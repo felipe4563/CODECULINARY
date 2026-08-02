@@ -31,10 +31,23 @@ const _consoleError = console.error.bind(console);
 console.log = (...args) => { _consoleLog(...args); logAArchivo(args.join(' ')); };
 console.error = (...args) => { _consoleError(...args); logAArchivo('ERROR: ' + args.join(' ')); };
 
+// Sin esto, una excepción no capturada mata el proceso en silencio: Node la
+// imprime por stderr (que nadie ve, porque el agente corre oculto) y agente.log
+// se queda sin ninguna pista de qué pasó — solo se ve que el siguiente arranque
+// aparece 5 minutos después, cuando la tarea vigía lo relanza.
+process.on('uncaughtException', function(err) {
+  console.error('EXCEPCIÓN NO CAPTURADA — el agente se va a cerrar:', err && err.stack ? err.stack : err);
+  process.exit(1);
+});
+process.on('unhandledRejection', function(reason) {
+  console.error('PROMESA RECHAZADA SIN MANEJAR — el agente se va a cerrar:', reason && reason.stack ? reason.stack : reason);
+  process.exit(1);
+});
+
 // ── Instancia única: evita que corran dos agentes al mismo tiempo ─────────────
 const LOCK_FILE = path.join(CONFIG_DIR, 'agente.lock');
 
-function yaCorriendо() {
+function yaCorriendo() {
   if (!existsSync(LOCK_FILE)) return false;
   try {
     const pid = parseInt(readFileSync(LOCK_FILE, 'utf8').trim(), 10);
@@ -46,8 +59,11 @@ function yaCorriendо() {
   } catch { return false; }
 }
 
-if (yaCorriendо()) {
-  console.error('Ya hay un agente corriendo. Saliendo para evitar duplicados.');
+if (yaCorriendo()) {
+  // No es un error: la tarea vigía dispara este intento cada 5 min como red de
+  // seguridad. Si ya hay uno corriendo, es lo esperado — este simplemente se
+  // retira sin duplicar la impresión.
+  console.log('.. Vigía: ya hay un agente activo, no hace falta relanzar.');
   process.exit(0);
 }
 
@@ -104,14 +120,14 @@ function liberar(tipo, pedidoId) {
   impresos.delete(tipo + ':' + pedidoId);
 }
 
-async function imprimirCaja(datos, origen) {
+async function imprimirCaja(datos, origen, forzar) {
   var pid = datos.pedido ? datos.pedido.id : '?';
-  if (yaImpreso('caja', pid)) {
+  if (!forzar && yaImpreso('caja', pid)) {
     console.log('[' + ts() + '] .. print:caja Pedido #' + pid + ' ya impreso (' + origen + ', omitido)');
     return;
   }
   reservar('caja', pid);
-  console.log('[' + ts() + '] >> print:caja  Pedido #' + pid + ' (' + origen + ')');
+  console.log('[' + ts() + '] >> print:caja  Pedido #' + pid + ' (' + origen + (forzar ? ', forzado' : '') + ')');
   try {
     await printRaw(config.impresora_caja, buildCaja(datos));
     console.log('[' + ts() + '] OK Caja impreso');
@@ -121,14 +137,14 @@ async function imprimirCaja(datos, origen) {
   }
 }
 
-async function imprimirCocina(datos, origen) {
+async function imprimirCocina(datos, origen, forzar) {
   var pid = datos.pedido ? datos.pedido.id : '?';
-  if (yaImpreso('cocina', pid)) {
+  if (!forzar && yaImpreso('cocina', pid)) {
     console.log('[' + ts() + '] .. print:cocina Pedido #' + pid + ' ya impreso (' + origen + ', omitido)');
     return;
   }
   reservar('cocina', pid);
-  console.log('[' + ts() + '] >> print:cocina Pedido #' + pid + ' (' + origen + ')');
+  console.log('[' + ts() + '] >> print:cocina Pedido #' + pid + ' (' + origen + (forzar ? ', forzado' : '') + ')');
   try {
     await printRaw(config.impresora_cocina, buildCocina(datos));
     console.log('[' + ts() + '] OK Cocina impreso');
@@ -172,11 +188,28 @@ socket.on('print:cocina', async function(datos) {
 // Solo escucha en 127.0.0.1: nadie fuera de esta máquina puede llegar a este puerto.
 
 const PUERTO_LOCAL = 4321;
-let origenPermitido = '*';
-try { origenPermitido = new URL(config.servidor).origin; } catch {}
+let origenConfigurado = '*';
+try { origenConfigurado = new URL(config.servidor).origin; } catch {}
 
-function enviarCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', origenPermitido);
+// Además del origen configurado (config.servidor — normalmente el dominio de
+// producción), se acepta cualquier localhost/127.0.0.1 sin importar el
+// puerto: así funciona tanto en producción como en desarrollo (el frontend
+// de Vite corre en un puerto distinto al backend, ej. 5173 vs 3001/3000).
+// Sigue sin exponer nada a Internet: este servidor solo escucha en
+// 127.0.0.1, así que ningún sitio fuera de esta PC puede llegar a preguntar.
+function origenPermitido(req) {
+  const origen = req.headers.origin;
+  if (!origen) return origenConfigurado;
+  if (origen === origenConfigurado) return origen;
+  try {
+    const { hostname } = new URL(origen);
+    if (hostname === 'localhost' || hostname === '127.0.0.1') return origen;
+  } catch {}
+  return origenConfigurado;
+}
+
+function enviarCors(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', origenPermitido(req));
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   // Chrome exige esta cabecera para permitir que una página https:// (red pública)
@@ -200,16 +233,19 @@ function leerCuerpo(req) {
 }
 
 const servidorLocal = http.createServer(async (req, res) => {
-  enviarCors(res);
+  enviarCors(req, res);
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
-  if (req.method === 'POST' && (req.url === '/imprimir/caja' || req.url === '/imprimir/cocina')) {
-    const tipo = req.url === '/imprimir/caja' ? 'caja' : 'cocina';
+  const { pathname, searchParams } = new URL(req.url, 'http://localhost');
+
+  if (req.method === 'POST' && (pathname === '/imprimir/caja' || pathname === '/imprimir/cocina')) {
+    const tipo = pathname === '/imprimir/caja' ? 'caja' : 'cocina';
+    const forzar = searchParams.get('forzar') === '1';
     try {
       const datos = await leerCuerpo(req);
-      if (tipo === 'caja') await imprimirCaja(datos, 'local');
-      else await imprimirCocina(datos, 'local');
+      if (tipo === 'caja') await imprimirCaja(datos, 'local', forzar);
+      else await imprimirCocina(datos, 'local', forzar);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true }));
     } catch (err) {
@@ -239,7 +275,7 @@ servidorLocal.on('error', (err) => {
 });
 
 servidorLocal.listen(PUERTO_LOCAL, '127.0.0.1', () => {
-  console.log(`[${ts()}] ✓ Servidor local escuchando en http://127.0.0.1:${PUERTO_LOCAL} (origen permitido: ${origenPermitido})`);
+  console.log(`[${ts()}] ✓ Servidor local escuchando en http://127.0.0.1:${PUERTO_LOCAL} (origen configurado: ${origenConfigurado}, + cualquier localhost/127.0.0.1)`);
 });
 
 // ── ESC/POS ──────────────────────────────────────────────────────────────────
@@ -335,11 +371,18 @@ function buildCaja(data) {
   for (var i = 0; i < detalles.length; i++) {
     var d    = detalles[i];
     var prod = String((d.producto && d.producto.nombre) ? d.producto.nombre : '').toUpperCase();
-    var qty  = d.cantidad;
-    var pu   = parseFloat(d.precio).toFixed(2);
-    var sub  = (parseFloat(d.precio) * qty).toFixed(2);
-    t.left().cols('  ' + qty + '   ' + prod, sub);
-    if (qty > 1) t.left().line('        (' + sym + ' ' + pu + ' c/u)');
+    var sub  = (parseFloat(d.precio) * d.cantidad).toFixed(2);
+    if (d.peso != null) {
+      var pesoKg   = parseFloat(d.peso).toFixed(3);
+      var precioKg = parseFloat((d.producto && d.producto.precio) || 0).toFixed(2);
+      t.left().cols('  ' + pesoKg + 'kg ' + prod, sub);
+      t.left().line('        (' + sym + ' ' + precioKg + '/kg)');
+    } else {
+      var qty = d.cantidad;
+      var pu  = parseFloat(d.precio).toFixed(2);
+      t.left().cols('  ' + qty + '   ' + prod, sub);
+      if (qty > 1) t.left().line('        (' + sym + ' ' + pu + ' c/u)');
+    }
     if (d.nota) t.left().bold(true).line('      >> ' + d.nota).bold(false);
   }
   t.rule('-');
@@ -396,11 +439,18 @@ function buildCocina(data) {
   for (var j = 0; j < detalles2.length; j++) {
     var d2    = detalles2[j];
     var prod2 = String((d2.producto && d2.producto.nombre) ? d2.producto.nombre : '').toUpperCase();
-    var qty2  = d2.cantidad;
-    var pu2   = parseFloat(d2.precio).toFixed(2);
-    var sub2  = (parseFloat(d2.precio) * qty2).toFixed(2);
-    t.left().dbl().bold(true).line(qty2 + '  ' + prod2).normal().bold(false);
-    t.left().line('     ' + sym + ' ' + pu2 + ' c/u       Sub: ' + sym + ' ' + sub2);
+    var sub2  = (parseFloat(d2.precio) * d2.cantidad).toFixed(2);
+    if (d2.peso != null) {
+      var pesoKg2   = parseFloat(d2.peso).toFixed(3);
+      var precioKg2 = parseFloat((d2.producto && d2.producto.precio) || 0).toFixed(2);
+      t.left().dbl().bold(true).line(pesoKg2 + 'kg  ' + prod2).normal().bold(false);
+      t.left().line('     ' + sym + ' ' + precioKg2 + '/kg       Sub: ' + sym + ' ' + sub2);
+    } else {
+      var qty2 = d2.cantidad;
+      var pu2  = parseFloat(d2.precio).toFixed(2);
+      t.left().dbl().bold(true).line(qty2 + '  ' + prod2).normal().bold(false);
+      t.left().line('     ' + sym + ' ' + pu2 + ' c/u       Sub: ' + sym + ' ' + sub2);
+    }
     if (d2.nota) t.left().bold(true).dblH().line(' >> ' + d2.nota).normal().bold(false);
     t.rule('-');
   }

@@ -1,0 +1,2 @@
+ALTER TABLE usuarios
+  ADD COLUMN avatar VARCHAR(255) DEFAULT NULL AFTER nombre;

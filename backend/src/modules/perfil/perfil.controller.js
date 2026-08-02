@@ -13,14 +13,15 @@ async function obtener(req, res, next) {
 
 async function actualizar(req, res, next) {
   try {
-    const { nombre, email } = req.body;
-    if (!nombre && !email) {
-      return res.status(400).json({ ok: false, mensaje: 'Proporciona al menos nombre o email' });
+    const { nombre, email, avatar } = req.body;
+    if (!nombre && !email && avatar === undefined) {
+      return res.status(400).json({ ok: false, mensaje: 'Proporciona al menos nombre, email o avatar' });
     }
     const u = await Usuario.findByPk(req.usuario.id);
     const datos = {};
     if (nombre) datos.nombre = nombre.trim();
     if (email)  datos.email  = email.trim().toLowerCase();
+    if (avatar !== undefined) datos.avatar = avatar || null;
 
     // Check email uniqueness if changing
     if (datos.email && datos.email !== u.email) {
@@ -54,7 +55,7 @@ async function cambiarContrasena(req, res, next) {
       return res.status(401).json({ ok: false, mensaje: 'La contraseña actual es incorrecta' });
     }
 
-    await u.update({ contrasena: await bcrypt.hash(nueva_contrasena, 10) });
+    await u.update({ contrasena: await bcrypt.hash(nueva_contrasena, 10), debe_cambiar_contrasena: 0 });
     res.json({ ok: true, datos: null });
   } catch (err) { next(err); }
 }

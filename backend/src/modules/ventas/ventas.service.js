@@ -1,11 +1,13 @@
 const { Op } = require('sequelize');
 const {
-  Pedido, DetallePedido, Mesa, Producto, Cliente, SesionCaja, LibroCaja, Configuracion, PagoQr, sequelize,
+  Pedido, DetallePedido, Mesa, Producto, Cliente, SesionCaja, LibroCaja, Configuracion, PagoQr, Opcion, Combo, Promocion, Cupon, sequelize,
 } = require('../../models');
 const { emitir } = require('../../socket');
 const { ajustarStockSucursal } = require('../inventario/stock.service');
 const codepayClient = require('../../integrations/codepay/codepay.client');
 const { calcularPrecioPesable } = require('../../utils/precio');
+const { estaActivoHoy } = require('../../utils/disponibilidad');
+const { resolver: _resolverCupon } = require('../cupones/cupones.service');
 
 // Rango del día calendario en hora de Bolivia (-04:00), sin depender de la
 // zona horaria del proceso de Node/VPS. Por defecto usa el momento actual;
@@ -19,9 +21,63 @@ function _rangoDiaBolivia(referencia = new Date()) {
   };
 }
 
+// Suma el precio_adicional de las opciones elegidas (ej. "sabor: fresa +2 Bs").
+// Se recalcula siempre desde la BD y nunca se confía en un precio que mande
+// el cliente, para que nadie pueda inflar/desinflar el total del pedido.
+async function _extraPorOpciones(opcion_ids = []) {
+  if (!opcion_ids || opcion_ids.length === 0) return 0;
+  const opciones = await Opcion.findAll({ where: { id: opcion_ids } });
+  return opciones.reduce((sum, o) => sum + parseFloat(o.precio_adicional || 0), 0);
+}
+
+// Si el producto tiene una promoción vigente hoy, devuelve el precio ya
+// descontado; si no, su precio normal. Se recalcula siempre desde la BD, no
+// desde lo que muestre el catálogo que ya tenga el cliente en pantalla.
+async function _precioConPromocion(producto) {
+  const base = parseFloat(producto.precio);
+  const promo = await Promocion.findOne({ where: { producto_id: producto.id, activo: 1 } });
+  if (!promo || !estaActivoHoy(promo)) return base;
+  const descuento = promo.tipo === 'porcentaje' ? base * (parseFloat(promo.valor) / 100) : parseFloat(promo.valor);
+  return Math.max(0, base - descuento);
+}
+
+// Lee la configuración del programa de fidelidad (puntos por Bs gastado y
+// valor en Bs de cada punto al canjear). `transaction` es opcional: se pasa
+// dentro de _finalizarVenta (fuente de verdad) y se omite en las
+// validaciones tempranas antes de abrir la transacción.
+async function _configFidelidad(transaction) {
+  const rows = await Configuracion.findAll({
+    where: { clave: ['fidelidad_activa', 'puntos_por_bs', 'valor_punto_bs'] },
+    transaction,
+  });
+  const cfg = rows.reduce((o, r) => { o[r.clave] = r.valor; return o; }, {});
+  return {
+    activa: cfg.fidelidad_activa === 'true',
+    puntosPorBs: parseFloat(cfg.puntos_por_bs || 0),
+    valorPunto: parseFloat(cfg.valor_punto_bs || 0),
+  };
+}
+
+// Valida y calcula el descuento en Bs de canjear `puntos_canjear` puntos del
+// cliente. Se llama dos veces: sin transacción, como validación temprana
+// (antes de abrir la transacción, para dar un error rápido), y de nuevo
+// dentro de la transacción de _finalizarVenta con lock de fila, que es la
+// que realmente descuenta los puntos — nunca se confía en el balance leído
+// fuera de la transacción para el descuento real.
+async function _resolverCanje(cliente_id, puntos_canjear, cfg, transaction) {
+  if (!cfg.activa || !cliente_id || !puntos_canjear) return { puntos: 0, descuento: 0, cliente: null };
+  const cliente = await Cliente.findByPk(cliente_id, transaction ? { transaction, lock: transaction.LOCK.UPDATE } : {});
+  if (!cliente || puntos_canjear > cliente.puntos) {
+    throw Object.assign(new Error('El cliente no tiene suficientes puntos'), { status: 400 });
+  }
+  return { puntos: puntos_canjear, descuento: puntos_canjear * cfg.valorPunto, cliente };
+}
+
 // Traduce un ítem del pedido (cantidad o peso) a los valores que se guardan
 // en detalle_pedidos, según si el producto se vende por peso o por unidad.
-function _datosLinea(item, producto) {
+// `precioBase` ya viene con la promoción aplicada (ver _precioConPromocion) y
+// `extra` es la suma de precio_adicional de las opciones elegidas (ej. sabor).
+function _datosLinea(item, producto, precioBase, extra = 0) {
   if (producto.es_pesable) {
     const pesoCrudo = parseFloat(item.peso);
     if (!(pesoCrudo > 0)) {
@@ -31,9 +87,9 @@ function _datosLinea(item, producto) {
       );
     }
     const peso = Math.round(pesoCrudo * 1000) / 1000;
-    return { cantidad: 1, precio: calcularPrecioPesable(peso, parseFloat(producto.precio)), peso };
+    return { cantidad: 1, precio: calcularPrecioPesable(peso, precioBase) + extra, peso };
   }
-  return { cantidad: item.cantidad ?? 1, precio: parseFloat(producto.precio), peso: null };
+  return { cantidad: item.cantidad ?? 1, precio: precioBase + extra, peso: null };
 }
 
 const INCLUDE_PEDIDO_COMPLETO = [
@@ -41,8 +97,15 @@ const INCLUDE_PEDIDO_COMPLETO = [
   { model: Cliente, as: 'cliente', attributes: ['id', 'nombre', 'numero_documento'] },
   {
     model: DetallePedido, as: 'detalles',
-    include: [{ model: Producto, as: 'producto', attributes: ['id', 'nombre', 'precio'] }],
+    include: [
+      { model: Producto, as: 'producto', attributes: ['id', 'nombre', 'precio'], required: false },
+      {
+        model: Combo, as: 'combo', attributes: ['id', 'nombre', 'descripcion'], required: false,
+        include: [{ model: Producto, as: 'productos', attributes: ['id', 'nombre'], through: { attributes: ['cantidad'] } }],
+      },
+    ],
   },
+  { model: Cupon, as: 'cupon', attributes: ['id', 'codigo', 'tipo', 'valor'], required: false },
 ];
 
 async function listar({ estado, mesa_id, sucursal_id, acceso_todas } = {}) {
@@ -175,13 +238,29 @@ async function crear({ mesa_id, tipo = 'mesa', usuario_id, cliente_id, sesion_ca
  * libro de caja y libera la mesa si corresponde. Debe correr dentro de una
  * transacción activa.
  */
-async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, descuento = 0, propina = 0, usuario_id }, transaction) {
-  const monto_neto = parseFloat(pedido.total) - parseFloat(descuento) + parseFloat(propina);
+async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, descuento = 0, propina = 0, usuario_id, puntos_canjear = 0, cupon_codigo }, transaction) {
+  const cfgFidelidad = await _configFidelidad(transaction);
+  const { puntos: puntosCanjeados, descuento: descuentoPuntos, cliente: clienteBloqueado } =
+    await _resolverCanje(pedido.cliente_id, puntos_canjear, cfgFidelidad, transaction);
+  const { cupon, descuento: descuentoCupon } =
+    await _resolverCupon(cupon_codigo, parseFloat(pedido.total) - parseFloat(descuento), transaction);
+
+  const monto_neto = Math.max(0, parseFloat(pedido.total) - parseFloat(descuento) - descuentoPuntos - descuentoCupon + parseFloat(propina));
   const cambio = metodo_pago === 'efectivo' ? parseFloat(monto_recibido) - monto_neto : 0;
+  const puntosGanados = (pedido.cliente_id && cfgFidelidad.activa) ? Math.floor(monto_neto * cfgFidelidad.puntosPorBs) : 0;
 
   await pedido.update({
     estado: 'completado', metodo_pago, monto_recibido: monto_recibido || monto_neto, cambio, descuento, propina,
+    puntos_ganados: puntosGanados, puntos_canjeados: puntosCanjeados,
+    cupon_id: cupon ? cupon.id : null, descuento_cupon: descuentoCupon,
   }, { transaction });
+
+  if (cupon) await cupon.update({ usado: 1, usado_en: new Date() }, { transaction });
+
+  if (pedido.cliente_id && (puntosGanados > 0 || puntosCanjeados > 0)) {
+    const cliente = clienteBloqueado ?? await Cliente.findByPk(pedido.cliente_id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (cliente) await cliente.update({ puntos: cliente.puntos - puntosCanjeados + puntosGanados }, { transaction });
+  }
 
   if (pedido.tipo !== 'llevar' && pedido.mesa_id) {
     const pendientes = await Pedido.count({ where: { mesa_id: pedido.mesa_id, estado: 'pendiente' }, transaction });
@@ -197,6 +276,21 @@ async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, 
   await SesionCaja.increment('total_ventas', { by: monto_neto, where: { id: pedido.sesion_caja_id }, transaction });
 
   for (const detalle of detalles) {
+    if (detalle.combo_id) {
+      const combo = await Combo.findByPk(detalle.combo_id, {
+        include: [{ model: Producto, as: 'productos', attributes: ['id', 'stock'], through: { attributes: ['cantidad'] } }],
+        transaction,
+      });
+      if (!combo) continue;
+      for (const p of combo.productos) {
+        if (p.stock === null) continue;
+        await ajustarStockSucursal({
+          producto_id: p.id, sucursal_id: pedido.sucursal_id, tipo: 'venta', cantidad: detalle.cantidad * p.ComboProducto.cantidad,
+          usuario_id, nota: `Venta #${pedido.id} (combo ${combo.nombre})`, transaction,
+        });
+      }
+      continue;
+    }
     const producto = await Producto.findByPk(detalle.producto_id, { transaction });
     if (producto && producto.stock !== null) {
       await ajustarStockSucursal({
@@ -291,7 +385,7 @@ async function _confirmarPagoQr(pagoQrInicial) {
     if (!pagoQr || pagoQr.estado !== 'pendiente') return null; // ya resuelto por otra llamada concurrente
 
     const pedido = await Pedido.findByPk(pagoQr.pedido_id, { include: INCLUDE_PEDIDO_COMPLETO, transaction: t });
-    const detalles = pedido.detalles.map((d) => ({ producto_id: d.producto_id, cantidad: d.cantidad }));
+    const detalles = pedido.detalles.map((d) => ({ producto_id: d.producto_id, combo_id: d.combo_id, cantidad: d.cantidad }));
 
     await _finalizarVenta({
       pedido, detalles, metodo_pago: 'qr', monto_recibido: pagoQr.monto_neto,
@@ -368,7 +462,7 @@ async function procesarWebhookPagoQr({ event, order_id }) {
   }
 }
 
-async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente, tipo_documento, notas, items, metodo_pago, monto_recibido, descuento = 0, propina = 0, sesion_caja_id, usuario_id }) {
+async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente, tipo_documento, notas, items, metodo_pago, monto_recibido, descuento = 0, propina = 0, sesion_caja_id, usuario_id, cliente_id, puntos_canjear = 0, cupon_codigo }) {
   if (!sesion_caja_id) {
     throw Object.assign(new Error('No hay caja abierta. Abre la caja antes de crear una orden.'), { status: 409 });
   }
@@ -384,10 +478,22 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
 
   const productos = [];
   for (const item of items) {
+    if (item.combo_id) {
+      const combo = await Combo.findByPk(item.combo_id);
+      if (!combo) throw Object.assign(new Error('Combo no encontrado'), { status: 404 });
+      if (!combo.activo || !estaActivoHoy(combo)) {
+        throw Object.assign(new Error(`El combo "${combo.nombre}" no está disponible`), { status: 409 });
+      }
+      const linea = { cantidad: item.cantidad ?? 1, precio: parseFloat(combo.precio), peso: null };
+      productos.push({ item, combo, linea });
+      continue;
+    }
     const producto = await Producto.findByPk(item.producto_id);
     if (!producto) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
     if (!producto.activo || !producto.es_vendible) throw Object.assign(new Error('Producto no disponible'), { status: 409 });
-    const linea = _datosLinea(item, producto);
+    const extra = await _extraPorOpciones(item.opcion_ids);
+    const precioBase = await _precioConPromocion(producto);
+    const linea = _datosLinea(item, producto, precioBase, extra);
     productos.push({ item, producto, linea });
   }
 
@@ -401,8 +507,12 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
     throw Object.assign(new Error("tipo debe ser 'mesa' o 'llevar'"), { status: 400 });
   }
 
+  const cfgFidelidad = await _configFidelidad();
+  const { descuento: descuentoPuntos } = await _resolverCanje(cliente_id, puntos_canjear, cfgFidelidad);
+
   const total = productos.reduce((sum, { linea }) => sum + linea.cantidad * linea.precio, 0);
-  const monto_neto = total - parseFloat(descuento) + parseFloat(propina);
+  const { descuento: descuentoCupon } = await _resolverCupon(cupon_codigo, total - parseFloat(descuento));
+  const monto_neto = Math.max(0, total - parseFloat(descuento) - descuentoPuntos - descuentoCupon + parseFloat(propina));
 
   if (metodo_pago === 'efectivo') {
     if (!monto_recibido || parseFloat(monto_recibido) < monto_neto) {
@@ -416,7 +526,7 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
   const pedidoId = await sequelize.transaction(async (t) => {
     const pedido = await Pedido.create({
       mesa_id: tipo === 'mesa' ? mesa_id : null,
-      tipo, numero_llevar, usuario_id, sesion_caja_id, sucursal_id, notas,
+      tipo, numero_llevar, usuario_id, cliente_id: cliente_id || null, sesion_caja_id, sucursal_id, notas,
       estado: estadoInicial, total, descuento, propina, metodo_pago: 'efectivo',
       nombre_cliente: nombre_cliente || (tipo === 'llevar' ? 'Cliente' : 'Público General'),
       documento_cliente,
@@ -424,15 +534,18 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
     }, { transaction: t });
 
     const detalles = [];
-    for (const { item, linea } of productos) {
+    for (const { item, combo, linea } of productos) {
       await DetallePedido.create({
-        pedido_id: pedido.id, producto_id: item.producto_id, cantidad: linea.cantidad, precio: linea.precio, peso: linea.peso, nota: item.nota,
+        pedido_id: pedido.id,
+        producto_id: combo ? null : item.producto_id,
+        combo_id: combo ? item.combo_id : null,
+        cantidad: linea.cantidad, precio: linea.precio, peso: linea.peso, nota: item.nota,
       }, { transaction: t });
-      detalles.push({ producto_id: item.producto_id, cantidad: linea.cantidad });
+      detalles.push({ producto_id: combo ? null : item.producto_id, combo_id: combo ? item.combo_id : null, cantidad: linea.cantidad });
     }
 
     if (metodo_pago !== 'qr') {
-      await _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, descuento, propina, usuario_id }, t);
+      await _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, descuento, propina, usuario_id, puntos_canjear, cupon_codigo }, t);
     }
 
     return pedido.id;
@@ -451,17 +564,33 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
   return { ...creado.toJSON(), datos_impresion };
 }
 
-async function agregarItem(pedido_id, { producto_id, cantidad = 1, nota, peso }, alcance) {
+async function agregarItem(pedido_id, { producto_id, combo_id, cantidad = 1, nota, peso, opcion_ids }, alcance) {
   const pedido = await Pedido.findByPk(pedido_id);
   if (!pedido) throw Object.assign(new Error('Pedido no encontrado'), { status: 404 });
   _verificarAlcance(pedido, alcance);
   if (pedido.estado !== 'pendiente') throw Object.assign(new Error('El pedido no está pendiente'), { status: 409 });
 
+  if (combo_id) {
+    const combo = await Combo.findByPk(combo_id);
+    if (!combo) throw Object.assign(new Error('Combo no encontrado'), { status: 404 });
+    if (!combo.activo || !estaActivoHoy(combo)) {
+      throw Object.assign(new Error(`El combo "${combo.nombre}" no está disponible`), { status: 409 });
+    }
+    const item = await DetallePedido.create({
+      pedido_id, combo_id, producto_id: null, cantidad, precio: parseFloat(combo.precio), peso: null, nota,
+    });
+    await _recalcularTotal(pedido_id);
+    emitir('restaurante:actualizar', { tipo: 'pedido_items' });
+    return item;
+  }
+
   const producto = await Producto.findByPk(producto_id);
   if (!producto) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
   if (!producto.activo || !producto.es_vendible) throw Object.assign(new Error('Producto no disponible'), { status: 409 });
 
-  const linea = _datosLinea({ cantidad, peso }, producto);
+  const extra = await _extraPorOpciones(opcion_ids);
+  const precioBase = await _precioConPromocion(producto);
+  const linea = _datosLinea({ cantidad, peso }, producto, precioBase, extra);
 
   const item = await DetallePedido.create({
     pedido_id,
@@ -486,7 +615,8 @@ async function actualizarItem(pedido_id, item_id, { cantidad, nota, estado, peso
 
   if (item.peso !== null && peso !== undefined) {
     const producto = await Producto.findByPk(item.producto_id);
-    const linea = _datosLinea({ peso }, producto);
+    const precioBase = await _precioConPromocion(producto);
+    const linea = _datosLinea({ peso }, producto, precioBase);
     await item.update({ peso: linea.peso, precio: linea.precio, nota, estado });
   } else {
     await item.update({ cantidad, nota, estado });
@@ -509,7 +639,7 @@ async function eliminarItem(pedido_id, item_id, alcance) {
   emitir('restaurante:actualizar', { tipo: 'pedido_items' });
 }
 
-async function cobrar(pedido_id, usuario_id, { metodo_pago, monto_recibido, descuento = 0, propina = 0 }, alcance) {
+async function cobrar(pedido_id, usuario_id, { metodo_pago, monto_recibido, descuento = 0, propina = 0, cliente_id, puntos_canjear = 0, cupon_codigo }, alcance) {
   const pedido = await Pedido.findByPk(pedido_id, { include: INCLUDE_PEDIDO_COMPLETO });
   if (!pedido) throw Object.assign(new Error('Pedido no encontrado'), { status: 404 });
   _verificarAlcance(pedido, alcance);
@@ -519,19 +649,31 @@ async function cobrar(pedido_id, usuario_id, { metodo_pago, monto_recibido, desc
   const sesion = await SesionCaja.findByPk(pedido.sesion_caja_id);
   if (!sesion || sesion.estado !== 'abierta') throw Object.assign(new Error('La sesión de caja está cerrada'), { status: 409 });
 
-  const monto_neto = parseFloat(pedido.total) - parseFloat(descuento) + parseFloat(propina);
+  // El cliente se puede asignar recién al cobrar (el pedido pudo crearse sin
+  // uno). Una vez asignado no se pisa, para no perder puntos ya calculados.
+  if (cliente_id && !pedido.cliente_id) {
+    await pedido.update({ cliente_id });
+  }
+
+  const cfgFidelidad = await _configFidelidad();
+  const { descuento: descuentoPuntos } = await _resolverCanje(pedido.cliente_id, puntos_canjear, cfgFidelidad);
+  const { descuento: descuentoCupon } = await _resolverCupon(cupon_codigo, parseFloat(pedido.total) - parseFloat(descuento));
+  const monto_neto = Math.max(0, parseFloat(pedido.total) - parseFloat(descuento) - descuentoPuntos - descuentoCupon + parseFloat(propina));
 
   if (metodo_pago === 'efectivo' && (!monto_recibido || parseFloat(monto_recibido) < monto_neto)) {
     throw Object.assign(new Error('Monto recibido insuficiente'), { status: 400 });
   }
 
   if (metodo_pago === 'qr') {
+    // El canje de puntos y de cupones no está soportado para QR (requeriría
+    // persistir el canje entre la generación del QR y su confirmación
+    // async); los puntos ganados sí se acreditan normalmente al confirmarse el pago.
     const pago_qr = await iniciarPagoQr(pedido, { descuento, propina });
     return { pedido: await obtener(pedido_id), pago_qr };
   }
 
-  const detalles = pedido.detalles.map((d) => ({ producto_id: d.producto_id, cantidad: d.cantidad }));
-  await sequelize.transaction((t) => _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, descuento, propina, usuario_id }, t));
+  const detalles = pedido.detalles.map((d) => ({ producto_id: d.producto_id, combo_id: d.combo_id, cantidad: d.cantidad }));
+  await sequelize.transaction((t) => _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, descuento, propina, usuario_id, puntos_canjear, cupon_codigo }, t));
 
   const cobrado = await obtener(pedido_id);
   emitir('restaurante:actualizar', { tipo: 'pedido_cobrado' }, pedido.sucursal_id);

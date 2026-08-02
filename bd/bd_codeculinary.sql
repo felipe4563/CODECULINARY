@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 24-07-2026 a las 15:30:59
+-- Tiempo de generación: 31-07-2026 a las 16:38:24
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.2.12
 
@@ -18,7 +18,7 @@ SET time_zone = "+00:00";
 /*!40101 SET NAMES utf8mb4 */;
 
 --
--- Base de datos: `bd_restaurante`
+-- Base de datos: `bd_codeculinary`
 --
 
 -- --------------------------------------------------------
@@ -86,8 +86,41 @@ CREATE TABLE `clientes` (
   `email` varchar(255) DEFAULT NULL,
   `telefono` varchar(50) DEFAULT NULL,
   `direccion` varchar(255) DEFAULT NULL,
+  `puntos` int(11) NOT NULL DEFAULT 0,
   `creado_en` timestamp NOT NULL DEFAULT current_timestamp(),
   `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `combos`
+--
+
+CREATE TABLE `combos` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `nombre` varchar(150) NOT NULL,
+  `descripcion` varchar(255) DEFAULT NULL,
+  `precio` decimal(10,2) NOT NULL,
+  `imagen` varchar(255) DEFAULT NULL,
+  `activo` tinyint(1) NOT NULL DEFAULT 1,
+  `fecha_inicio` date DEFAULT NULL,
+  `fecha_fin` date DEFAULT NULL,
+  `dias_semana` varchar(20) DEFAULT NULL,
+  `creado_en` timestamp NOT NULL DEFAULT current_timestamp(),
+  `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `combo_productos`
+--
+
+CREATE TABLE `combo_productos` (
+  `combo_id` int(10) UNSIGNED NOT NULL,
+  `producto_id` int(10) UNSIGNED NOT NULL,
+  `cantidad` int(11) NOT NULL DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -120,6 +153,45 @@ CREATE TABLE `configuraciones` (
   `valor` text DEFAULT NULL,
   `creado_en` timestamp NOT NULL DEFAULT current_timestamp(),
   `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Volcado de datos para la tabla `configuraciones`
+--
+
+INSERT INTO `configuraciones` (`id`, `clave`, `valor`, `creado_en`, `actualizado_en`) VALUES
+(1, 'nombre_negocio', '', '2026-07-31 14:37:04', '2026-07-31 14:37:30'),
+(2, 'direccion', '', '2026-07-31 14:37:04', '2026-07-31 14:37:30'),
+(3, 'telefono', '', '2026-07-31 14:37:04', '2026-07-31 14:37:30'),
+(4, 'moneda', 'Bs', '2026-07-31 14:37:04', '2026-07-31 14:37:30'),
+(5, 'simbolo_moneda', 'Bs.', '2026-07-31 14:37:04', '2026-07-31 14:37:30'),
+(6, 'zona_horaria', 'America/La_Paz', '2026-07-31 14:37:04', '2026-07-31 14:37:30'),
+(7, 'pie_ticket', '¡Gracias por su preferencia!', '2026-07-31 14:37:04', '2026-07-31 14:37:30'),
+(8, 'logo', '', '2026-07-31 14:37:04', '2026-07-31 14:37:30'),
+(9, 'color_primario', '#8a0000', '2026-07-31 14:37:04', '2026-07-31 14:37:30'),
+(10, 'color_secundario', '#d73382', '2026-07-31 14:37:04', '2026-07-31 14:37:30'),
+(31, 'flujo_cocina', 'fisico', '2026-07-31 14:37:43', '2026-07-31 14:37:43'),
+(32, 'fidelidad_activa', 'false', current_timestamp(), current_timestamp()),
+(33, 'puntos_por_bs', '1', current_timestamp(), current_timestamp()),
+(34, 'valor_punto_bs', '0.10', current_timestamp(), current_timestamp());
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `cupones`
+--
+
+CREATE TABLE `cupones` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `codigo` varchar(30) NOT NULL,
+  `tipo` enum('fijo','porcentaje') NOT NULL DEFAULT 'fijo',
+  `valor` decimal(10,2) NOT NULL,
+  `fecha_expiracion` date DEFAULT NULL,
+  `activo` tinyint(1) NOT NULL DEFAULT 1,
+  `usado` tinyint(1) NOT NULL DEFAULT 0,
+  `usado_en` datetime DEFAULT NULL,
+  `creado_por` int(10) UNSIGNED DEFAULT NULL,
+  `creado_en` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -160,7 +232,8 @@ CREATE TABLE `detalle_compras` (
 CREATE TABLE `detalle_pedidos` (
   `id` int(10) UNSIGNED NOT NULL,
   `pedido_id` int(10) UNSIGNED NOT NULL,
-  `producto_id` int(10) UNSIGNED NOT NULL,
+  `producto_id` int(10) UNSIGNED DEFAULT NULL,
+  `combo_id` int(10) UNSIGNED DEFAULT NULL,
   `cantidad` int(11) NOT NULL DEFAULT 1,
   `peso` decimal(10,3) DEFAULT NULL,
   `precio` decimal(10,2) NOT NULL,
@@ -245,6 +318,7 @@ CREATE TABLE `opciones` (
   `id` int(10) UNSIGNED NOT NULL,
   `grupo_opciones_id` int(10) UNSIGNED NOT NULL,
   `nombre` varchar(100) NOT NULL,
+  `precio_adicional` decimal(10,2) NOT NULL DEFAULT 0.00,
   `orden` int(11) NOT NULL DEFAULT 0,
   `creado_en` timestamp NULL DEFAULT current_timestamp(),
   `actualizado_en` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -297,6 +371,10 @@ CREATE TABLE `pedidos` (
   `total` decimal(10,2) NOT NULL DEFAULT 0.00,
   `descuento` decimal(10,2) NOT NULL DEFAULT 0.00,
   `propina` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `puntos_ganados` int(11) NOT NULL DEFAULT 0,
+  `puntos_canjeados` int(11) NOT NULL DEFAULT 0,
+  `cupon_id` int(10) UNSIGNED DEFAULT NULL,
+  `descuento_cupon` decimal(10,2) NOT NULL DEFAULT 0.00,
   `metodo_pago` enum('efectivo','qr') NOT NULL DEFAULT 'efectivo',
   `monto_recibido` decimal(10,2) DEFAULT NULL,
   `cambio` decimal(10,2) NOT NULL DEFAULT 0.00,
@@ -369,7 +447,19 @@ INSERT INTO `permisos` (`id`, `modulo`, `accion`, `descripcion`) VALUES
 (44, 'cajas', 'ver', 'Ver cajas'),
 (45, 'cajas', 'crear', 'Crear cajas'),
 (46, 'cajas', 'editar', 'Editar cajas'),
-(47, 'cajas', 'eliminar', 'Eliminar cajas');
+(47, 'cajas', 'eliminar', 'Eliminar cajas'),
+(48, 'combos', 'ver', 'Ver combos'),
+(49, 'combos', 'crear', 'Crear combos'),
+(50, 'combos', 'editar', 'Editar combos'),
+(51, 'combos', 'eliminar', 'Eliminar combos'),
+(52, 'promociones', 'ver', 'Ver promociones'),
+(53, 'promociones', 'crear', 'Crear promociones'),
+(54, 'promociones', 'editar', 'Editar promociones'),
+(55, 'promociones', 'eliminar', 'Eliminar promociones'),
+(56, 'cupones', 'ver', 'Ver cupones'),
+(57, 'cupones', 'crear', 'Crear cupones'),
+(58, 'cupones', 'editar', 'Editar cupones'),
+(59, 'cupones', 'eliminar', 'Eliminar cupones');
 
 -- --------------------------------------------------------
 
@@ -389,6 +479,26 @@ CREATE TABLE `productos` (
   `stock` int(11) DEFAULT NULL,
   `es_vendible` tinyint(1) NOT NULL DEFAULT 1,
   `imagen` varchar(255) DEFAULT NULL,
+  `activo` tinyint(1) NOT NULL DEFAULT 1,
+  `creado_en` timestamp NOT NULL DEFAULT current_timestamp(),
+  `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `promociones`
+--
+
+CREATE TABLE `promociones` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `producto_id` int(10) UNSIGNED NOT NULL,
+  `nombre` varchar(150) DEFAULT NULL,
+  `tipo` enum('porcentaje','monto') NOT NULL DEFAULT 'porcentaje',
+  `valor` decimal(10,2) NOT NULL,
+  `fecha_inicio` date DEFAULT NULL,
+  `fecha_fin` date DEFAULT NULL,
+  `dias_semana` varchar(20) DEFAULT NULL,
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `creado_en` timestamp NOT NULL DEFAULT current_timestamp(),
   `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -542,6 +652,18 @@ INSERT INTO `roles_permisos` (`rol_id`, `permiso_id`) VALUES
 (1, 45),
 (1, 46),
 (1, 47),
+(1, 48),
+(1, 49),
+(1, 50),
+(1, 51),
+(1, 52),
+(1, 53),
+(1, 54),
+(1, 55),
+(1, 56),
+(1, 57),
+(1, 58),
+(1, 59),
 (2, 1),
 (2, 2),
 (2, 3),
@@ -615,8 +737,10 @@ CREATE TABLE `usuarios` (
   `rol_id` int(10) UNSIGNED NOT NULL,
   `acceso_todas_sucursales` tinyint(1) NOT NULL DEFAULT 0,
   `nombre` varchar(255) NOT NULL,
+  `avatar` varchar(255) DEFAULT NULL,
   `email` varchar(255) NOT NULL,
   `contrasena` varchar(255) NOT NULL,
+  `debe_cambiar_contrasena` tinyint(1) NOT NULL DEFAULT 0,
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `creado_en` timestamp NOT NULL DEFAULT current_timestamp(),
   `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -627,7 +751,7 @@ CREATE TABLE `usuarios` (
 --
 
 INSERT INTO `usuarios` (`id`, `rol_id`, `acceso_todas_sucursales`, `nombre`, `email`, `contrasena`, `activo`, `creado_en`, `actualizado_en`) VALUES
-(1, 1, 1, 'Administrador', 'admin@solocarnes.com', '$2b$10$tvvijjWvfNhTOXiCbqrmQ.dSrVOBvmNn8hVmLM.hiAiYMTePWEVmK', 1, '2026-07-01 00:23:31', '2026-07-24 12:22:16');
+(1, 1, 1, 'Administrador', 'admin@codeculinary.com', '$2b$10$tvvijjWvfNhTOXiCbqrmQ.dSrVOBvmNn8hVmLM.hiAiYMTePWEVmK', 1, '2026-07-01 00:23:31', '2026-07-31 14:38:05');
 
 -- --------------------------------------------------------
 
@@ -665,6 +789,19 @@ ALTER TABLE `categorias`
   ADD PRIMARY KEY (`id`);
 
 --
+-- Indices de la tabla `combos`
+--
+ALTER TABLE `combos`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indices de la tabla `combo_productos`
+--
+ALTER TABLE `combo_productos`
+  ADD PRIMARY KEY (`combo_id`,`producto_id`),
+  ADD KEY `producto_id` (`producto_id`);
+
+--
 -- Indices de la tabla `clientes`
 --
 ALTER TABLE `clientes`
@@ -688,6 +825,14 @@ ALTER TABLE `configuraciones`
   ADD UNIQUE KEY `configuraciones_clave_unique` (`clave`);
 
 --
+-- Indices de la tabla `cupones`
+--
+ALTER TABLE `cupones`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `codigo` (`codigo`),
+  ADD KEY `creado_por` (`creado_por`);
+
+--
 -- Indices de la tabla `detalle_arqueo`
 --
 ALTER TABLE `detalle_arqueo`
@@ -708,7 +853,8 @@ ALTER TABLE `detalle_compras`
 ALTER TABLE `detalle_pedidos`
   ADD PRIMARY KEY (`id`),
   ADD KEY `pedido_id` (`pedido_id`),
-  ADD KEY `producto_id` (`producto_id`);
+  ADD KEY `producto_id` (`producto_id`),
+  ADD KEY `combo_id` (`combo_id`);
 
 --
 -- Indices de la tabla `gastos`
@@ -764,7 +910,8 @@ ALTER TABLE `pedidos`
   ADD KEY `usuario_id` (`usuario_id`),
   ADD KEY `cliente_id` (`cliente_id`),
   ADD KEY `sesion_caja_id` (`sesion_caja_id`),
-  ADD KEY `sucursal_id` (`sucursal_id`);
+  ADD KEY `sucursal_id` (`sucursal_id`),
+  ADD KEY `cupon_id` (`cupon_id`);
 
 --
 -- Indices de la tabla `permisos`
@@ -780,6 +927,13 @@ ALTER TABLE `productos`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `productos_barcode_unique` (`codigo_barras`),
   ADD KEY `categoria_id` (`categoria_id`);
+
+--
+-- Indices de la tabla `promociones`
+--
+ALTER TABLE `promociones`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `producto_id` (`producto_id`);
 
 --
 -- Indices de la tabla `producto_grupos_opciones`
@@ -876,6 +1030,12 @@ ALTER TABLE `categorias`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT de la tabla `combos`
+--
+ALTER TABLE `combos`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT de la tabla `clientes`
 --
 ALTER TABLE `clientes`
@@ -888,10 +1048,16 @@ ALTER TABLE `compras`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT de la tabla `cupones`
+--
+ALTER TABLE `cupones`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT de la tabla `configuraciones`
 --
 ALTER TABLE `configuraciones`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=35;
 
 --
 -- AUTO_INCREMENT de la tabla `detalle_arqueo`
@@ -957,7 +1123,13 @@ ALTER TABLE `pedidos`
 -- AUTO_INCREMENT de la tabla `permisos`
 --
 ALTER TABLE `permisos`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=55;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=60;
+
+--
+-- AUTO_INCREMENT de la tabla `promociones`
+--
+ALTER TABLE `promociones`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `productos`
@@ -1018,12 +1190,25 @@ ALTER TABLE `cajas`
   ADD CONSTRAINT `cajas_ibfk_1` FOREIGN KEY (`sucursal_id`) REFERENCES `sucursales` (`id`);
 
 --
+-- Filtros para la tabla `combo_productos`
+--
+ALTER TABLE `combo_productos`
+  ADD CONSTRAINT `combo_productos_ibfk_1` FOREIGN KEY (`combo_id`) REFERENCES `combos` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `combo_productos_ibfk_2` FOREIGN KEY (`producto_id`) REFERENCES `productos` (`id`);
+
+--
 -- Filtros para la tabla `compras`
 --
 ALTER TABLE `compras`
   ADD CONSTRAINT `compras_ibfk_1` FOREIGN KEY (`proveedor_id`) REFERENCES `proveedores` (`id`),
   ADD CONSTRAINT `compras_ibfk_2` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`id`),
   ADD CONSTRAINT `compras_ibfk_3` FOREIGN KEY (`sucursal_id`) REFERENCES `sucursales` (`id`);
+
+--
+-- Filtros para la tabla `cupones`
+--
+ALTER TABLE `cupones`
+  ADD CONSTRAINT `cupones_ibfk_1` FOREIGN KEY (`creado_por`) REFERENCES `usuarios` (`id`);
 
 --
 -- Filtros para la tabla `detalle_arqueo`
@@ -1043,7 +1228,8 @@ ALTER TABLE `detalle_compras`
 --
 ALTER TABLE `detalle_pedidos`
   ADD CONSTRAINT `detalle_pedidos_ibfk_1` FOREIGN KEY (`pedido_id`) REFERENCES `pedidos` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `detalle_pedidos_ibfk_2` FOREIGN KEY (`producto_id`) REFERENCES `productos` (`id`);
+  ADD CONSTRAINT `detalle_pedidos_ibfk_2` FOREIGN KEY (`producto_id`) REFERENCES `productos` (`id`),
+  ADD CONSTRAINT `detalle_pedidos_combo_fk` FOREIGN KEY (`combo_id`) REFERENCES `combos` (`id`);
 
 --
 -- Filtros para la tabla `gastos`
@@ -1086,13 +1272,20 @@ ALTER TABLE `pedidos`
   ADD CONSTRAINT `pedidos_ibfk_2` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`id`),
   ADD CONSTRAINT `pedidos_ibfk_3` FOREIGN KEY (`cliente_id`) REFERENCES `clientes` (`id`) ON DELETE SET NULL,
   ADD CONSTRAINT `pedidos_ibfk_4` FOREIGN KEY (`sesion_caja_id`) REFERENCES `sesiones_caja` (`id`) ON DELETE SET NULL,
-  ADD CONSTRAINT `pedidos_ibfk_5` FOREIGN KEY (`sucursal_id`) REFERENCES `sucursales` (`id`);
+  ADD CONSTRAINT `pedidos_ibfk_5` FOREIGN KEY (`sucursal_id`) REFERENCES `sucursales` (`id`),
+  ADD CONSTRAINT `pedidos_cupon_fk` FOREIGN KEY (`cupon_id`) REFERENCES `cupones` (`id`);
 
 --
 -- Filtros para la tabla `productos`
 --
 ALTER TABLE `productos`
   ADD CONSTRAINT `productos_ibfk_1` FOREIGN KEY (`categoria_id`) REFERENCES `categorias` (`id`) ON DELETE CASCADE;
+
+--
+-- Filtros para la tabla `promociones`
+--
+ALTER TABLE `promociones`
+  ADD CONSTRAINT `promociones_ibfk_1` FOREIGN KEY (`producto_id`) REFERENCES `productos` (`id`) ON DELETE CASCADE;
 
 --
 -- Filtros para la tabla `producto_grupos_opciones`

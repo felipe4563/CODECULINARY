@@ -19,6 +19,9 @@ import ClientesPage from '../pages/clientes/ClientesPage';
 import ReportesPage from '../pages/reportes/ReportesPage';
 import CocinaPage from '../pages/cocina/CocinaPage';
 import PerfilPage from '../pages/perfil/PerfilPage';
+import CombosPage from '../pages/combos/CombosPage';
+import PromocionesPage from '../pages/promociones/PromocionesPage';
+import CuponesPage from '../pages/cupones/CuponesPage';
 
 export const router = createBrowserRouter(
   [
@@ -33,7 +36,11 @@ export const router = createBrowserRouter(
             { path: '/ventas',            element: <VentasPage /> },
             { path: '/ventas/pedido/:id', element: <PedidoPage /> },
             { path: '/productos',         element: <ProductosPage /> },
-            { path: '/configuracion',     element: <ConfiguracionPage /> },
+            { path: '/combos',            element: <CombosPage /> },
+            { path: '/promociones',       element: <PromocionesPage /> },
+            { path: '/cupones',           element: <CuponesPage /> },
+            { path: '/configuracion',        element: <Navigate to="/configuracion/negocio" replace /> },
+            { path: '/configuracion/:tab',   element: <ConfiguracionPage /> },
             { path: '/caja',             element: <CajaPage /> },
             { path: '/roles',            element: <RolesPage /> },
             { path: '/sucursales',       element: <SucursalesPage /> },

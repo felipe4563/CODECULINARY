@@ -108,9 +108,9 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
           <FiltroFechas desde={desde} hasta={hasta} setDesde={setDesde} setHasta={setHasta}
             onBuscar={() => setParams({ desde, hasta })} cargando={isLoading} />
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Cajero</label>
+            <label className="text-xs font-medium text-muted-foreground">Cajero</label>
             <select value={filtroCajero} onChange={e => setFiltroCajero(e.target.value)}
-              className="px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+              className="px-3 py-2 text-sm rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
               <option value="todos">Todos</option>
               {cajeros.map(c => (
                 <option key={c.id} value={String(c.id)}>{c.nombre}</option>
@@ -118,9 +118,9 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
             </select>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Método de pago</label>
+            <label className="text-xs font-medium text-muted-foreground">Método de pago</label>
             <select value={filtroMetodoPago} onChange={e => setFiltroMetodoPago(e.target.value)}
-              className="px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+              className="px-3 py-2 text-sm rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
               <option value="todos">Todos</option>
               <option value="efectivo">Efectivo</option>
               <option value="qr">QR / Transferencia</option>
@@ -128,9 +128,9 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
           </div>
           {accesoTodas && (
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Sucursal</label>
+              <label className="text-xs font-medium text-muted-foreground">Sucursal</label>
               <select value={filtroSucursal} onChange={e => setFiltroSucursal(e.target.value)}
-                className="px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                className="px-3 py-2 text-sm rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
                 <option value="todas">Todas</option>
                 {sucursales.map(s => (
                   <option key={s.id} value={String(s.id)}>{s.nombre}</option>
@@ -146,30 +146,30 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard label="N° Ventas"          valor={stats.count}        color="violet"  Icono={ShoppingCart} idx={0} />
+        <StatCard label="N° Ventas"          valor={stats.count}        color="primary" Icono={ShoppingCart} idx={0} />
         <StatCard label="Total Ingresos"     valor={bs(stats.total)}    color="emerald" Icono={TrendingUp}   idx={1} />
         <StatCard label="Efectivo"           valor={bs(stats.efectivo)} color="blue"    Icono={DollarSign}   idx={2} />
         <StatCard label="QR / Transferencia" valor={bs(stats.qr)}       color="amber"   Icono={BarChart2}    idx={3} />
       </div>
 
       {accesoTodas && resumenSucursales.length > 0 && (
-        <div className="overflow-x-auto rounded-2xl border border-gray-200 dark:border-gray-700/50">
+        <div className="overflow-x-auto rounded-2xl border border-border">
           <table className="w-full text-xs sm:text-sm">
             <thead>
-              <tr className="bg-violet-50 dark:bg-violet-900/20 border-b border-gray-200 dark:border-gray-700/50">
+              <tr className="bg-primary/10 border-b border-border">
                 {['Sucursal', 'N° Ventas', 'Total', 'Efectivo', 'QR'].map(h => (
-                  <th key={h} className="text-left px-3 py-2.5 sm:px-4 sm:py-3 text-xs font-semibold text-violet-700 dark:text-violet-300 uppercase tracking-wide">{h}</th>
+                  <th key={h} className="text-left px-3 py-2.5 sm:px-4 sm:py-3 text-xs font-semibold text-primary uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-700/40">
+            <tbody className="divide-y divide-border">
               {resumenSucursales.map(s => (
-                <tr key={s.id} className="bg-white dark:bg-gray-900">
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-gray-900 dark:text-white">{s.nombre}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-gray-700 dark:text-gray-200">{s.count}</td>
+                <tr key={s.id} className="bg-card">
+                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-foreground">{s.nombre}</td>
+                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-foreground">{s.count}</td>
                   <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-semibold text-emerald-600 dark:text-emerald-400">{bs(s.total)}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-gray-600 dark:text-gray-300">{bs(s.efectivo)}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-gray-600 dark:text-gray-300">{bs(s.qr)}</td>
+                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{bs(s.efectivo)}</td>
+                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{bs(s.qr)}</td>
                 </tr>
               ))}
             </tbody>
@@ -178,29 +178,29 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
       )}
 
       {isLoading ? <Skeleton /> : (
-        <div className="overflow-x-auto rounded-2xl border border-gray-200 dark:border-gray-700/50">
+        <div className="overflow-x-auto rounded-2xl border border-border">
           <table className="w-full text-xs sm:text-sm">
             <thead>
-              <tr className="bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700/50">
+              <tr className="bg-muted border-b border-border">
                 {[...(accesoTodas ? ['Sucursal'] : []), 'Fecha', 'Mesa', 'Cliente', 'Cajero', 'Método', 'Total'].map(h => (
-                  <th key={h} className="text-left px-3 py-2.5 sm:px-4 sm:py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{h}</th>
+                  <th key={h} className="text-left px-3 py-2.5 sm:px-4 sm:py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-700/40">
+            <tbody className="divide-y divide-border">
               {filtrado.length === 0 ? (
-                <tr><td colSpan={accesoTodas ? 7 : 6} className="text-center py-10 text-gray-400 dark:text-gray-500">Sin resultados para el período</td></tr>
+                <tr><td colSpan={accesoTodas ? 7 : 6} className="text-center py-10 text-muted-foreground">Sin resultados para el período</td></tr>
               ) : filtrado.map((v, i) => (
                 <tr key={v.id}
-                  className="bg-white dark:bg-gray-900 hover:bg-violet-50/40 dark:hover:bg-violet-900/10 transition-colors animate-[rpFadeUp_0.3s_ease_forwards] opacity-0"
+                  className="bg-card hover:bg-primary/5 transition-colors animate-[rpFadeUp_0.3s_ease_forwards] opacity-0"
                   style={{ animationDelay: `${i * 20}ms` }}>
                   {accesoTodas && (
-                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-gray-600 dark:text-gray-300">{v.sucursal?.nombre || '-'}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{v.sucursal?.nombre || '-'}</td>
                   )}
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-gray-600 dark:text-gray-300 whitespace-nowrap">{fechaHora(v.creado_en)}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-gray-900 dark:text-white">{v.mesa?.nombre || '-'}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-gray-600 dark:text-gray-300">{v.nombre_cliente || v.cliente?.nombre || 'Público General'}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-gray-600 dark:text-gray-300">{v.usuario?.nombre || '-'}</td>
+                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground whitespace-nowrap">{fechaHora(v.creado_en)}</td>
+                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-foreground">{v.mesa?.nombre || '-'}</td>
+                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{v.nombre_cliente || v.cliente?.nombre || 'Público General'}</td>
+                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{v.usuario?.nombre || '-'}</td>
                   <td className="px-3 py-2.5 sm:px-4 sm:py-3"><BadgeTipo tipo={v.metodo_pago || 'efectivo'} /></td>
                   <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-semibold text-emerald-600 dark:text-emerald-400">{bs(v.total)}</td>
                 </tr>
@@ -208,8 +208,8 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
             </tbody>
             {filtrado.length > 0 && (
               <tfoot>
-                <tr className="bg-gray-50 dark:bg-gray-800/60 border-t-2 border-violet-200 dark:border-violet-700/40">
-                  <td colSpan={accesoTodas ? 6 : 5} className="px-3 py-2.5 sm:px-4 sm:py-3 text-right font-semibold text-gray-700 dark:text-gray-300 text-sm">TOTAL</td>
+                <tr className="bg-muted border-t-2 border-primary/30">
+                  <td colSpan={accesoTodas ? 6 : 5} className="px-3 py-2.5 sm:px-4 sm:py-3 text-right font-semibold text-muted-foreground text-sm">TOTAL</td>
                   <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-bold text-emerald-600 dark:text-emerald-400">{bs(stats.total)}</td>
                 </tr>
               </tfoot>

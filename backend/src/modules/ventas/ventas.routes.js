@@ -12,6 +12,7 @@ router.get('/', verificarPermiso('ventas', 'ver'), ctrl.listar);
 router.post('/', verificarPermiso('ventas', 'crear'), requiereSucursalActiva, ctrl.crear);
 router.post('/completa', verificarPermiso('ventas', 'crear'), requiereSucursalActiva, ctrl.crearCompleta);
 router.get('/:id', verificarPermiso('ventas', 'ver'), ctrl.obtener);
+router.post('/:id/reimprimir', verificarPermiso('ventas', 'cobrar'), ctrl.reimprimir);
 router.post('/:id/items', verificarPermiso('ventas', 'crear'), ctrl.agregarItem);
 router.put('/:id/items/:item_id', verificarPermiso('ventas', 'crear'), ctrl.actualizarItem);
 router.delete('/:id/items/:item_id', verificarPermiso('ventas', 'crear'), ctrl.eliminarItem);

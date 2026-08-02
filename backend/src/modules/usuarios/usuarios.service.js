@@ -19,7 +19,7 @@ async function obtener(id) {
 
 async function crear({ nombre, email, contrasena, rol_id, activo = 1 }) {
   const hash = await bcrypt.hash(contrasena, 10);
-  const u = await Usuario.create({ nombre, email, contrasena: hash, rol_id, activo });
+  const u = await Usuario.create({ nombre, email, contrasena: hash, rol_id, activo, debe_cambiar_contrasena: 1 });
   return obtener(u.id);
 }
 
@@ -31,7 +31,10 @@ async function actualizar(id, { nombre, email, contrasena, rol_id, activo }) {
   if (email !== undefined) datos.email = email;
   if (rol_id !== undefined) datos.rol_id = rol_id;
   if (activo !== undefined) datos.activo = activo;
-  if (contrasena) datos.contrasena = await bcrypt.hash(contrasena, 10);
+  if (contrasena) {
+    datos.contrasena = await bcrypt.hash(contrasena, 10);
+    datos.debe_cambiar_contrasena = 1;
+  }
   await u.update(datos);
   return obtener(id);
 }

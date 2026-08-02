@@ -18,6 +18,9 @@ const MODULO_LABELS = {
   compras:      'Compras',
   proveedores:  'Proveedores',
   productos:    'Productos',
+  combos:       'Combos',
+  promociones:  'Promociones',
+  cupones:      'Cupones',
   clientes:     'Clientes',
   configuracion:'Configuración',
   roles:        'Roles',
@@ -30,6 +33,9 @@ const MODULO_COLOR = {
   caja:         'emerald',
   libro_caja:   'teal',
   productos:    'violet',
+  combos:       'pink',
+  promociones:  'lime',
+  cupones:      'fuchsia',
   inventario:   'purple',
   compras:      'orange',
   proveedores:  'amber',
@@ -53,6 +59,9 @@ const COLOR_CLASSES = {
   rose:    'bg-rose-50   dark:bg-rose-900/20   text-rose-700   dark:text-rose-400   border-rose-200   dark:border-rose-800',
   gray:    'bg-gray-50   dark:bg-gray-700/40   text-gray-700   dark:text-gray-300   border-gray-200   dark:border-gray-600',
   sky:     'bg-sky-50    dark:bg-sky-900/20    text-sky-700    dark:text-sky-400    border-sky-200    dark:border-sky-800',
+  pink:    'bg-pink-50   dark:bg-pink-900/20   text-pink-700   dark:text-pink-400   border-pink-200   dark:border-pink-800',
+  lime:    'bg-lime-50   dark:bg-lime-900/20   text-lime-700   dark:text-lime-400   border-lime-200   dark:border-lime-800',
+  fuchsia: 'bg-fuchsia-50 dark:bg-fuchsia-900/20 text-fuchsia-700 dark:text-fuchsia-400 border-fuchsia-200 dark:border-fuchsia-800',
 };
 
 /* ─────────────────────────────────────────────────────── página principal ── */
@@ -86,7 +95,7 @@ export default function RolesPage() {
 
   if (!puedeVer) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3 text-gray-400 dark:text-gray-600">
+      <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
         <AlertCircle className="w-10 h-10" />
         <p className="font-medium">No tienes permiso para ver los roles</p>
       </div>
@@ -95,25 +104,25 @@ export default function RolesPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64 gap-3 text-gray-400">
+      <div className="flex items-center justify-center h-64 gap-3 text-muted-foreground">
         <RefreshCw className="w-5 h-5 animate-spin" /><span>Cargando...</span>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6">
 
       {/* Cabecera */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100">Roles y Permisos</h1>
-          <p className="text-sm text-gray-400 mt-0.5">{roles.length} roles configurados</p>
+          <h1 className="text-xl font-bold text-foreground">Roles y Permisos</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{roles.length} roles configurados</p>
         </div>
         {puedeCrear && (
           <button
             onClick={() => setModalForm('nuevo')}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-sm font-semibold transition-colors"
           >
             <Plus className="w-4 h-4" /> Nuevo Rol
           </button>
@@ -137,99 +146,101 @@ export default function RolesPage() {
       </div>
 
       {/* sm+: tabla */}
-      <div className="hidden sm:block bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden">
+      <div className="hidden sm:block bg-card border border-border rounded-2xl overflow-hidden">
         {roles.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-400">
+          <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
             <Shield className="w-10 h-10" />
             <p className="text-sm">No hay roles configurados</p>
             {puedeCrear && (
               <button
                 onClick={() => setModalForm('nuevo')}
-                className="text-sm text-blue-600 hover:underline"
+                className="text-sm text-primary hover:underline"
               >
                 Crear el primero
               </button>
             )}
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Rol</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Descripción</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Permisos</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Módulos</th>
-                <th className="px-5 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-              {roles.map(rol => {
-                const modulos = [...new Set(rol.permisos?.map(p => p.modulo) ?? [])];
-                return (
-                  <tr key={rol.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
-                          <Shield className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted border-b border-border">
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Rol</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Descripción</th>
+                  <th className="px-5 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">Permisos</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Módulos</th>
+                  <th className="px-5 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {roles.map(rol => {
+                  const modulos = [...new Set(rol.permisos?.map(p => p.modulo) ?? [])];
+                  return (
+                    <tr key={rol.id} className="hover:bg-muted/50 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                            <Shield className="w-4 h-4 text-primary" />
+                          </div>
+                          <span className="font-semibold text-foreground">{rol.nombre}</span>
                         </div>
-                        <span className="font-semibold text-gray-800 dark:text-gray-100">{rol.nombre}</span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5 text-gray-500 dark:text-gray-400">
-                      {rol.descripcion ?? <span className="italic text-gray-300 dark:text-gray-600">—</span>}
-                    </td>
-                    <td className="px-5 py-3.5 text-center">
-                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 text-xs font-bold text-gray-700 dark:text-gray-300">
-                        {rol.permisos?.length ?? 0}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex flex-wrap gap-1">
-                        {modulos.slice(0, 4).map(m => {
-                          const color = MODULO_COLOR[m] ?? 'gray';
-                          return (
-                            <span
-                              key={m}
-                              className={`text-xs px-1.5 py-0.5 rounded border font-medium ${COLOR_CLASSES[color]}`}
-                            >
-                              {MODULO_LABELS[m] ?? m}
+                      </td>
+                      <td className="px-5 py-3.5 text-muted-foreground">
+                        {rol.descripcion ?? <span className="italic text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-5 py-3.5 text-center">
+                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-muted text-xs font-bold text-muted-foreground">
+                          {rol.permisos?.length ?? 0}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex flex-wrap gap-1">
+                          {modulos.slice(0, 4).map(m => {
+                            const color = MODULO_COLOR[m] ?? 'gray';
+                            return (
+                              <span
+                                key={m}
+                                className={`text-xs px-1.5 py-0.5 rounded border font-medium ${COLOR_CLASSES[color]}`}
+                              >
+                                {MODULO_LABELS[m] ?? m}
+                              </span>
+                            );
+                          })}
+                          {modulos.length > 4 && (
+                            <span className="text-xs px-1.5 py-0.5 rounded border bg-muted text-muted-foreground border-border">
+                              +{modulos.length - 4}
                             </span>
-                          );
-                        })}
-                        {modulos.length > 4 && (
-                          <span className="text-xs px-1.5 py-0.5 rounded border bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600">
-                            +{modulos.length - 4}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center justify-end gap-1">
-                        {puedeEditar && (
-                          <button
-                            onClick={() => setModalForm(rol)}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                            title="Editar"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                        )}
-                        {puedeEliminar && (
-                          <button
-                            onClick={() => setConfirmar(rol)}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                            title="Eliminar"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center justify-end gap-1">
+                          {puedeEditar && (
+                            <button
+                              onClick={() => setModalForm(rol)}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                              title="Editar"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
+                          {puedeEliminar && (
+                            <button
+                              onClick={() => setConfirmar(rol)}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -249,8 +260,8 @@ export default function RolesPage() {
       {confirmar && (
         <Modal titulo="Eliminar rol" onClose={() => setConfirmar(null)} ancho="max-w-sm">
           <div className="space-y-4">
-            <p className="text-sm text-gray-600 dark:text-gray-300">
-              ¿Eliminar el rol <span className="font-semibold text-gray-800 dark:text-gray-100">"{confirmar.nombre}"</span>?
+            <p className="text-sm text-muted-foreground">
+              ¿Eliminar el rol <span className="font-semibold text-foreground">"{confirmar.nombre}"</span>?
               Esta acción no se puede deshacer.
             </p>
             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3 text-xs text-amber-700 dark:text-amber-400">
@@ -259,14 +270,14 @@ export default function RolesPage() {
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setConfirmar(null)}
-                className="px-4 py-2 rounded-xl text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="px-4 py-2 rounded-xl text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={() => eliminar.mutate(confirmar.id)}
                 disabled={eliminar.isPending}
-                className="px-5 py-2 rounded-xl text-sm bg-red-600 hover:bg-red-700 text-white font-semibold transition-colors disabled:opacity-60"
+                className="px-5 py-2 rounded-xl text-sm bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold transition-colors disabled:opacity-60"
               >
                 {eliminar.isPending ? 'Eliminando...' : 'Eliminar'}
               </button>
@@ -285,15 +296,15 @@ function RolCard({ rol, puedeEditar, puedeEliminar, onEditar, onEliminar }) {
   const modulos = [...new Set(rol.permisos?.map(p => p.modulo) ?? [])];
 
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden">
+    <div className="bg-card border border-border rounded-2xl overflow-hidden">
       <div className="flex items-start gap-3 p-4">
-        <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
-          <Shield className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+        <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+          <Shield className="w-4 h-4 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-800 dark:text-gray-100">{rol.nombre}</p>
+          <p className="font-semibold text-foreground">{rol.nombre}</p>
           {rol.descripcion && (
-            <p className="text-xs text-gray-400 mt-0.5 truncate">{rol.descripcion}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">{rol.descripcion}</p>
           )}
           <div className="flex flex-wrap gap-1 mt-2">
             {modulos.slice(0, 3).map(m => {
@@ -305,24 +316,24 @@ function RolCard({ rol, puedeEditar, puedeEliminar, onEditar, onEliminar }) {
               );
             })}
             {modulos.length > 3 && (
-              <span className="text-xs px-1.5 py-0.5 rounded border bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600">
+              <span className="text-xs px-1.5 py-0.5 rounded border bg-muted text-muted-foreground border-border">
                 +{modulos.length - 3}
               </span>
             )}
           </div>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
-          <span className="text-xs font-bold text-gray-500 dark:text-gray-400">
+          <span className="text-xs font-bold text-muted-foreground">
             {rol.permisos?.length ?? 0} permisos
           </span>
           <div className="flex gap-1 mt-1">
             {puedeEditar && (
-              <button onClick={onEditar} className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+              <button onClick={onEditar} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors">
                 <Pencil className="w-4 h-4" />
               </button>
             )}
             {puedeEliminar && (
-              <button onClick={onEliminar} className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+              <button onClick={onEliminar} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
                 <Trash2 className="w-4 h-4" />
               </button>
             )}
@@ -332,14 +343,14 @@ function RolCard({ rol, puedeEditar, puedeEliminar, onEditar, onEliminar }) {
       {rol.permisos?.length > 0 && (
         <button
           onClick={() => setExpandido(v => !v)}
-          className="w-full flex items-center justify-center gap-1 py-2 border-t border-gray-100 dark:border-gray-700 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
+          className="w-full flex items-center justify-center gap-1 py-2 border-t border-border text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
         >
           {expandido ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           {expandido ? 'Ocultar permisos' : 'Ver permisos'}
         </button>
       )}
       {expandido && (
-        <div className="px-4 pb-4 pt-2 border-t border-gray-100 dark:border-gray-700 space-y-2">
+        <div className="px-4 pb-4 pt-2 border-t border-border space-y-2">
           {modulos.map(m => {
             const perms = rol.permisos.filter(p => p.modulo === m);
             const color = MODULO_COLOR[m] ?? 'gray';
@@ -350,7 +361,7 @@ function RolCard({ rol, puedeEditar, puedeEliminar, onEditar, onEliminar }) {
                 </p>
                 <div className="flex flex-wrap gap-1">
                   {perms.map(p => (
-                    <span key={p.id} className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded">
+                    <span key={p.id} className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded">
                       {p.descripcion ?? p.accion}
                     </span>
                   ))}
@@ -410,7 +421,6 @@ function ModalRol({ rol, onClose, onExito }) {
 
   const todosIds = modulos.flatMap(m => permisosAgrupados[m].map(p => p.id));
   const todosOn  = todosIds.length > 0 && todosIds.every(id => selectedIds.has(id));
-  const algunOn  = todosIds.some(id => selectedIds.has(id));
 
   const guardar = useMutation({
     mutationFn: () => {
@@ -428,26 +438,26 @@ function ModalRol({ rol, onClose, onExito }) {
         {/* Nombre y descripción */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
-              Nombre <span className="text-red-500">*</span>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+              Nombre <span className="text-destructive">*</span>
             </label>
             <input
               autoFocus
               value={nombre}
               onChange={e => { setNombre(e.target.value); setError(null); }}
               placeholder="Ej: Supervisor"
-              className="w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+              className="w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
               Descripción
             </label>
             <input
               value={descripcion}
               onChange={e => setDescripcion(e.target.value)}
               placeholder="Ej: Acceso parcial a ventas"
-              className="w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+              className="w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
             />
           </div>
         </div>
@@ -455,13 +465,13 @@ function ModalRol({ rol, onClose, onExito }) {
         {/* Matriz de permisos */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               Permisos ({selectedIds.size} seleccionados)
             </p>
             {!isLoading && (
               <button
                 onClick={toggleTodo}
-                className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                className="flex items-center gap-1.5 text-xs text-primary hover:underline font-medium"
               >
                 {todosOn
                   ? <><CheckSquare className="w-3.5 h-3.5" /> Quitar todos</>
@@ -472,7 +482,7 @@ function ModalRol({ rol, onClose, onExito }) {
           </div>
 
           {isLoading ? (
-            <div className="flex items-center justify-center h-24 gap-2 text-gray-400">
+            <div className="flex items-center justify-center h-24 gap-2 text-muted-foreground">
               <RefreshCw className="w-4 h-4 animate-spin" /> Cargando permisos...
             </div>
           ) : (
@@ -488,12 +498,12 @@ function ModalRol({ rol, onClose, onExito }) {
                 return (
                   <div
                     key={modulo}
-                    className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden"
+                    className="border border-border rounded-xl overflow-hidden"
                   >
                     {/* Cabecera de módulo */}
                     <button
                       onClick={() => toggleModulo(perms)}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 border-b border-gray-100 dark:border-gray-700 hover:opacity-90 transition-opacity ${classes.split(' ').slice(0, 2).join(' ')} bg-opacity-50`}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 border-b border-border hover:opacity-90 transition-opacity ${classes.split(' ').slice(0, 2).join(' ')} bg-opacity-50`}
                     >
                       <span className={`text-xs font-bold ${classes.split(' ').find(c => c.startsWith('text-'))}`}>
                         {MODULO_LABELS[modulo] ?? modulo}
@@ -502,24 +512,24 @@ function ModalRol({ rol, onClose, onExito }) {
                         ? <CheckSquare className={`w-4 h-4 ${classes.split(' ').find(c => c.startsWith('text-'))}`} />
                         : someOn
                         ? <MinusSquare className={`w-4 h-4 ${classes.split(' ').find(c => c.startsWith('text-'))}`} />
-                        : <Square className="w-4 h-4 text-gray-300 dark:text-gray-600" />
+                        : <Square className="w-4 h-4 text-muted-foreground" />
                       }
                     </button>
 
                     {/* Permisos del módulo */}
-                    <div className="bg-white dark:bg-gray-800 divide-y divide-gray-50 dark:divide-gray-700/50">
+                    <div className="bg-card divide-y divide-border">
                       {perms.map(p => (
                         <label
                           key={p.id}
-                          className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
+                          className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors"
                         >
                           <input
                             type="checkbox"
                             checked={selectedIds.has(p.id)}
                             onChange={() => togglePermiso(p.id)}
-                            className="w-3.5 h-3.5 rounded accent-blue-600 cursor-pointer"
+                            className="w-3.5 h-3.5 rounded accent-primary cursor-pointer"
                           />
-                          <span className="text-xs text-gray-700 dark:text-gray-300 leading-tight">
+                          <span className="text-xs text-foreground leading-tight">
                             {p.descripcion ?? p.accion}
                           </span>
                         </label>
@@ -532,16 +542,16 @@ function ModalRol({ rol, onClose, onExito }) {
           )}
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <div className="flex justify-end gap-3 pt-1 border-t border-gray-100 dark:border-gray-700">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+        <div className="flex justify-end gap-3 pt-1 border-t border-border">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
             Cancelar
           </button>
           <button
             onClick={() => guardar.mutate()}
             disabled={guardar.isPending || !nombre.trim()}
-            className="px-5 py-2 rounded-xl text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors disabled:opacity-60"
+            className="px-5 py-2 rounded-xl text-sm bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-colors disabled:opacity-60"
           >
             {guardar.isPending ? 'Guardando...' : esNuevo ? 'Crear Rol' : 'Guardar cambios'}
           </button>

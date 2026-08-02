@@ -37,6 +37,10 @@ const Sucursal = require('./Sucursal');
 const ProductoStockSucursal = require('./ProductoStockSucursal');
 const Caja = require('./Caja');
 const PagoQr = require('./PagoQr');
+const Combo = require('./Combo');
+const ComboProducto = require('./ComboProducto');
+const Promocion = require('./Promocion');
+const Cupon = require('./Cupon');
 
 // Roles y Permisos
 Rol.belongsToMany(Permiso, { through: RolesPermisos, foreignKey: 'rol_id', otherKey: 'permiso_id', as: 'permisos' });
@@ -76,6 +80,17 @@ Pedido.belongsTo(SesionCaja, { foreignKey: 'sesion_caja_id', as: 'sesion_caja' }
 Pedido.hasMany(DetallePedido, { foreignKey: 'pedido_id', as: 'detalles' });
 DetallePedido.belongsTo(Pedido, { foreignKey: 'pedido_id' });
 DetallePedido.belongsTo(Producto, { foreignKey: 'producto_id', as: 'producto' });
+DetallePedido.belongsTo(Combo, { foreignKey: 'combo_id', as: 'combo' });
+
+// Combos y promociones
+Combo.belongsToMany(Producto, { through: ComboProducto, foreignKey: 'combo_id', otherKey: 'producto_id', as: 'productos' });
+Producto.belongsToMany(Combo, { through: ComboProducto, foreignKey: 'producto_id', otherKey: 'combo_id', as: 'combos' });
+Promocion.belongsTo(Producto, { foreignKey: 'producto_id', as: 'producto' });
+Producto.hasMany(Promocion, { foreignKey: 'producto_id', as: 'promociones' });
+
+// Cupones
+Pedido.belongsTo(Cupon, { foreignKey: 'cupon_id', as: 'cupon' });
+Cupon.belongsTo(Usuario, { foreignKey: 'creado_por', as: 'creador' });
 
 // SesionCaja
 SesionCaja.belongsTo(Usuario, { foreignKey: 'usuario_id', as: 'usuario' });
@@ -145,4 +160,6 @@ module.exports = {
   ProductoStockSucursal,
   Caja,
   PagoQr,
+  Combo, ComboProducto, Promocion,
+  Cupon,
 };

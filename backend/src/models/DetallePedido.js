@@ -4,7 +4,8 @@ const sequelize = require('../config/database');
 const DetallePedido = sequelize.define('DetallePedido', {
   id: { type: DataTypes.INTEGER.UNSIGNED, primaryKey: true, autoIncrement: true },
   pedido_id: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
-  producto_id: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
+  producto_id: { type: DataTypes.INTEGER.UNSIGNED, allowNull: true },
+  combo_id: { type: DataTypes.INTEGER.UNSIGNED, allowNull: true },
   cantidad: { type: DataTypes.INTEGER, defaultValue: 1 },
   peso: { type: DataTypes.DECIMAL(10,3) },
   precio: { type: DataTypes.DECIMAL(10,2), allowNull: false },

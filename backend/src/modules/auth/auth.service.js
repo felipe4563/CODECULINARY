@@ -14,8 +14,10 @@ function emitirSesion(usuario, sucursalId, sucursalNombre) {
       id: usuario.id,
       nombre: usuario.nombre,
       email: usuario.email,
+      avatar: usuario.avatar || null,
       rol: usuario.rol.nombre,
       permisos: usuario.rol.permisos.map(p => `${p.modulo}.${p.accion}`),
+      debe_cambiar_contrasena: !!usuario.debe_cambiar_contrasena,
       sucursal_activa: { id: sucursalId, nombre: sucursalNombre },
     },
   };

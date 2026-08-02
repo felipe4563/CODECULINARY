@@ -40,7 +40,7 @@ function BadgeMetodo({ metodo }) {
     transferencia: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
   };
   return (
-    <span className={`px-2 py-0.5 rounded-md text-xs font-medium capitalize ${cfg[metodo] ?? 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
+    <span className={`px-2 py-0.5 rounded-md text-xs font-medium capitalize ${cfg[metodo] ?? 'bg-muted text-muted-foreground'}`}>
       {metodo}
     </span>
   );
@@ -78,7 +78,7 @@ function ModalMovimiento({ cajaActiva, sesiones, onClose, onGuardar }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md border border-gray-100 dark:border-gray-700 animate-[dashFadeUp_0.3s_ease_both]">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md border border-border animate-[dashFadeUp_0.3s_ease_both]">
 
         {/* header */}
         <div className={`rounded-t-2xl p-5 flex items-center justify-between ${isIngreso ? 'bg-emerald-50 dark:bg-emerald-500/10' : 'bg-rose-50 dark:bg-rose-500/10'}`}>
@@ -87,9 +87,9 @@ function ModalMovimiento({ cajaActiva, sesiones, onClose, onGuardar }) {
               ? <ArrowUpCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
               : <ArrowDownCircle className="w-5 h-5 text-rose-600 dark:text-rose-400" />
             }
-            <h2 className="text-base font-semibold text-gray-800 dark:text-white">Nuevo movimiento</h2>
+            <h2 className="text-base font-semibold text-foreground">Nuevo movimiento</h2>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+          <button onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -98,7 +98,7 @@ function ModalMovimiento({ cajaActiva, sesiones, onClose, onGuardar }) {
 
           {/* tipo */}
           <div>
-            <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 block">Tipo de movimiento</label>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Tipo de movimiento</label>
             <div className="flex gap-2">
               {[['ingreso', 'Ingreso', 'emerald'], ['egreso', 'Egreso', 'rose']].map(([val, lbl, clr]) => (
                 <button
@@ -109,7 +109,7 @@ function ModalMovimiento({ cajaActiva, sesiones, onClose, onGuardar }) {
                       ? clr === 'emerald'
                         ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-emerald-500'
                         : 'border-rose-500 bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400 dark:border-rose-500'
-                      : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500'
+                      : 'border-border text-muted-foreground hover:border-muted-foreground'
                   }`}
                 >
                   {val === 'ingreso' ? <ArrowUpCircle className="w-3.5 h-3.5" /> : <ArrowDownCircle className="w-3.5 h-3.5" />}
@@ -121,35 +121,35 @@ function ModalMovimiento({ cajaActiva, sesiones, onClose, onGuardar }) {
 
           {/* concepto */}
           <div>
-            <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 block">Concepto *</label>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Concepto *</label>
             <input
               type="text"
               value={form.concepto}
               onChange={e => set('concepto', e.target.value)}
               placeholder="Ej: Pago de proveedor, venta extra..."
-              className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-gray-400"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-input bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground"
             />
           </div>
 
           {/* monto + método */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 block">Monto (Bs) *</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Monto (Bs) *</label>
               <input
                 type="number"
                 min="0.01" step="0.01"
                 value={form.monto}
                 onChange={e => set('monto', e.target.value)}
                 placeholder="0.00"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-gray-400"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-input bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground"
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 block">Método de pago</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Método de pago</label>
               <select
                 value={form.metodo_pago}
                 onChange={e => set('metodo_pago', e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-input bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="efectivo">Efectivo</option>
                 <option value="qr">QR</option>
@@ -160,11 +160,11 @@ function ModalMovimiento({ cajaActiva, sesiones, onClose, onGuardar }) {
           {/* sesión */}
           {sesiones?.length > 0 && (
             <div>
-              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 block">Sesión de caja (opcional)</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Sesión de caja (opcional)</label>
               <select
                 value={form.sesion_caja_id}
                 onChange={e => set('sesion_caja_id', e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-input bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="">— Sin sesión —</option>
                 {sesiones.map(s => (
@@ -183,7 +183,7 @@ function ModalMovimiento({ cajaActiva, sesiones, onClose, onGuardar }) {
           <div className="flex gap-2 pt-1">
             <button
               type="button" onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              className="flex-1 py-2.5 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
             >
               Cancelar
             </button>
@@ -207,7 +207,7 @@ function MovCard({ mov }) {
   const [open, setOpen] = useState(false);
   const isIngreso = mov.tipo === 'ingreso';
   return (
-    <div className={`bg-white dark:bg-gray-800 rounded-xl border shadow-sm overflow-hidden ${isIngreso ? 'border-emerald-100 dark:border-emerald-900/40' : 'border-rose-100 dark:border-rose-900/40'}`}>
+    <div className={`bg-card rounded-xl border shadow-sm overflow-hidden ${isIngreso ? 'border-emerald-100 dark:border-emerald-900/40' : 'border-rose-100 dark:border-rose-900/40'}`}>
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full p-3.5 flex items-center gap-3 text-left"
@@ -216,24 +216,24 @@ function MovCard({ mov }) {
           {isIngreso ? <ArrowUpCircle className="w-4 h-4" /> : <ArrowDownCircle className="w-4 h-4" />}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-gray-800 dark:text-white truncate">{mov.concepto}</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500">{fmtFecha(mov.creado_en)}</p>
+          <p className="text-sm font-semibold text-foreground truncate">{mov.concepto}</p>
+          <p className="text-xs text-muted-foreground">{fmtFecha(mov.creado_en)}</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <p className={`text-sm font-bold ${isIngreso ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
             {isIngreso ? '+' : '-'}{fmt(mov.monto)}
           </p>
-          {open ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          {open ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
         </div>
       </button>
       {open && (
-        <div className="px-3.5 pb-3.5 pt-0 border-t border-gray-100 dark:border-gray-700 space-y-2 text-xs text-gray-500 dark:text-gray-400">
+        <div className="px-3.5 pb-3.5 pt-0 border-t border-border space-y-2 text-xs text-muted-foreground">
           <div className="flex items-center gap-4 pt-2.5">
             <span>Tipo: <BadgeTipo tipo={mov.tipo} /></span>
             <span>Método: <BadgeMetodo metodo={mov.metodo_pago} /></span>
           </div>
-          {mov.usuario && <p>Registrado por: <span className="font-medium text-gray-700 dark:text-gray-300">{mov.usuario.nombre}</span></p>}
-          {mov.sesion_caja && <p>Sesión: <span className="font-medium text-gray-700 dark:text-gray-300">#{mov.sesion_caja.id}</span></p>}
+          {mov.usuario && <p>Registrado por: <span className="font-medium text-foreground">{mov.usuario.nombre}</span></p>}
+          {mov.sesion_caja && <p>Sesión: <span className="font-medium text-foreground">#{mov.sesion_caja.id}</span></p>}
         </div>
       )}
     </div>
@@ -245,10 +245,10 @@ function SummaryCard({ icono: Icono, titulo, valor, color, delay }) {
   const cfg = {
     emerald: { bar: 'bg-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10', icon: 'text-emerald-600 dark:text-emerald-400', val: 'text-emerald-700 dark:text-emerald-300' },
     rose:    { bar: 'bg-rose-500',    bg: 'bg-rose-50 dark:bg-rose-500/10',       icon: 'text-rose-600 dark:text-rose-400',       val: 'text-rose-700 dark:text-rose-300' },
-    indigo:  { bar: 'bg-indigo-500',  bg: 'bg-indigo-50 dark:bg-indigo-500/10',   icon: 'text-indigo-600 dark:text-indigo-400',   val: 'text-indigo-700 dark:text-indigo-300' },
+    primary: { bar: 'bg-primary',     bg: 'bg-primary/10',                       icon: 'text-primary',                            val: 'text-primary' },
   }[color];
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4 flex items-center gap-3 shadow-sm relative overflow-hidden"
+    <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3 shadow-sm relative overflow-hidden"
       style={{ animation: 'dashFadeUp 0.5s ease both', animationDelay: `${delay}ms` }}
     >
       <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl ${cfg.bar}`} />
@@ -256,7 +256,7 @@ function SummaryCard({ icono: Icono, titulo, valor, color, delay }) {
         <Icono className={`w-5 h-5 ${cfg.icon}`} />
       </div>
       <div>
-        <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{titulo}</p>
+        <p className="text-xs font-medium text-muted-foreground">{titulo}</p>
         <p className={`text-xl font-bold ${cfg.val}`}>{valor}</p>
       </div>
     </div>
@@ -340,7 +340,7 @@ export default function LibroCajaPage() {
 
   if (!puedoVer) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-gray-400 dark:text-gray-500 gap-3">
+      <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-3">
         <BookOpen className="w-10 h-10 opacity-30" />
         <p className="text-sm">Sin permiso para ver el libro de caja.</p>
       </div>
@@ -360,25 +360,25 @@ export default function LibroCajaPage() {
         }
       `}</style>
 
-      <div className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4">
+      <div className="space-y-4">
 
         {/* ── Header ──────────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-3"
           style={{ animation: 'dashFadeUp 0.4s ease both' }}
         >
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-indigo-100 dark:bg-indigo-500/15 rounded-xl">
-              <BookOpen className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            <div className="p-2.5 bg-primary/10 rounded-xl">
+              <BookOpen className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">Libro de Caja</h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Historial de ingresos y egresos</p>
+              <h1 className="text-lg sm:text-xl font-bold text-foreground">Libro de Caja</h1>
+              <p className="text-xs text-muted-foreground">Historial de ingresos y egresos</p>
             </div>
           </div>
           {puedoCrear && (
             <button
               onClick={() => setModalOpen(true)}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-sm shadow-indigo-500/30 transition-all hover:shadow-md hover:-translate-y-0.5"
+              className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2.5 rounded-xl text-sm font-semibold shadow-sm shadow-primary/30 transition-all hover:shadow-md hover:-translate-y-0.5"
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Nuevo registro</span>
@@ -390,34 +390,34 @@ export default function LibroCajaPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <SummaryCard icono={TrendingUp}   titulo="Total ingresos"  valor={fmt(totalIngresos)} color="emerald" delay={80}  />
           <SummaryCard icono={TrendingDown} titulo="Total egresos"   valor={fmt(totalEgresos)}  color="rose"    delay={140} />
-          <SummaryCard icono={DollarSign}   titulo="Balance neto"    valor={fmt(balance)}        color="indigo"  delay={200} />
+          <SummaryCard icono={DollarSign}   titulo="Balance neto"    valor={fmt(balance)}        color="primary" delay={200} />
         </div>
 
         {/* ── Filtros ─────────────────────────────────────────── */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-3 sm:p-4 shadow-sm"
+        <div className="bg-card rounded-2xl border border-border p-3 sm:p-4 shadow-sm"
           style={{ animation: 'dashFadeUp 0.5s ease both', animationDelay: '240ms' }}
         >
           <div className="flex flex-col sm:flex-row gap-3">
             {/* búsqueda */}
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="text"
                 placeholder="Buscar por concepto, usuario..."
                 value={buscar}
                 onChange={e => setBuscar(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-gray-400"
+                className="w-full pl-9 pr-3 py-2 rounded-xl border border-input bg-muted text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground"
               />
               {buscar && (
-                <button onClick={() => setBuscar('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <button onClick={() => setBuscar('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
 
             {/* filtro tipo */}
-            <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700/60 rounded-xl p-1">
-              <Filter className="w-4 h-4 text-gray-400 ml-1.5 flex-shrink-0" />
+            <div className="flex items-center gap-1 bg-muted rounded-xl p-1">
+              <Filter className="w-4 h-4 text-muted-foreground ml-1.5 flex-shrink-0" />
               {[['todos', 'Todos'], ['ingreso', 'Ingresos'], ['egreso', 'Egresos']].map(([val, lbl]) => (
                 <button
                   key={val}
@@ -426,8 +426,8 @@ export default function LibroCajaPage() {
                     filtroTipo === val
                       ? val === 'ingreso' ? 'bg-emerald-600 text-white shadow-sm'
                         : val === 'egreso' ? 'bg-rose-600 text-white shadow-sm'
-                        : 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                        : 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {lbl}
@@ -437,7 +437,7 @@ export default function LibroCajaPage() {
           </div>
 
           {/* contador */}
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-2.5">
+          <p className="text-xs text-muted-foreground mt-2.5">
             {filtrados.length} registro{filtrados.length !== 1 ? 's' : ''}
             {(buscar || filtroTipo !== 'todos') ? ' encontrados' : ' en total'}
           </p>
@@ -447,21 +447,21 @@ export default function LibroCajaPage() {
         {isLoading && (
           <div className="space-y-2">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-4 animate-pulse h-16" />
+              <div key={i} className="bg-card rounded-xl border border-border p-4 animate-pulse h-16" />
             ))}
           </div>
         )}
 
         {/* ── Sin resultados ───────────────────────────────────── */}
         {!isLoading && filtrados.length === 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 py-16 flex flex-col items-center gap-3 text-gray-400 dark:text-gray-500 shadow-sm">
-            <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+          <div className="bg-card rounded-2xl border border-border py-16 flex flex-col items-center gap-3 text-muted-foreground shadow-sm">
+            <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
               <BookOpen className="w-7 h-7 opacity-40" />
             </div>
             <p className="text-sm font-medium">Sin movimientos registrados</p>
             {buscar && <p className="text-xs">Prueba con otro término de búsqueda</p>}
             {puedoCrear && !buscar && (
-              <button onClick={() => setModalOpen(true)} className="mt-1 text-xs text-indigo-600 dark:text-indigo-400 font-medium hover:underline">
+              <button onClick={() => setModalOpen(true)} className="mt-1 text-xs text-primary font-medium hover:underline">
                 Registrar primer movimiento
               </button>
             )}
@@ -481,33 +481,33 @@ export default function LibroCajaPage() {
 
         {/* ── Desktop: tabla ───────────────────────────────────── */}
         {!isLoading && filtrados.length > 0 && (
-          <div className="hidden sm:block bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden"
+          <div className="hidden sm:block bg-card rounded-2xl border border-border shadow-sm overflow-hidden"
             style={{ animation: 'dashFadeUp 0.5s ease both', animationDelay: '280ms' }}
           >
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40">
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Fecha</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Concepto</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Tipo</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Método</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Monto</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Usuario</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Sesión</th>
+                  <tr className="border-b border-border bg-muted">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Fecha</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Concepto</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">Tipo</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">Método</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Monto</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Usuario</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">Sesión</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50 dark:divide-gray-700/60">
+                <tbody className="divide-y divide-border">
                   {filtrados.map((m, i) => (
                     <tr
                       key={m.id}
-                      className="hover:bg-gray-50/60 dark:hover:bg-gray-700/30 transition-colors"
+                      className="hover:bg-muted/50 transition-colors"
                       style={{ animation: 'dashFadeUp 0.35s ease both', animationDelay: `${i * 20}ms` }}
                     >
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs whitespace-nowrap">
+                      <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">
                         {fmtFecha(m.creado_en)}
                       </td>
-                      <td className="px-4 py-3 text-gray-800 dark:text-gray-200 font-medium max-w-[220px]">
+                      <td className="px-4 py-3 text-foreground font-medium max-w-[220px]">
                         <span className="line-clamp-1">{m.concepto}</span>
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -519,10 +519,10 @@ export default function LibroCajaPage() {
                       <td className={`px-4 py-3 text-right font-bold tabular-nums ${m.tipo === 'ingreso' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                         {m.tipo === 'ingreso' ? '+' : '-'}{fmt(m.monto)}
                       </td>
-                      <td className="px-4 py-3 text-gray-600 dark:text-gray-300 text-xs">
+                      <td className="px-4 py-3 text-foreground text-xs">
                         {m.usuario?.nombre ?? '—'}
                       </td>
-                      <td className="px-4 py-3 text-center text-xs text-gray-400 dark:text-gray-500">
+                      <td className="px-4 py-3 text-center text-xs text-muted-foreground">
                         {m.sesion_caja ? `#${m.sesion_caja.id}` : '—'}
                       </td>
                     </tr>
@@ -531,15 +531,15 @@ export default function LibroCajaPage() {
 
                 {/* footer con totales */}
                 <tfoot>
-                  <tr className="bg-gray-50 dark:bg-gray-700/40 border-t-2 border-gray-200 dark:border-gray-600">
-                    <td colSpan={4} className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+                  <tr className="bg-muted border-t-2 border-border">
+                    <td colSpan={4} className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">
                       Totales ({filtrados.length} registros)
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex flex-col items-end gap-0.5">
                         <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">+{fmt(totalIngresos)}</span>
                         <span className="text-xs text-rose-600 dark:text-rose-400 font-semibold">-{fmt(totalEgresos)}</span>
-                        <span className={`text-sm font-bold border-t border-gray-300 dark:border-gray-500 pt-0.5 ${balance >= 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                        <span className={`text-sm font-bold border-t border-border pt-0.5 ${balance >= 0 ? 'text-primary' : 'text-rose-600 dark:text-rose-400'}`}>
                           {fmt(balance)}
                         </span>
                       </div>

@@ -1,0 +1,2 @@
+ALTER TABLE opciones
+  ADD COLUMN precio_adicional DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER nombre;

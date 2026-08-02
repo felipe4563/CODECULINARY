@@ -17,6 +17,8 @@ const Pedido = sequelize.define('Pedido', {
   total: { type: DataTypes.DECIMAL(10,2), defaultValue: 0 },
   descuento: { type: DataTypes.DECIMAL(10,2), defaultValue: 0 },
   propina: { type: DataTypes.DECIMAL(10,2), defaultValue: 0 },
+  puntos_ganados: { type: DataTypes.INTEGER, defaultValue: 0 },
+  puntos_canjeados: { type: DataTypes.INTEGER, defaultValue: 0 },
   metodo_pago: { type: DataTypes.ENUM('efectivo','qr'), defaultValue: 'efectivo' },
   monto_recibido: { type: DataTypes.DECIMAL(10,2) },
   cambio: { type: DataTypes.DECIMAL(10,2), defaultValue: 0 },
