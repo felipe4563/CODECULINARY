@@ -166,9 +166,19 @@ socket.on('connect', () => {
   console.log(`[${ts()}] ✓ Conectado (id: ${socket.id})`);
   if (config.sucursal_id) {
     socket.emit('unirse_sucursal', config.sucursal_id);
-    console.log(`[${ts()}] → Unido a la sala de la sucursal ${config.sucursal_id}`);
+    console.log(`[${ts()}] → Unido a la sala de la sucursal ${config.sucursal_id} (comandas de cocina)`);
   } else {
     console.log(`[${ts()}] ⚠ config.json no tiene sucursal_id — este agente NO recibirá ningún evento de impresión hasta que se configure`);
+  }
+  // Sala por caja: si hay varias cajas en la misma sucursal, cada una tiene
+  // su propia impresora — sin caja_id, print:caja llegaría por igual a todas
+  // las cajas de la sucursal (ver socket.js del backend). Con una sola caja
+  // configurada por sucursal, esto queda vacío y no rompe nada.
+  if (config.caja_id) {
+    socket.emit('unirse_caja', config.caja_id);
+    console.log(`[${ts()}] → Unido a la sala de la caja ${config.caja_id} (tickets de venta)`);
+  } else {
+    console.log(`[${ts()}] ⚠ config.json no tiene caja_id — el ticket de venta por socket (respaldo) solo llegará si esta es la única caja de la sucursal`);
   }
 });
 socket.on('disconnect',    () => console.log(`[${ts()}] ✗ Desconectado — reintentando...`));
@@ -282,19 +292,52 @@ servidorLocal.listen(PUERTO_LOCAL, '127.0.0.1', () => {
 
 const COLS = 48;
 
-const CP850 = {
+// Tres formas de mandar tildes/ñ, elegibles con "codepage" en config.json.
+// Muchas impresoras térmicas clon no respetan la tabla PC850 tal como la
+// documenta Epson (ESC t 2): un byte como el de la "ñ" cae en un hueco no
+// soportado, sale como un cuadro/triángulo, y en algunos firmwares eso corta
+// o corrompe el resto de la línea. Si eso pasa, probar "cp1252" y si sigue
+// mal, "ascii" (sin tildes, pero nunca sale roto).
+const MAPA_CP850 = {
   'á':0xA0,'é':0x82,'í':0xA1,'ó':0xA2,'ú':0xA3,
   'Á':0xB5,'É':0x90,'Í':0xD6,'Ó':0xE0,'Ú':0xE9,
   'ñ':0xA4,'Ñ':0xA5,'ü':0x81,'Ü':0x9A,
   '¡':0xAD,'¿':0xA8,'°':0xF8,'·':0xFA,
   '★':0x2A,'—':0x2D,
 };
+const MAPA_CP1252 = {
+  'á':0xE1,'é':0xE9,'í':0xED,'ó':0xF3,'ú':0xFA,
+  'Á':0xC1,'É':0xC9,'Í':0xCD,'Ó':0xD3,'Ú':0xDA,
+  'ñ':0xF1,'Ñ':0xD1,'ü':0xFC,'Ü':0xDC,
+  '¡':0xA1,'¿':0xBF,'°':0xB0,'·':0xB7,
+  '★':0x2A,'—':0x2D,
+};
+// Sin acentos: transcribe a ASCII plano antes de imprimir, para que nunca
+// dependa de que la impresora soporte ninguna tabla de códigos.
+const REEMPLAZO_ASCII = {
+  'á':'a','é':'e','í':'i','ó':'o','ú':'u',
+  'Á':'A','É':'E','Í':'I','Ó':'O','Ú':'U',
+  'ñ':'n','Ñ':'N','ü':'u','Ü':'U',
+  '¡':'!','¿':'?','°':'o','·':'.',
+  '★':'*','—':'-',
+};
+// n para "ESC t n" (tabla de código de caracteres, estándar Epson).
+const TABLA_ESC_T = { cp850: 2, cp1252: 16, ascii: 0 };
+
+var CODEPAGE = String(config.codepage || 'cp850').toLowerCase();
+if (!TABLA_ESC_T.hasOwnProperty(CODEPAGE)) CODEPAGE = 'cp850';
+var MAPA_ACTIVO = CODEPAGE === 'cp1252' ? MAPA_CP1252 : MAPA_CP850;
+console.log('Codepage : ' + CODEPAGE + (CODEPAGE === 'cp850' ? ' (por defecto — si salen caracteres rotos, probar "cp1252" o "ascii" en config.json)' : ''));
+
+function quitarAcentos(str) {
+  return str.replace(/[áéíóúÁÉÍÓÚñÑüÜ¡¿°·★—]/g, function(ch) { return REEMPLAZO_ASCII[ch] || ch; });
+}
 
 class Esc {
   constructor() { this.b = []; }
   raw(bytes)  { this.b.push(...bytes); return this; }
   init()      { return this.raw([0x1B, 0x40]); }
-  charset()   { return this.raw([0x1B, 0x74, 0x02]); }
+  charset()   { return this.raw([0x1B, 0x74, TABLA_ESC_T[CODEPAGE]]); }
   cut()       { return this.raw([0x1D, 0x56, 0x41, 0x05]); }
   lf(n = 1)  { for (let i = 0; i < n; i++) this.b.push(0x0A); return this; }
   left()      { return this.raw([0x1B, 0x61, 0x00]); }
@@ -307,10 +350,12 @@ class Esc {
   dblW()      { return this.raw([0x1D, 0x21, 0x10]); }
   text(s) {
     var str = String(s != null ? s : '');
+    if (CODEPAGE === 'ascii') str = quitarAcentos(str);
     for (var ci = 0; ci < str.length; ci++) {
       var ch   = str[ci];
       var code = ch.charCodeAt(0);
-      this.b.push(CP850[ch] != null ? CP850[ch] : (code < 128 ? code : 0x3F));
+      var byte = MAPA_ACTIVO[ch];
+      this.b.push(byte != null ? byte : (code < 128 ? code : 0x3F));
     }
     return this;
   }

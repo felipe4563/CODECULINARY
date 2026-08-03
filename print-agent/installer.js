@@ -96,6 +96,24 @@ async function obtenerSucursales(servidor) {
   return body.datos;
 }
 
+async function obtenerCajas(servidor, sucursal_id) {
+  const url = servidor.replace(/\/+$/, '') + '/api/v1/cajas/publico?sucursal_id=' + encodeURIComponent(sucursal_id);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  let res;
+  try {
+    res = await fetch(url, { signal: controller.signal });
+  } catch {
+    throw new Error('No se pudo conectar al servidor para buscar las cajas.');
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (!res.ok) throw new Error(`El servidor respondió con estado ${res.status}.`);
+  const body = await res.json();
+  if (!body.ok || !Array.isArray(body.datos)) throw new Error('Respuesta inesperada del servidor.');
+  return body.datos;
+}
+
 // ── Admin check ───────────────────────────────────────────────────────────────
 
 function isAdmin() {
@@ -407,6 +425,112 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
   } catch { return 'CANCEL'; }
 }
 
+// Solo se muestra cuando la sucursal elegida tiene más de una caja registrada
+// (si tiene 0 o 1, no hace falta preguntar — ver main()).
+function pedirCaja(cajas, defaults) {
+  const outFile     = path.join(os.tmpdir(), `agente_caja_${Date.now()}.txt`);
+  const outFileSafe = outFile.replace(/\\/g, '\\\\');
+  const indiceDefecto = defaults.caja_id
+    ? cajas.findIndex((c) => c.id === defaults.caja_id)
+    : -1;
+  const nombresCajasPS = cajas
+    .map((c) => `"${String(c.nombre).replace(/"/g, '\`"')}"`)
+    .join(', ');
+
+  const ps = `
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+$form = New-Object System.Windows.Forms.Form
+$form.Text            = "Agente de Impresion Termica - Paso 3 de 3"
+$form.Size            = New-Object System.Drawing.Size(500, 210)
+$form.StartPosition   = "CenterScreen"
+$form.FormBorderStyle = "FixedDialog"
+$form.MaximizeBox     = $false
+$form.MinimizeBox     = $false
+$form.BackColor       = [System.Drawing.Color]::White
+
+$lblTitulo = New-Object System.Windows.Forms.Label
+$lblTitulo.Text      = "Esta sucursal tiene mas de una caja"
+$lblTitulo.Font      = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
+$lblTitulo.Location  = New-Object System.Drawing.Point(20, 18)
+$lblTitulo.Size      = New-Object System.Drawing.Size(450, 28)
+$lblTitulo.ForeColor = [System.Drawing.Color]::FromArgb(30, 64, 175)
+
+$lblSub = New-Object System.Windows.Forms.Label
+$lblSub.Text      = "Indica a que caja pertenece esta PC, para que sus tickets de venta no se impriman en otra caja."
+$lblSub.Font      = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$lblSub.Location  = New-Object System.Drawing.Point(20, 48)
+$lblSub.Size      = New-Object System.Drawing.Size(450, 34)
+$lblSub.ForeColor = [System.Drawing.Color]::FromArgb(100, 100, 100)
+
+$lblCaja = New-Object System.Windows.Forms.Label
+$lblCaja.Text     = "Caja:"
+$lblCaja.Font     = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$lblCaja.Location = New-Object System.Drawing.Point(20, 84)
+$lblCaja.Size     = New-Object System.Drawing.Size(200, 20)
+
+$cbCaja = New-Object System.Windows.Forms.ComboBox
+$cbCaja.Font          = New-Object System.Drawing.Font("Segoe UI", 9)
+$cbCaja.Location      = New-Object System.Drawing.Point(20, 106)
+$cbCaja.Size          = New-Object System.Drawing.Size(450, 26)
+$cbCaja.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+foreach ($n in @(${nombresCajasPS})) { $cbCaja.Items.Add($n) | Out-Null }
+if (${indiceDefecto} -ge 0) { $cbCaja.SelectedIndex = ${indiceDefecto} }
+elseif ($cbCaja.Items.Count -gt 0) { $cbCaja.SelectedIndex = 0 }
+
+$btnCancelar = New-Object System.Windows.Forms.Button
+$btnCancelar.Text         = "Cancelar"
+$btnCancelar.Font         = New-Object System.Drawing.Font("Segoe UI", 9)
+$btnCancelar.Location     = New-Object System.Drawing.Point(248, 146)
+$btnCancelar.Size         = New-Object System.Drawing.Size(100, 34)
+$btnCancelar.FlatStyle    = [System.Windows.Forms.FlatStyle]::Flat
+$btnCancelar.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+
+$btnInstalar = New-Object System.Windows.Forms.Button
+$btnInstalar.Text         = "  Instalar"
+$btnInstalar.Font         = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$btnInstalar.BackColor    = [System.Drawing.Color]::FromArgb(37, 99, 235)
+$btnInstalar.ForeColor    = [System.Drawing.Color]::White
+$btnInstalar.FlatStyle    = [System.Windows.Forms.FlatStyle]::Flat
+$btnInstalar.Location     = New-Object System.Drawing.Point(358, 146)
+$btnInstalar.Size         = New-Object System.Drawing.Size(112, 34)
+$btnInstalar.DialogResult = [System.Windows.Forms.DialogResult]::OK
+
+$form.Controls.AddRange(@($lblTitulo, $lblSub, $lblCaja, $cbCaja, $btnCancelar, $btnInstalar))
+$form.AcceptButton = $btnInstalar
+$form.CancelButton = $btnCancelar
+
+$result = $form.ShowDialog()
+
+if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+  [System.IO.File]::WriteAllLines("${outFileSafe}", @("OK", $cbCaja.SelectedIndex))
+} else {
+  [System.IO.File]::WriteAllText("${outFileSafe}", "CANCEL")
+}
+`;
+
+  const tmpPs = path.join(os.tmpdir(), `agente_caja_form_${Date.now()}.ps1`);
+  writeFileSync(tmpPs, ps, { encoding: 'utf8' });
+
+  try {
+    execFileSync('powershell.exe',
+      ['-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File', tmpPs],
+      { stdio: 'ignore' });
+  } finally {
+    try { unlinkSync(tmpPs); } catch {}
+  }
+
+  try {
+    const raw = readFileSync(outFile, 'utf8').trim().split('\n');
+    unlinkSync(outFile);
+    if (raw[0].trim() !== 'OK') return 'CANCEL';
+    const indiceElegido = parseInt((raw[1] || '').trim(), 10);
+    const cajaElegida = cajas[indiceElegido];
+    return cajaElegida ? cajaElegida.id : null;
+  } catch { return 'CANCEL'; }
+}
+
 // ── Mensaje de resultado ──────────────────────────────────────────────────────
 
 function showMessage(titulo, mensaje, error = false) {
@@ -702,7 +826,29 @@ async function main() {
       return main();
     }
 
-    install({ servidor, sucursal_id: resultado.sucursal_id, impresora_caja: resultado.impresora_caja, impresora_cocina: resultado.impresora_cocina });
+    // Paso 3 (solo si aplica): si la sucursal elegida tiene más de una caja
+    // registrada, hay que saber a cuál pertenece esta PC — si no, el ticket
+    // de venta (por el respaldo de socket) podría imprimirse también en la
+    // impresora de otra caja de la misma sucursal.
+    let caja_id = null;
+    try {
+      const cajas = await obtenerCajas(servidor, resultado.sucursal_id);
+      if (cajas.length === 1) {
+        caja_id = cajas[0].id;
+      } else if (cajas.length > 1) {
+        const elegida = pedirCaja(cajas, defaults);
+        if (elegida === 'CANCEL') { process.exit(0); return; }
+        caja_id = elegida;
+      }
+    } catch (err) {
+      showMessage('Aviso', `No se pudo verificar las cajas de la sucursal:\n${err.message}\n\nSe instalará sin asignar a una caja específica.`);
+    }
+
+    install({
+      servidor, sucursal_id: resultado.sucursal_id,
+      impresora_caja: resultado.impresora_caja, impresora_cocina: resultado.impresora_cocina,
+      caja_id,
+    });
   } catch (err) {
     showMessage('Error inesperado', `El instalador encontró un error:\n${err.message}`, true);
     process.exit(1);

@@ -5,6 +5,11 @@ async function listar(req, res, next) {
   catch (err) { next(err); }
 }
 
+async function listarPublico(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.listarPublico(req.query.sucursal_id) }); }
+  catch (err) { next(err); }
+}
+
 async function crear(req, res, next) {
   try { res.status(201).json({ ok: true, datos: await svc.crear(req.body) }); }
   catch (err) { next(err); }
@@ -20,4 +25,4 @@ async function eliminar(req, res, next) {
   catch (err) { next(err); }
 }
 
-module.exports = { listar, crear, actualizar, eliminar };
+module.exports = { listar, listarPublico, crear, actualizar, eliminar };

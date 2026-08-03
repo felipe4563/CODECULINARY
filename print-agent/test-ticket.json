@@ -1,0 +1,48 @@
+{
+  "pedido": {
+    "id": 9999,
+    "tipo": "llevar",
+    "numero_llevar": 12,
+    "nombre_cliente": "María Peña",
+    "total": 45.00,
+    "descuento": 0,
+    "propina": 0,
+    "descuento_cupon": 5.00,
+    "cupon": { "codigo": "PROMOÑ10" },
+    "puntos_ganados": 4,
+    "puntos_canjeados": 0,
+    "monto_recibido": 40.00,
+    "cambio": 0,
+    "notas": "Sin cebolla, tamaño extra grande",
+    "cliente": { "nombre": "María Peña", "puntos": 34 },
+    "detalles": [
+      {
+        "producto": { "nombre": "Salteña de Pollo", "precio": 8.5 },
+        "precio": 8.5,
+        "cantidad": 2,
+        "peso": null,
+        "nota": "Bien picante"
+      },
+      {
+        "combo": {
+          "nombre": "Combo Ñoquis",
+          "productos": [
+            { "nombre": "Ñoquis a la Boloñesa", "ComboProducto": { "cantidad": 1 } },
+            { "nombre": "Refresco de Tamarindo", "ComboProducto": { "cantidad": 1 } }
+          ]
+        },
+        "precio": 28.0,
+        "cantidad": 1,
+        "peso": null
+      }
+    ]
+  },
+  "metodo_pago": "efectivo",
+  "numero_orden_diario": 7,
+  "config": {
+    "nombre_negocio": "El Rincón Cochabambino",
+    "direccion": "Av. Ñuflo de Chávez #123",
+    "telefono": "77712345",
+    "simbolo_moneda": "Bs."
+  }
+}

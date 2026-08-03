@@ -319,11 +319,23 @@ async function _emitirImpresion(pedido, metodo_pago, cambio, sucursal_id, numero
     });
   }
 
+  // El ticket de caja va solo a la sala de la caja que hizo la venta (no a
+  // toda la sucursal): si hay dos cajas en la misma sucursal, cada una tiene
+  // su propio agente/impresora y no deben imprimirse tickets cruzados.
+  let caja_id = null;
+  if (pedido.sesion_caja_id) {
+    const sesion = await SesionCaja.findByPk(pedido.sesion_caja_id, { attributes: ['caja_id'] });
+    caja_id = sesion ? sesion.caja_id : null;
+  }
+
   const datosCaja = { pedido: pedido.toJSON(), metodo_pago, cambio, config: cfg, numero_orden_diario };
-  emitir('print:caja', datosCaja, sucursal_id);
+  emitir('print:caja', datosCaja, sucursal_id, caja_id);
 
   let datosCocina = null;
   if (cfg.flujo_cocina === 'fisico') {
+    // La cocina, en cambio, suele ser una sola impresora compartida por toda
+    // la sucursal, sin importar qué caja vendió — se sigue emitiendo a nivel
+    // de sucursal.
     datosCocina = { pedido: pedido.toJSON(), config: cfg, numero_orden_diario };
     emitir('print:cocina', datosCocina, sucursal_id);
   }

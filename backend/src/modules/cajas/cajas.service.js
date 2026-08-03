@@ -10,6 +10,17 @@ async function listar({ sucursal_id } = {}) {
   });
 }
 
+// Sin autenticación — usado por el instalador del agente de impresión para
+// elegir a qué caja pertenece esa PC, antes de tener credenciales.
+async function listarPublico(sucursal_id) {
+  if (!sucursal_id) return [];
+  return Caja.findAll({
+    where: { sucursal_id, activo: 1 },
+    attributes: ['id', 'nombre'],
+    order: [['nombre', 'ASC']],
+  });
+}
+
 async function crear({ sucursal_id, nombre, activo = 1 }) {
   if (!sucursal_id) throw Object.assign(new Error('sucursal_id es requerido'), { status: 400 });
   if (!nombre || !nombre.trim()) throw Object.assign(new Error('El nombre es requerido'), { status: 400 });
@@ -36,4 +47,4 @@ async function eliminar(id) {
   await caja.destroy();
 }
 
-module.exports = { listar, crear, actualizar, eliminar };
+module.exports = { listar, listarPublico, crear, actualizar, eliminar };
