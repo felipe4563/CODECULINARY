@@ -94,7 +94,7 @@ function _datosLinea(item, producto, precioBase, extra = 0) {
 
 const INCLUDE_PEDIDO_COMPLETO = [
   { model: Mesa, as: 'mesa', attributes: ['id', 'nombre', 'estado'] },
-  { model: Cliente, as: 'cliente', attributes: ['id', 'nombre', 'numero_documento'] },
+  { model: Cliente, as: 'cliente', attributes: ['id', 'nombre', 'numero_documento', 'puntos'] },
   {
     model: DetallePedido, as: 'detalles',
     include: [

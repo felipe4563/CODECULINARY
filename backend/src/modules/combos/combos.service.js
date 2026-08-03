@@ -15,8 +15,8 @@ async function listarActivos() {
   return combos.filter((c) => estaActivoHoy(c));
 }
 
-async function obtener(id) {
-  const combo = await Combo.findByPk(id, { include: INCLUDE_PRODUCTOS });
+async function obtener(id, transaction) {
+  const combo = await Combo.findByPk(id, { include: INCLUDE_PRODUCTOS, transaction });
   if (!combo) throw Object.assign(new Error('Combo no encontrado'), { status: 404 });
   return combo;
 }
@@ -43,7 +43,7 @@ async function crear({ nombre, descripcion, precio, imagen, activo = 1, fecha_in
       nombre: nombre.trim(), descripcion, precio, imagen, activo, fecha_inicio: fecha_inicio || null, fecha_fin: fecha_fin || null, dias_semana: dias_semana || null,
     }, { transaction: t });
     await _sincronizarProductos(combo.id, productos, t);
-    return obtener(combo.id);
+    return obtener(combo.id, t);
   });
 }
 
@@ -63,7 +63,7 @@ async function actualizar(id, { nombre, descripcion, precio, imagen, activo, fec
     if (dias_semana !== undefined) datos.dias_semana = dias_semana || null;
     await combo.update(datos, { transaction: t });
     await _sincronizarProductos(id, productos, t);
-    return obtener(id);
+    return obtener(id, t);
   });
 }
 

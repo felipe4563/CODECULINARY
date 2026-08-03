@@ -17,16 +17,21 @@ export function imprimirTicketCocina(pedido, config = {}, numeroOrdenDiario = nu
   const total    = detalles.reduce((s, d) => s + parseFloat(d.precio) * d.cantidad, 0);
 
   const filas = detalles.map(d => {
+    const esCombo = !!d.combo;
     const esPesable = d.peso != null;
     const cantEtiqueta = esPesable ? parseFloat(d.peso).toFixed(3) : d.cantidad;
     const precioEtiqueta = esPesable
       ? `${parseFloat(d.producto?.precio ?? 0).toFixed(2)}/kg`
       : parseFloat(d.precio).toFixed(2);
     const subtotal = (parseFloat(d.precio) * d.cantidad).toFixed(2);
+    const nombre = d.producto?.nombre ?? (esCombo ? `Combo: ${d.combo.nombre}` : '');
+    const contenidoCombo = esCombo && d.combo.productos?.length
+      ? `<br><span class="prod-combo-detalle">${d.combo.productos.map(p => `${p.ComboProducto?.cantidad ?? 1}x ${p.nombre}`).join(', ')}</span>`
+      : '';
     return `
     <tr class="fila-prod">
       <td class="col-prod">
-        <span class="prod-nombre">${d.producto?.nombre ?? ''}</span>
+        <span class="prod-nombre">${nombre}</span>${contenidoCombo}
         ${d.nota ? `<br><span class="prod-nota">» ${d.nota}</span>` : ''}
       </td>
       <td class="col-cant">${cantEtiqueta}</td>
@@ -146,6 +151,7 @@ export function imprimirTicketCocina(pedido, config = {}, numeroOrdenDiario = nu
 
     .prod-nombre { font-weight: 700; font-size: 13px; line-height: 1.3; }
     .prod-nota   { font-size: 8.5px; font-style: italic; color: #444; }
+    .prod-combo-detalle { font-size: 8.5px; font-style: italic; color: #555; }
 
     /* ── Total ── */
     .total-bloque { margin-top: 3px; }

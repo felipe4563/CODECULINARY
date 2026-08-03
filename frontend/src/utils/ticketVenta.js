@@ -15,18 +15,41 @@ export function imprimirTicketVenta(pedido, pago, config = {}, numeroOrdenDiario
   const metodoPagoLabel = pago.metodo_pago === 'qr' ? 'QR / Transferencia' : 'Efectivo';
 
   const detalles = pedido.detalles ?? [];
-  const total    = pago.total ?? detalles.reduce((s, d) => s + parseFloat(d.precio) * d.cantidad, 0);
+  const subtotalLineas = detalles.reduce((s, d) => s + parseFloat(d.precio) * d.cantidad, 0);
+
+  // El total realmente cobrado se deriva de monto_recibido - cambio (siempre
+  // coherente, tanto en efectivo como en QR — ver _finalizarVenta en el
+  // backend), en vez de confiar en pago.total, que no reflejaba descuentos,
+  // cupón ni puntos canjeados.
+  const montoRecibido = pedido.monto_recibido != null ? parseFloat(pedido.monto_recibido) : null;
+  const cambio = parseFloat(pedido.cambio || 0);
+  const total = montoRecibido != null ? montoRecibido - cambio : (pago.total ?? subtotalLineas);
+
+  const descuento = parseFloat(pedido.descuento || 0);
+  const propina = parseFloat(pedido.propina || 0);
+  const descuentoCupon = parseFloat(pedido.descuento_cupon || 0);
+  const puntosGanados = pedido.puntos_ganados || 0;
+  const puntosCanjeados = pedido.puntos_canjeados || 0;
+  // El descuento en Bs por canje de puntos no se guarda como columna propia:
+  // se despeja de la misma fórmula que usa _finalizarVenta para el total neto.
+  const descuentoPuntos = Math.max(0, subtotalLineas - descuento - descuentoCupon + propina - total);
+  const hayAjustes = descuento > 0 || descuentoCupon > 0 || descuentoPuntos > 0 || propina > 0;
 
   const filas = detalles.map(d => {
+    const esCombo = !!d.combo;
     const esPesable = d.peso != null;
     const cantEtiqueta = esPesable ? parseFloat(d.peso).toFixed(3) : d.cantidad;
     const precioEtiqueta = esPesable
       ? `${parseFloat(d.producto?.precio ?? 0).toFixed(2)}/kg`
       : parseFloat(d.precio).toFixed(2);
     const subtotal = (parseFloat(d.precio) * d.cantidad).toFixed(2);
+    const nombre = d.producto?.nombre ?? (esCombo ? `Combo: ${d.combo.nombre}` : '');
+    const contenidoCombo = esCombo && d.combo.productos?.length
+      ? `<br><span class="prod-combo-detalle">${d.combo.productos.map(p => `${p.ComboProducto?.cantidad ?? 1}x ${p.nombre}`).join(', ')}</span>`
+      : '';
     return `
     <tr class="fila-prod">
-      <td class="col-prod"><span class="prod-nombre">${d.producto?.nombre ?? ''}</span></td>
+      <td class="col-prod"><span class="prod-nombre">${nombre}</span>${contenidoCombo}</td>
       <td class="col-cant">${cantEtiqueta}</td>
       <td class="col-precio">${precioEtiqueta}</td>
       <td class="col-sub">${subtotal}</td>
@@ -125,16 +148,23 @@ export function imprimirTicketVenta(pedido, pago, config = {}, numeroOrdenDiario
     .col-sub   { width: 24%; text-align: right; font-weight: 700; }
 
     .prod-nombre { font-weight: 700; font-size: 14px; line-height: 1.3; }
+    .prod-combo-detalle { font-size: 8.5px; font-style: italic; color: #555; }
 
     .total-bloque { margin-top: 3px; }
     .total-row {
       display: flex; justify-content: space-between;
       padding: 1px 0; font-size: 10px;
     }
+    .total-row.descuento { color: #b00; }
     .total-row.principal {
       font-size: 14px; font-weight: 700;
       margin-top: 2px; padding-top: 3px;
       border-top: 2px solid #000;
+    }
+
+    .puntos-bloque {
+      margin-top: 3px; padding: 3px 5px;
+      border: 1px dashed #000; font-size: 9px;
     }
 
     .footer {
@@ -200,6 +230,11 @@ ${['', ''].map((_, i) => `
   </table>
 
   <div class="total-bloque">
+    ${hayAjustes ? `<div class="total-row"><span>Subtotal</span><span>${simbolo} ${subtotalLineas.toFixed(2)}</span></div>` : ''}
+    ${descuento > 0 ? `<div class="total-row descuento"><span>Descuento</span><span>-${simbolo} ${descuento.toFixed(2)}</span></div>` : ''}
+    ${descuentoCupon > 0 ? `<div class="total-row descuento"><span>Cupón${pedido.cupon ? ` (${pedido.cupon.codigo})` : ''}</span><span>-${simbolo} ${descuentoCupon.toFixed(2)}</span></div>` : ''}
+    ${descuentoPuntos > 0 ? `<div class="total-row descuento"><span>Puntos canjeados (${puntosCanjeados})</span><span>-${simbolo} ${descuentoPuntos.toFixed(2)}</span></div>` : ''}
+    ${propina > 0 ? `<div class="total-row"><span>Propina</span><span>${simbolo} ${propina.toFixed(2)}</span></div>` : ''}
     <div class="total-row principal">
       <span>TOTAL</span>
       <span>${simbolo} ${parseFloat(total).toFixed(2)}</span>
@@ -207,6 +242,13 @@ ${['', ''].map((_, i) => `
   </div>
 
   <div class="info-row"><span class="info-label">Forma de pago</span><span class="info-valor">${metodoPagoLabel}</span></div>
+
+  ${pedido.cliente && (puntosGanados > 0 || pedido.cliente.puntos != null) ? `
+  <div class="puntos-bloque">
+    ${pedido.cliente.nombre ? `<div>Cliente: <b>${pedido.cliente.nombre}</b></div>` : ''}
+    ${puntosGanados > 0 ? `<div>+ ${puntosGanados} puntos ganados</div>` : ''}
+    ${pedido.cliente.puntos != null ? `<div>Saldo de puntos: <b>${pedido.cliente.puntos}</b></div>` : ''}
+  </div>` : ''}
 
   <hr class="sdash"/>
 

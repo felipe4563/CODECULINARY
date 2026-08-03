@@ -338,7 +338,24 @@ function buildCaja(data) {
   var hora        = ahora.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' });
   var sym         = cfg.simbolo_moneda || 'Bs.';
   var nombre      = cfg.nombre_negocio || 'RESTAURANTE';
-  var total       = parseFloat(pedido.total);
+
+  var detallesTotal   = pedido.detalles || [];
+  var subtotalLineas  = detallesTotal.reduce(function(s, d) { return s + parseFloat(d.precio) * d.cantidad; }, 0);
+  var montoRecibido   = pedido.monto_recibido != null ? parseFloat(pedido.monto_recibido) : null;
+  var cambioTotal     = parseFloat(pedido.cambio || 0);
+  // Total realmente cobrado: se deriva de monto_recibido - cambio (coherente
+  // en efectivo y QR — ver _finalizarVenta en el backend), no de pedido.total,
+  // que no refleja descuentos, cupón ni puntos canjeados.
+  var total           = montoRecibido != null ? montoRecibido - cambioTotal : subtotalLineas;
+  var descuento       = parseFloat(pedido.descuento || 0);
+  var propina         = parseFloat(pedido.propina || 0);
+  var descuentoCupon  = parseFloat(pedido.descuento_cupon || 0);
+  var puntosGanados   = pedido.puntos_ganados || 0;
+  var puntosCanjeados = pedido.puntos_canjeados || 0;
+  // El descuento en Bs por canje de puntos no se guarda como columna propia:
+  // se despeja de la misma fórmula que usa _finalizarVenta para el total neto.
+  var descuentoPuntos = Math.max(0, subtotalLineas - descuento - descuentoCupon + propina - total);
+  var hayAjustes      = descuento > 0 || descuentoCupon > 0 || descuentoPuntos > 0 || propina > 0;
 
   var t = new Esc();
   t.init().charset();
@@ -369,9 +386,10 @@ function buildCaja(data) {
   t.rule('-');
   var detalles = pedido.detalles || [];
   for (var i = 0; i < detalles.length; i++) {
-    var d    = detalles[i];
-    var prod = String((d.producto && d.producto.nombre) ? d.producto.nombre : '').toUpperCase();
-    var sub  = (parseFloat(d.precio) * d.cantidad).toFixed(2);
+    var d       = detalles[i];
+    var esCombo = !!d.combo;
+    var prod    = String(esCombo ? ('COMBO: ' + d.combo.nombre) : ((d.producto && d.producto.nombre) ? d.producto.nombre : '')).toUpperCase();
+    var sub     = (parseFloat(d.precio) * d.cantidad).toFixed(2);
     if (d.peso != null) {
       var pesoKg   = parseFloat(d.peso).toFixed(3);
       var precioKg = parseFloat((d.producto && d.producto.precio) || 0).toFixed(2);
@@ -383,17 +401,42 @@ function buildCaja(data) {
       t.left().cols('  ' + qty + '   ' + prod, sub);
       if (qty > 1) t.left().line('        (' + sym + ' ' + pu + ' c/u)');
     }
+    if (esCombo && d.combo.productos && d.combo.productos.length) {
+      var contenidoCombo = d.combo.productos.map(function(p) {
+        var cant = (p.ComboProducto && p.ComboProducto.cantidad) || 1;
+        return cant + 'x ' + p.nombre;
+      }).join(', ');
+      t.left().line('        (' + contenidoCombo + ')');
+    }
     if (d.nota) t.left().bold(true).line('      >> ' + d.nota).bold(false);
   }
   t.rule('-');
 
   // ── Total ─────────────────────────────────────────────────────────────────
+  if (hayAjustes) {
+    t.left().cols('Subtotal', sym + ' ' + subtotalLineas.toFixed(2));
+    if (descuento > 0) t.left().cols('Descuento', '-' + sym + ' ' + descuento.toFixed(2));
+    if (descuentoCupon > 0) {
+      var etiquetaCupon = 'Cupon' + (pedido.cupon ? ' (' + pedido.cupon.codigo + ')' : '');
+      t.left().cols(etiquetaCupon, '-' + sym + ' ' + descuentoCupon.toFixed(2));
+    }
+    if (descuentoPuntos > 0) t.left().cols('Puntos canjeados (' + puntosCanjeados + ')', '-' + sym + ' ' + descuentoPuntos.toFixed(2));
+    if (propina > 0) t.left().cols('Propina', sym + ' ' + propina.toFixed(2));
+  }
   t.left().bold(true).cols('TOTAL ' + sym, total.toFixed(2)).bold(false);
   t.rule('=');
 
   // ── Método de pago ────────────────────────────────────────────────────────
   t.left().line('Forma de pago: ' + (metodo_pago === 'efectivo' ? 'Efectivo' : 'QR / Transferencia'));
   t.rule('-');
+
+  // ── Cliente / puntos de fidelidad ────────────────────────────────────────
+  if (pedido.cliente && (puntosGanados > 0 || pedido.cliente.puntos != null)) {
+    if (pedido.cliente.nombre) t.left().line('Cliente: ' + pedido.cliente.nombre);
+    if (puntosGanados > 0) t.left().line('+ ' + puntosGanados + ' puntos ganados');
+    if (pedido.cliente.puntos != null) t.left().bold(true).line('Saldo de puntos: ' + pedido.cliente.puntos).bold(false);
+    t.rule('-');
+  }
 
   // ── Pie ───────────────────────────────────────────────────────────────────
   t.lf(1).center().line('Gracias por su preferencia').center().line(nombre).lf(3).cut();
@@ -437,9 +480,10 @@ function buildCocina(data) {
   // ── Items ─────────────────────────────────────────────────────────────────
   var detalles2 = pedido.detalles || [];
   for (var j = 0; j < detalles2.length; j++) {
-    var d2    = detalles2[j];
-    var prod2 = String((d2.producto && d2.producto.nombre) ? d2.producto.nombre : '').toUpperCase();
-    var sub2  = (parseFloat(d2.precio) * d2.cantidad).toFixed(2);
+    var d2       = detalles2[j];
+    var esCombo2 = !!d2.combo;
+    var prod2    = String(esCombo2 ? ('COMBO: ' + d2.combo.nombre) : ((d2.producto && d2.producto.nombre) ? d2.producto.nombre : '')).toUpperCase();
+    var sub2     = (parseFloat(d2.precio) * d2.cantidad).toFixed(2);
     if (d2.peso != null) {
       var pesoKg2   = parseFloat(d2.peso).toFixed(3);
       var precioKg2 = parseFloat((d2.producto && d2.producto.precio) || 0).toFixed(2);
@@ -450,6 +494,13 @@ function buildCocina(data) {
       var pu2  = parseFloat(d2.precio).toFixed(2);
       t.left().dbl().bold(true).line(qty2 + '  ' + prod2).normal().bold(false);
       t.left().line('     ' + sym + ' ' + pu2 + ' c/u       Sub: ' + sym + ' ' + sub2);
+    }
+    if (esCombo2 && d2.combo.productos && d2.combo.productos.length) {
+      var contenidoCombo2 = d2.combo.productos.map(function(p) {
+        var cant = (p.ComboProducto && p.ComboProducto.cantidad) || 1;
+        return cant + 'x ' + p.nombre;
+      }).join(', ');
+      t.left().bold(true).line('     >> Incluye: ' + contenidoCombo2).bold(false);
     }
     if (d2.nota) t.left().bold(true).dblH().line(' >> ' + d2.nota).normal().bold(false);
     t.rule('-');
