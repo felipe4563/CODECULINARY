@@ -307,7 +307,7 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar }) {
               <div key={prod.id} className="bg-card border border-border rounded-xl p-3.5 flex items-center gap-3">
                 {prod.imagen ? (
                   <img
-                    src={`${API_BASE}${prod.imagen}`}
+                    src={prod.imagen}
                     alt={prod.nombre}
                     className="w-12 h-12 rounded-lg object-cover shrink-0 border border-border"
                   />
@@ -377,7 +377,7 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar }) {
                         <div className="flex items-center gap-3">
                           {prod.imagen ? (
                             <img
-                              src={`${API_BASE}${prod.imagen}`}
+                              src={prod.imagen}
                               alt={prod.nombre}
                               className="w-10 h-10 rounded-lg object-cover shrink-0 border border-border"
                             />
@@ -503,7 +503,7 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
     es_pesable:   prod?.es_pesable ?? false,
     imagen:       prod?.imagen ?? null,
   });
-  const [preview, setPreview] = useState(prod?.imagen ? `${API_BASE}${prod.imagen}` : null);
+  const [preview, setPreview] = useState(prod?.imagen ?? null);
   const [subiendoImg, setSubiendoImg] = useState(false);
   const [errImg, setErrImg] = useState(null);
   const inputFileRef = useRef(null);

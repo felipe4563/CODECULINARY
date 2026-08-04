@@ -5,7 +5,7 @@ const {
 const { emitir } = require('../../socket');
 const { ajustarStockSucursal } = require('../inventario/stock.service');
 const codepayClient = require('../../integrations/codepay/codepay.client');
-const { calcularPrecioPesable } = require('../../utils/precio');
+const { calcularPrecioPesable, redondearAMedio } = require('../../utils/precio');
 const { estaActivoHoy } = require('../../utils/disponibilidad');
 const { resolver: _resolverCupon } = require('../cupones/cupones.service');
 
@@ -43,7 +43,7 @@ async function _precioConPromocion(producto) {
   const promo = await Promocion.findOne({ where: { producto_id: producto.id, activo: 1 }, order: [['id', 'DESC']] });
   if (!promo || !estaActivoHoy(promo)) return base;
   const descuento = promo.tipo === 'porcentaje' ? base * (parseFloat(promo.valor) / 100) : parseFloat(promo.valor);
-  return Math.max(0, base - descuento);
+  return redondearAMedio(Math.max(0, base - descuento));
 }
 
 // Lee la configuración del programa de fidelidad (puntos por Bs gastado y
@@ -305,8 +305,12 @@ async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, 
   }
 
   if (pedido.tipo !== 'llevar' && pedido.mesa_id) {
-    const pendientes = await Pedido.count({ where: { mesa_id: pedido.mesa_id, estado: 'pendiente' }, transaction });
-    if (pendientes === 0) {
+    // 'listo' también cuenta como pedido activo sin cobrar todavía — si acá
+    // solo se mira 'pendiente', un pedido que ya pasó a 'listo' en cocina
+    // pero no se cobró queda huérfano: la mesa se libera igual y el pedido
+    // sigue apareciendo en pantalla como si nada.
+    const activos = await Pedido.count({ where: { mesa_id: pedido.mesa_id, estado: ['pendiente', 'listo'] }, transaction });
+    if (activos === 0) {
       await Mesa.update({ estado: 'disponible' }, { where: { id: pedido.mesa_id }, transaction });
     }
   }
@@ -790,8 +794,8 @@ async function cancelar(pedido_id, usuario_id, alcance) {
   await pedido.update({ estado: 'cancelado' });
 
   if (pedido.tipo !== 'llevar' && pedido.mesa_id) {
-    const pendientes = await Pedido.count({ where: { mesa_id: pedido.mesa_id, estado: 'pendiente' } });
-    if (pendientes === 0) {
+    const activos = await Pedido.count({ where: { mesa_id: pedido.mesa_id, estado: ['pendiente', 'listo'] } });
+    if (activos === 0) {
       await Mesa.update({ estado: 'disponible' }, { where: { id: pedido.mesa_id } });
     }
   }

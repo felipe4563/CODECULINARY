@@ -20,3 +20,6 @@ backend/uploads/*
 # Documentación de la API de Personas (registro civil) — contiene credenciales
 # de ejemplo y URLs de un servicio de terceros, no se sube al repo.
 api_personas/
+
+# Doc interna para coordinar con el equipo de la app de pedidos — no se sube.
+docs/sincronizacion-productos-websocket.md

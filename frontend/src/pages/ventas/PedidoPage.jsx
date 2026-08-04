@@ -11,14 +11,12 @@ import { getCategorias } from '../../api/categorias';
 import { getCombosActivos } from '../../api/combos';
 import ClienteFidelidad from './components/ClienteFidelidad';
 import CuponInput from './components/CuponInput';
-import { BASE_URL, getConfiguracion } from '../../api/configuracion';
+import { getConfiguracion } from '../../api/configuracion';
 import { imprimirLocal, reimprimirConFallback } from '../../utils/impresionLocal';
 import { usePermisos } from '../../hooks/usePermisos';
 import Modal from '../../components/ui/Modal';
 import ModalPagoQr from './components/ModalPagoQr';
 import ModalPeso from './components/ModalPeso';
-
-const API_BASE = BASE_URL;
 
 export default function PedidoPage() {
   const { id } = useParams();
@@ -349,7 +347,7 @@ export default function PedidoPage() {
                       <div className="w-full aspect-square bg-gray-100 dark:bg-gray-700 overflow-hidden">
                         {prod.imagen ? (
                           <img
-                            src={`${API_BASE}${prod.imagen}`}
+                            src={prod.imagen}
                             alt={prod.nombre}
                             className="w-full h-full object-cover"
                           />

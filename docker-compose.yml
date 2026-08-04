@@ -35,6 +35,7 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
       CORS_ORIGIN: ${CORS_ORIGIN:-https://cdemo.codewave.com.bo}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-https://cdemo.codewave.com.bo}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD es obligatorio}
       CODEPAY_SANDBOX: ${CODEPAY_SANDBOX:-true}
       CODEPAY_API_URL: ${CODEPAY_API_URL:-https://payapi.codewave.com.bo/api}

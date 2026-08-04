@@ -14,11 +14,11 @@ import { getCombosActivos } from '../../api/combos';
 import { getPromocionesActivas } from '../../api/promociones';
 import ClienteFidelidad from './components/ClienteFidelidad';
 import CuponInput from './components/CuponInput';
-import { BASE_URL, getConfiguracion } from '../../api/configuracion';
+import { getConfiguracion } from '../../api/configuracion';
 import { usePermisos } from '../../hooks/usePermisos';
 import { useAuth } from '../../hooks/useAuth';
 import { imprimirLocal, reimprimirConFallback } from '../../utils/impresionLocal';
-import { calcularPrecioPesable } from '../../utils/precio';
+import { calcularPrecioPesable, redondearAMedio } from '../../utils/precio';
 import ModalLlevar from './components/ModalLlevar';
 import ModalMesas from './components/ModalMesas';
 import CategoriasBar from './components/CategoriasBar';
@@ -109,7 +109,7 @@ export default function VentasPage() {
     const promo = promoPorProducto[prod.id];
     if (!promo) return base;
     const descuento = promo.tipo === 'porcentaje' ? base * (parseFloat(promo.valor) / 100) : parseFloat(promo.valor);
-    return Math.max(0, base - descuento);
+    return redondearAMedio(Math.max(0, base - descuento));
   }
 
   useEffect(() => {
@@ -342,7 +342,7 @@ export default function VentasPage() {
                     >
                       <div className="w-full aspect-square bg-muted overflow-hidden">
                         {prod.imagen ? (
-                          <img src={`${BASE_URL}${prod.imagen}`} alt={prod.nombre} className="w-full h-full object-cover" />
+                          <img src={prod.imagen} alt={prod.nombre} className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
                             <Package className="w-10 h-10 text-muted-foreground" />

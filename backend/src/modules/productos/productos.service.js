@@ -1,6 +1,16 @@
 const { Categoria, Producto, Sucursal, GrupoOpciones, Opcion, ProductoGrupoOpciones, DetallePedido } = require('../../models');
 const sequelize = require('../../config/database');
 const { ajustarStockSucursal, mezclarStockPorSucursal } = require('../inventario/stock.service');
+const { emitir } = require('../../socket');
+
+// Avisa a la app de pedidos (y a cualquier otro cliente conectado, p. ej. el
+// admin en otra pestaña) que el catálogo cambió, para que refresque contra
+// GET /productos — no manda el producto completo por socket, solo la señal.
+// Se emite sin sucursal_id (a todos): el catálogo es el mismo en todas las
+// sucursales, solo el stock varía, y eso todavía no sincroniza en vivo.
+function _avisarCambioProducto(tipo, producto_id) {
+  emitir('productos:actualizado', { tipo, producto_id });
+}
 
 // --- Categorías ---
 
@@ -102,7 +112,18 @@ async function _sincronizarGruposOpciones(producto_id, grupos_opciones = [], tra
   }
 }
 
+// Arma la URL completa de la imagen a partir de la ruta relativa guardada
+// en BD (ej. "/uploads/xxx.jpg") — así cualquier cliente (frontend propio,
+// app de pedidos externa, etc.) la puede usar directo en un <img src> sin
+// tener que conocer/armar la URL base del backend.
+function _urlAbsoluta(ruta) {
+  if (!ruta) return ruta;
+  const base = (process.env.PUBLIC_API_URL || '').replace(/\/+$/, '');
+  return `${base}${ruta}`;
+}
+
 function _normalizarGruposOpciones(producto) {
+  producto.imagen = _urlAbsoluta(producto.imagen);
   if (Array.isArray(producto.grupos_opciones)) {
     producto.grupos_opciones = producto.grupos_opciones
       .map((g) => ({
@@ -201,6 +222,7 @@ async function crearProducto({ categoria_id, nombre, precio, stock, sucursal_id,
     await ajustarStockSucursal({ producto_id: producto.id, sucursal_id: sucursalDestino, tipo: 'ajuste', cantidad: stock, usuario_id: alcance.usuario_id, nota: 'Stock inicial' });
   }
 
+  _avisarCambioProducto('creado', producto.id);
   return obtenerProducto(producto.id, alcance);
 }
 
@@ -214,6 +236,7 @@ async function actualizarProducto(id, datos, alcance) {
       await _sincronizarGruposOpciones(id, grupos_opciones, t);
     }
   });
+  _avisarCambioProducto('actualizado', id);
   return obtenerProducto(id, alcance);
 }
 
@@ -224,9 +247,11 @@ async function eliminarProducto(id) {
   const tieneVentas = await DetallePedido.count({ where: { producto_id: id } });
   if (tieneVentas > 0) {
     await p.update({ activo: 0 });
+    _avisarCambioProducto('actualizado', id);
     return { eliminado: false };
   }
   await p.destroy();
+  _avisarCambioProducto('eliminado', id);
   return { eliminado: true };
 }
 

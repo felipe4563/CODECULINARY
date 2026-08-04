@@ -32,6 +32,29 @@ function BadgeTipo({ tipo }) {
   );
 }
 
+// Tailwind escanea el código buscando nombres de clase completos y
+// literales en build time — una clase armada con interpolación, como
+// `bg-${color}-600`, nunca queda incluida en el CSS final (ni el color se
+// ve, ni el texto). Por eso acá van los estilos completos por color, en vez
+// de construir el string dinámicamente.
+const ESTILOS_TIPO = {
+  emerald: {
+    header: 'bg-emerald-600',
+    tabActivo: 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400',
+    boton: 'bg-emerald-600 hover:bg-emerald-700',
+  },
+  rose: {
+    header: 'bg-rose-600',
+    tabActivo: 'border-rose-500 bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400',
+    boton: 'bg-rose-600 hover:bg-rose-700',
+  },
+  amber: {
+    header: 'bg-amber-600',
+    tabActivo: 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400',
+    boton: 'bg-amber-600 hover:bg-amber-700',
+  },
+};
+
 /* ─── modal movimiento ─── */
 function ModalMovimiento({ productos, accesoTodas, sucursales, onClose, onGuardar }) {
   const [tipo, setTipo] = useState('entrada');
@@ -42,6 +65,7 @@ function ModalMovimiento({ productos, accesoTodas, sucursales, onClose, onGuarda
   const [error, setError] = useState('');
 
   const accentColor = tipo === 'entrada' ? 'emerald' : tipo === 'salida' ? 'rose' : 'amber';
+  const estilos = ESTILOS_TIPO[accentColor];
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -67,7 +91,7 @@ function ModalMovimiento({ productos, accesoTodas, sucursales, onClose, onGuarda
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
       <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md border border-border">
         {/* header */}
-        <div className={`px-6 py-4 rounded-t-2xl bg-${accentColor}-600 flex items-center justify-between`}>
+        <div className={`px-6 py-4 rounded-t-2xl ${estilos.header} flex items-center justify-between`}>
           <h2 className="text-white font-semibold text-base">
             {tipo === 'entrada' ? 'Registrar Entrada' : tipo === 'salida' ? 'Registrar Salida' : 'Ajuste de Stock'}
           </h2>
@@ -94,7 +118,7 @@ function ModalMovimiento({ productos, accesoTodas, sucursales, onClose, onGuarda
                   onClick={() => setTipo(v)}
                   className={`flex-1 py-2 rounded-lg text-sm font-medium border-2 transition-all ${
                     tipo === v
-                      ? `border-${color}-500 bg-${color}-50 dark:bg-${color}-900/20 text-${color}-700 dark:text-${color}-400`
+                      ? ESTILOS_TIPO[color].tabActivo
                       : 'border-border text-muted-foreground hover:border-muted-foreground'
                   }`}
                 >
@@ -185,7 +209,7 @@ function ModalMovimiento({ productos, accesoTodas, sucursales, onClose, onGuarda
             </button>
             <button
               type="submit"
-              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors bg-${accentColor}-600 hover:bg-${accentColor}-700`}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors ${estilos.boton}`}
             >
               Registrar
             </button>
