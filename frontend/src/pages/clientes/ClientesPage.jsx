@@ -146,7 +146,7 @@ function ModalCliente({ cliente, onClose, onGuardar, loading }) {
               {/* buscar por código interno (primero) */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
-                  Buscar por código <span className="font-normal normal-case">(opcional, para autocompletar)</span>
+                  Buscar por CI
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -181,7 +181,7 @@ function ModalCliente({ cliente, onClose, onGuardar, loading }) {
               ) : (
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
-                    Buscar por nombre <span className="font-normal normal-case">(opcional, para autocompletar)</span>
+                    Buscar por nombre
                   </label>
                   <div className="relative">
                     <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
