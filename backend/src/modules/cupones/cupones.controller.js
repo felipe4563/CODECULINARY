@@ -32,4 +32,9 @@ async function validar(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { listar, obtener, crear, actualizar, eliminar, validar };
+async function disponiblesPorCliente(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.listarPorCliente(req.query.cliente_id || null) }); }
+  catch (err) { next(err); }
+}
+
+module.exports = { listar, obtener, crear, actualizar, eliminar, validar, disponiblesPorCliente };

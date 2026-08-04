@@ -1,3 +1,4 @@
+const { Sequelize, Op } = require('sequelize');
 const { Cupon, Pedido, Cliente } = require('../../models');
 const { estaActivoHoy } = require('../../utils/disponibilidad');
 
@@ -151,4 +152,31 @@ async function validar(codigo, subtotal, cliente_id) {
   return { codigo: cupon.codigo, tipo: cupon.tipo, valor: parseFloat(cupon.valor), descuento };
 }
 
-module.exports = { listar, obtener, crear, actualizar, eliminar, resolver, validar };
+// Cupones exclusivos de un cliente (cliente_id del cupón = este cliente),
+// activos, con usos disponibles y vigentes — para que en el checkout se
+// elijan de una lista en vez de tener que dictar/tipear el código. Los
+// cupones públicos (sin cliente_id) siguen siendo por código manual.
+async function listarPorCliente(cliente_id) {
+  if (!cliente_id) return [];
+  const cupones = await Cupon.findAll({
+    where: {
+      cliente_id,
+      activo: 1,
+      [Op.and]: Sequelize.literal('usos_actuales < usos_maximos'),
+    },
+    order: [['fecha_expiracion', 'ASC'], ['creado_en', 'DESC']],
+  });
+
+  const disponibles = [];
+  for (const cupon of cupones) {
+    if (!estaActivoHoy({ fecha_fin: cupon.fecha_expiracion })) continue;
+    if (cupon.limite_por_cliente) {
+      const usosCliente = await Pedido.count({ where: { cupon_id: cupon.id, cliente_id, estado: 'completado' } });
+      if (usosCliente >= cupon.limite_por_cliente) continue;
+    }
+    disponibles.push(cupon);
+  }
+  return disponibles;
+}
+
+module.exports = { listar, obtener, crear, actualizar, eliminar, resolver, validar, listarPorCliente };
