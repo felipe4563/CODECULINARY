@@ -640,7 +640,7 @@ function ModalCobrar({ total, pedidoId, onClose, onExito }) {
   const puedeCanjearPuntos = metodo === 'qr' ? config.fidelidad_canje_qr === 'true' : config.fidelidad_canje_efectivo !== 'false';
 
   const descuentoCupon = cuponAplicado?.descuento ?? 0;
-  const totalFinal = Math.max(0, total - (puedeCanjearPuntos ? descuentoPuntos : 0) - (metodo === 'efectivo' ? descuentoCupon : 0));
+  const totalFinal = Math.max(0, total - (puedeCanjearPuntos ? descuentoPuntos : 0) - descuentoCupon);
 
   const reimprimir = useMutation({
     mutationFn: () => reimprimirVenta(pedidoId),
@@ -651,7 +651,7 @@ function ModalCobrar({ total, pedidoId, onClose, onExito }) {
     mutationFn: () => cobrarVenta(pedidoId, {
       metodo_pago: metodo, monto_recibido: totalFinal,
       cliente_id: clienteFidelidad?.id, puntos_canjear: puedeCanjearPuntos ? puntosCanjear : 0,
-      cupon_codigo: metodo === 'efectivo' ? cuponAplicado?.codigo : undefined,
+      cupon_codigo: cuponAplicado?.codigo,
     }),
     onSuccess: (resultado) => {
       if (resultado.pago_qr) {
@@ -717,7 +717,7 @@ function ModalCobrar({ total, pedidoId, onClose, onExito }) {
         {/* Total */}
         <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 text-center">
           <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Total a cobrar</p>
-          {(puedeCanjearPuntos && descuentoPuntos > 0) || (metodo === 'efectivo' && descuentoCupon > 0) ? (
+          {(puedeCanjearPuntos && descuentoPuntos > 0) || descuentoCupon > 0 ? (
             <>
               <p className="text-sm text-gray-400 line-through">Bs {total.toFixed(2)}</p>
               <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">Bs {totalFinal.toFixed(2)}</p>

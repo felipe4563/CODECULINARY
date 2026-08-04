@@ -158,7 +158,7 @@ async function imprimirCocina(datos, origen, forzar) {
 
 const socket = io(config.servidor, {
   reconnection: true,
-  reconnectionDelay: 3000,
+  reconnectionDelay: 1500,
   reconnectionAttempts: Infinity,
 });
 

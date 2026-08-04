@@ -16,6 +16,8 @@ const Pedido = sequelize.define('Pedido', {
   documento_cliente: { type: DataTypes.STRING(50) },
   total: { type: DataTypes.DECIMAL(10,2), defaultValue: 0 },
   descuento: { type: DataTypes.DECIMAL(10,2), defaultValue: 0 },
+  cupon_id: { type: DataTypes.INTEGER.UNSIGNED },
+  descuento_cupon: { type: DataTypes.DECIMAL(10,2), defaultValue: 0 },
   propina: { type: DataTypes.DECIMAL(10,2), defaultValue: 0 },
   puntos_ganados: { type: DataTypes.INTEGER, defaultValue: 0 },
   puntos_canjeados: { type: DataTypes.INTEGER, defaultValue: 0 },

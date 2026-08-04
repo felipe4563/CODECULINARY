@@ -556,17 +556,17 @@ Add-Type -AssemblyName System.Windows.Forms
 // sesión del usuario, no como SYSTEM (ver comentario en registrarTareaNotificador).
 function registrarTareaNotificador() {
   const ps1Path = path.join(INSTALL_DIR, 'notificador.ps1');
-  const ps1 = `Start-Sleep -Seconds 30
+  const ps1 = `Start-Sleep -Seconds 15
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-# Reintenta durante ~5.5 minutos: recién arrancada la PC hay mucha competencia
+# Reintenta durante ~3.25 minutos: recién arrancada la PC hay mucha competencia
 # por CPU/disco (otros programas de inicio), así que el primer intento del
-# agente puede tardar o fallar. La tarea vigía ya lo relanza sola cada 5 min
+# agente puede tardar o fallar. La tarea vigía ya lo relanza sola cada 2 min
 # si hace falta — este aviso espera a que ese ciclo tenga chance de resolverlo
 # solo, en vez de alarmar de más por algo que se autocorrige.
 $ok = $false
-for ($i = 0; $i -lt 22; $i++) {
+for ($i = 0; $i -lt 12; $i++) {
   try {
     $r = Invoke-RestMethod -Uri "http://127.0.0.1:4321/salud" -TimeoutSec 3
     if ($r.ok) { $ok = $true; break }
@@ -650,7 +650,7 @@ function install(cfg) {
     //    schtasks NO inicia la tarea si la PC esta en bateria — en una laptop, o
     //    una PC de caja en UPS durante un corte, eso hace que nunca arranque):
     //      - TASK_NAME: al encender/reiniciar la PC (antes del login).
-    //      - TASK_NAME_VIGIA: cada 5 min, relanza el agente si se cayó. El propio
+    //      - TASK_NAME_VIGIA: cada 2 min, relanza el agente si se cayó. El propio
     //        agent.js ya se auto-descarta (agente.lock) si detecta que ya hay una
     //        instancia corriendo, así que esto no genera duplicados.
     const comandoArgs = `"${vbsPath}"`;
@@ -660,19 +660,19 @@ function install(cfg) {
       'Agente de impresion termica automatica (caja + cocina) - inicio del sistema',
       `    <BootTrigger>
       <Enabled>true</Enabled>
-      <Delay>PT30S</Delay>
+      <Delay>PT10S</Delay>
     </BootTrigger>`,
       comandoArgs
     );
 
     crearTareaXml(
       TASK_NAME_VIGIA,
-      'Agente de impresion termica automatica (caja + cocina) - vigia cada 5 min',
+      'Agente de impresion termica automatica (caja + cocina) - vigia cada 2 min',
       `    <TimeTrigger>
       <Enabled>true</Enabled>
       <StartBoundary>${xmlStartBoundaryLocal(new Date())}</StartBoundary>
       <Repetition>
-        <Interval>PT5M</Interval>
+        <Interval>PT2M</Interval>
         <StopAtDurationEnd>false</StopAtDurationEnd>
       </Repetition>
     </TimeTrigger>`,
@@ -721,7 +721,7 @@ function leerConfigInstalada() {
 function uninstall() {
   try {
     // 1. Eliminar las tareas del Programador de tareas PRIMERO — si se mata el
-    //    proceso antes, la tarea vigía (corre cada 5 min) podría relanzarlo
+    //    proceso antes, la tarea vigía (corre cada 2 min) podría relanzarlo
     //    justo en ese hueco.
     for (const tn of [TASK_NAME, TASK_NAME_VIGIA, TASK_NAME_NOTIF]) {
       try { execSync(`schtasks /delete /tn "${tn}" /f`, { stdio: 'pipe' }); } catch {}
