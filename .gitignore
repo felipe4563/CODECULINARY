@@ -16,3 +16,7 @@ node_modules/
 # Archivos subidos por usuarios (imágenes de productos, logo, etc.)
 backend/uploads/*
 !backend/uploads/.gitkeep
+
+# Documentación de la API de Personas (registro civil) — contiene credenciales
+# de ejemplo y URLs de un servicio de terceros, no se sube al repo.
+api_personas/

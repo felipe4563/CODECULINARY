@@ -28,7 +28,7 @@ async function eliminar(req, res, next) {
 async function validar(req, res, next) {
   try {
     const subtotal = parseFloat(req.query.subtotal || 0);
-    res.json({ ok: true, datos: await svc.validar(req.params.codigo, subtotal) });
+    res.json({ ok: true, datos: await svc.validar(req.params.codigo, subtotal, req.query.cliente_id || null) });
   } catch (err) { next(err); }
 }
 

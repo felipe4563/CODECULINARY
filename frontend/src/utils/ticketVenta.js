@@ -34,6 +34,10 @@ export function imprimirTicketVenta(pedido, pago, config = {}, numeroOrdenDiario
   // se despeja de la misma fórmula que usa _finalizarVenta para el total neto.
   const descuentoPuntos = Math.max(0, subtotalLineas - descuento - descuentoCupon + propina - total);
   const hayAjustes = descuento > 0 || descuentoCupon > 0 || descuentoPuntos > 0 || propina > 0;
+  // Cupón generado por la promo de cumpleaños (ver cumpleanos.job.js en el
+  // backend — código con prefijo "CUMPLE"): además de la línea normal de
+  // descuento, un banner festivo con el nombre del cliente.
+  const esCuponCumple = pedido.cupon && /^CUMPLE/.test(pedido.cupon.codigo);
 
   const filas = detalles.map(d => {
     const esCombo = !!d.combo;
@@ -167,6 +171,12 @@ export function imprimirTicketVenta(pedido, pago, config = {}, numeroOrdenDiario
       border: 1px dashed #000; font-size: 9px;
     }
 
+    .cumple-banner {
+      margin-top: 3px; padding: 3px 0;
+      text-align: center; font-weight: 700; font-size: 10px;
+      border-top: 1px dashed #000; border-bottom: 1px dashed #000;
+    }
+
     .footer {
       margin-top: 8px; text-align: center;
       font-size: 9px; color: #555;
@@ -233,6 +243,7 @@ ${['', ''].map((_, i) => `
     ${hayAjustes ? `<div class="total-row"><span>Subtotal</span><span>${simbolo} ${subtotalLineas.toFixed(2)}</span></div>` : ''}
     ${descuento > 0 ? `<div class="total-row descuento"><span>Descuento</span><span>-${simbolo} ${descuento.toFixed(2)}</span></div>` : ''}
     ${descuentoCupon > 0 ? `<div class="total-row descuento"><span>Cupón${pedido.cupon ? ` (${pedido.cupon.codigo})` : ''}</span><span>-${simbolo} ${descuentoCupon.toFixed(2)}</span></div>` : ''}
+    ${esCuponCumple ? `<div class="cumple-banner">🎂 ¡Feliz cumpleaños${pedido.cliente?.nombre ? `, ${pedido.cliente.nombre}` : ''}!</div>` : ''}
     ${descuentoPuntos > 0 ? `<div class="total-row descuento"><span>Puntos canjeados (${puntosCanjeados})</span><span>-${simbolo} ${descuentoPuntos.toFixed(2)}</span></div>` : ''}
     ${propina > 0 ? `<div class="total-row"><span>Propina</span><span>${simbolo} ${propina.toFixed(2)}</span></div>` : ''}
     <div class="total-row principal">

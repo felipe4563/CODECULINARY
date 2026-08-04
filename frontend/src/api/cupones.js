@@ -5,4 +5,4 @@ export const getCupon         = (id)        => api.get(`/cupones/${id}`).then(r 
 export const crearCupon       = (datos)     => api.post('/cupones', datos).then(r => r.data.datos);
 export const actualizarCupon  = (id, datos) => api.put(`/cupones/${id}`, datos).then(r => r.data.datos);
 export const eliminarCupon    = (id)        => api.delete(`/cupones/${id}`).then(r => r.data.datos);
-export const validarCupon     = (codigo, subtotal) => api.get(`/cupones/validar/${encodeURIComponent(codigo)}`, { params: { subtotal } }).then(r => r.data.datos);
+export const validarCupon     = (codigo, subtotal, cliente_id) => api.get(`/cupones/validar/${encodeURIComponent(codigo)}`, { params: { subtotal, cliente_id } }).then(r => r.data.datos);

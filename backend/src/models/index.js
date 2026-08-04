@@ -91,6 +91,7 @@ Producto.hasMany(Promocion, { foreignKey: 'producto_id', as: 'promociones' });
 // Cupones
 Pedido.belongsTo(Cupon, { foreignKey: 'cupon_id', as: 'cupon' });
 Cupon.belongsTo(Usuario, { foreignKey: 'creado_por', as: 'creador' });
+Cupon.belongsTo(Cliente, { foreignKey: 'cliente_id', as: 'cliente' });
 
 // SesionCaja
 SesionCaja.belongsTo(Usuario, { foreignKey: 'usuario_id', as: 'usuario' });

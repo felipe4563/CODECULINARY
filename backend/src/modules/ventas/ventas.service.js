@@ -47,7 +47,7 @@ async function _precioConPromocion(producto) {
 // validaciones tempranas antes de abrir la transacción.
 async function _configFidelidad(transaction) {
   const rows = await Configuracion.findAll({
-    where: { clave: ['fidelidad_activa', 'puntos_por_bs', 'valor_punto_bs'] },
+    where: { clave: ['fidelidad_activa', 'puntos_por_bs', 'valor_punto_bs', 'fidelidad_canje_efectivo', 'fidelidad_canje_qr'] },
     transaction,
   });
   const cfg = rows.reduce((o, r) => { o[r.clave] = r.valor; return o; }, {});
@@ -55,6 +55,12 @@ async function _configFidelidad(transaction) {
     activa: cfg.fidelidad_activa === 'true',
     puntosPorBs: parseFloat(cfg.puntos_por_bs || 0),
     valorPunto: parseFloat(cfg.valor_punto_bs || 0),
+    // Default true por retrocompatibilidad (antes de esta config, el canje
+    // en efectivo siempre estaba permitido). El de QR default false: recién
+    // se puede sostener porque iniciarPagoQr reserva los puntos al generar
+    // el QR (ver más abajo) — antes de eso, no había forma de hacerlo bien.
+    canjeEfectivo: cfg.fidelidad_canje_efectivo !== 'false',
+    canjeQr: cfg.fidelidad_canje_qr === 'true',
   };
 }
 
@@ -63,9 +69,12 @@ async function _configFidelidad(transaction) {
 // (antes de abrir la transacción, para dar un error rápido), y de nuevo
 // dentro de la transacción de _finalizarVenta con lock de fila, que es la
 // que realmente descuenta los puntos — nunca se confía en el balance leído
-// fuera de la transacción para el descuento real.
-async function _resolverCanje(cliente_id, puntos_canjear, cfg, transaction) {
-  if (!cfg.activa || !cliente_id || !puntos_canjear) return { puntos: 0, descuento: 0, cliente: null };
+// fuera de la transacción para el descuento real. `metodoPago` filtra por lo
+// que el negocio permitió en Configuración (efectivo y QR se controlan por
+// separado).
+async function _resolverCanje(cliente_id, puntos_canjear, cfg, transaction, metodoPago = 'efectivo') {
+  const permitido = metodoPago === 'qr' ? cfg.canjeQr : cfg.canjeEfectivo;
+  if (!cfg.activa || !permitido || !cliente_id || !puntos_canjear) return { puntos: 0, descuento: 0, cliente: null };
   const cliente = await Cliente.findByPk(cliente_id, transaction ? { transaction, lock: transaction.LOCK.UPDATE } : {});
   if (!cliente || puntos_canjear > cliente.puntos) {
     throw Object.assign(new Error('El cliente no tiene suficientes puntos'), { status: 400 });
@@ -238,12 +247,24 @@ async function crear({ mesa_id, tipo = 'mesa', usuario_id, cliente_id, sesion_ca
  * libro de caja y libera la mesa si corresponde. Debe correr dentro de una
  * transacción activa.
  */
-async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, descuento = 0, propina = 0, usuario_id, puntos_canjear = 0, cupon_codigo }, transaction) {
+async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, descuento = 0, propina = 0, usuario_id, puntos_canjear = 0, cupon_codigo, canjeYaReservado = false }, transaction) {
   const cfgFidelidad = await _configFidelidad(transaction);
-  const { puntos: puntosCanjeados, descuento: descuentoPuntos, cliente: clienteBloqueado } =
-    await _resolverCanje(pedido.cliente_id, puntos_canjear, cfgFidelidad, transaction);
+
+  let puntosCanjeados, descuentoPuntos, clienteBloqueado;
+  if (canjeYaReservado) {
+    // Pago QR: los puntos ya se descontaron del cliente al generar el QR
+    // (ver iniciarPagoQr), porque el monto cobrado quedó fijo desde ese
+    // momento. Acá solo se usa el canje ya persistido en el pedido — no se
+    // vuelve a tocar el saldo del cliente por el lado del canje.
+    puntosCanjeados = pedido.puntos_canjeados || 0;
+    descuentoPuntos = puntosCanjeados * cfgFidelidad.valorPunto;
+    clienteBloqueado = null;
+  } else {
+    ({ puntos: puntosCanjeados, descuento: descuentoPuntos, cliente: clienteBloqueado } =
+      await _resolverCanje(pedido.cliente_id, puntos_canjear, cfgFidelidad, transaction, metodo_pago));
+  }
   const { cupon, descuento: descuentoCupon } =
-    await _resolverCupon(cupon_codigo, parseFloat(pedido.total) - parseFloat(descuento), transaction);
+    await _resolverCupon(cupon_codigo, parseFloat(pedido.total) - parseFloat(descuento), pedido.cliente_id, transaction);
 
   const monto_neto = Math.max(0, parseFloat(pedido.total) - parseFloat(descuento) - descuentoPuntos - descuentoCupon + parseFloat(propina));
   const cambio = metodo_pago === 'efectivo' ? parseFloat(monto_recibido) - monto_neto : 0;
@@ -255,11 +276,17 @@ async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, 
     cupon_id: cupon ? cupon.id : null, descuento_cupon: descuentoCupon,
   }, { transaction });
 
-  if (cupon) await cupon.update({ usado: 1, usado_en: new Date() }, { transaction });
+  if (cupon) await cupon.update({ usos_actuales: cupon.usos_actuales + 1, usado_en: new Date() }, { transaction });
 
-  if (pedido.cliente_id && (puntosGanados > 0 || puntosCanjeados > 0)) {
+  // Si el canje ya se reservó (QR), el saldo solo se mueve para acreditar lo
+  // ganado. Si no (efectivo), falta descontar el canje además de acreditar.
+  const faltaDescontarCanje = !canjeYaReservado && puntosCanjeados > 0;
+  if (pedido.cliente_id && (puntosGanados > 0 || faltaDescontarCanje)) {
     const cliente = clienteBloqueado ?? await Cliente.findByPk(pedido.cliente_id, { transaction, lock: transaction.LOCK.UPDATE });
-    if (cliente) await cliente.update({ puntos: cliente.puntos - puntosCanjeados + puntosGanados }, { transaction });
+    if (cliente) {
+      const delta = puntosGanados - (faltaDescontarCanje ? puntosCanjeados : 0);
+      await cliente.update({ puntos: cliente.puntos + delta }, { transaction });
+    }
   }
 
   if (pedido.tipo !== 'llevar' && pedido.mesa_id) {
@@ -351,35 +378,72 @@ async function _emitirImpresion(pedido, metodo_pago, cambio, sucursal_id, numero
  * total ya calculado) y deja el pedido en 'pendiente_pago' hasta que se
  * confirme (ver consultarEstadoPagoQr / procesarWebhookPagoQr).
  */
-async function iniciarPagoQr(pedido, { descuento = 0, propina = 0 } = {}) {
-  const estadoPrevio = pedido.estado;
-  const monto_neto = parseFloat(pedido.total) - parseFloat(descuento) + parseFloat(propina);
-  const intentosPrevios = await PagoQr.count({ where: { pedido_id: pedido.id } });
-  const order_id = `pedido_${pedido.id}_${intentosPrevios + 1}`;
-  const expires_at = new Date(Date.now() + 30 * 60 * 1000);
+async function iniciarPagoQr(pedido, { descuento = 0, propina = 0, puntos_canjear = 0 } = {}) {
+  const cfgFidelidad = await _configFidelidad();
 
-  const cfg = await Configuracion.findOne({ where: { clave: 'nombre_negocio' } });
-  const description = ((cfg && cfg.valor) || 'Venta').replace(/[^a-zA-Z0-9]/g, '').slice(0, 20) || 'Venta';
+  // El monto que se le cobra al cliente por CodePay queda fijo desde que se
+  // genera el QR, así que el canje de puntos (si el negocio lo permite para
+  // QR) se reserva ANTES de pedir el QR: se descuentan del cliente de una
+  // y se guardan en el pedido. Si algo falla más abajo, se revierten. Si el
+  // pago termina fallando/expirando, _revertirPagoQr los devuelve.
+  let puntosCanjeados = 0;
+  let descuentoPuntos = 0;
+  if (cfgFidelidad.canjeQr && pedido.cliente_id && puntos_canjear) {
+    await sequelize.transaction(async (t) => {
+      const { puntos, descuento: desc, cliente } = await _resolverCanje(pedido.cliente_id, puntos_canjear, cfgFidelidad, t, 'qr');
+      if (cliente && puntos > 0) {
+        await cliente.update({ puntos: cliente.puntos - puntos }, { transaction: t });
+        await pedido.update({ puntos_canjeados: puntos }, { transaction: t });
+      }
+      puntosCanjeados = puntos;
+      descuentoPuntos = desc;
+    });
+  }
 
-  const respuesta = await codepayClient.generarQr({
-    order_id, amount: monto_neto, description, expires_at: expires_at.toISOString(),
-  });
+  try {
+    const estadoPrevio = pedido.estado;
+    const monto_neto = Math.max(0, parseFloat(pedido.total) - parseFloat(descuento) - descuentoPuntos + parseFloat(propina));
+    const intentosPrevios = await PagoQr.count({ where: { pedido_id: pedido.id } });
+    const order_id = `pedido_${pedido.id}_${intentosPrevios + 1}`;
+    const expires_at = new Date(Date.now() + 30 * 60 * 1000);
 
-  await sequelize.transaction(async (t) => {
-    await PagoQr.create({
-      pedido_id: pedido.id, sucursal_id: pedido.sucursal_id, order_id,
-      tx_id: respuesta.tx_id, estado: 'pendiente', estado_previo: estadoPrevio,
+    const cfg = await Configuracion.findOne({ where: { clave: 'nombre_negocio' } });
+    const description = ((cfg && cfg.valor) || 'Venta').replace(/[^a-zA-Z0-9]/g, '').slice(0, 20) || 'Venta';
+
+    const respuesta = await codepayClient.generarQr({
+      order_id, amount: monto_neto, description, expires_at: expires_at.toISOString(),
+    });
+
+    await sequelize.transaction(async (t) => {
+      await PagoQr.create({
+        pedido_id: pedido.id, sucursal_id: pedido.sucursal_id, order_id,
+        tx_id: respuesta.tx_id, estado: 'pendiente', estado_previo: estadoPrevio,
+        monto_neto, comision: respuesta.commission_amount, monto_total: respuesta.amount,
+        qr_code: respuesta.qr_code, expires_at,
+      }, { transaction: t });
+
+      await pedido.update({ estado: 'pendiente_pago', metodo_pago: 'qr', descuento, propina }, { transaction: t });
+    });
+
+    return {
+      qr_code: respuesta.qr_code, tx_id: respuesta.tx_id, expires_at,
       monto_neto, comision: respuesta.commission_amount, monto_total: respuesta.amount,
-      qr_code: respuesta.qr_code, expires_at,
-    }, { transaction: t });
+    };
+  } catch (err) {
+    if (puntosCanjeados > 0) await _devolverPuntosCanjeados(pedido, puntosCanjeados);
+    throw err;
+  }
+}
 
-    await pedido.update({ estado: 'pendiente_pago', metodo_pago: 'qr', descuento, propina }, { transaction: t });
+// Devuelve al cliente los puntos reservados para un intento de pago QR que
+// no llegó a generarse (o que falló/expiró/fue rechazado) — usado por
+// iniciarPagoQr (si el propio generarQr falla) y por _revertirPagoQr.
+async function _devolverPuntosCanjeados(pedido, puntos) {
+  await sequelize.transaction(async (t) => {
+    const cliente = await Cliente.findByPk(pedido.cliente_id, { transaction: t, lock: t.LOCK.UPDATE });
+    if (cliente) await cliente.update({ puntos: cliente.puntos + puntos }, { transaction: t });
+    await Pedido.update({ puntos_canjeados: 0 }, { where: { id: pedido.id }, transaction: t });
   });
-
-  return {
-    qr_code: respuesta.qr_code, tx_id: respuesta.tx_id, expires_at,
-    monto_neto, comision: respuesta.commission_amount, monto_total: respuesta.amount,
-  };
 }
 
 async function _revertirPagoQr(pagoQrInicial, nuevoEstado) {
@@ -387,7 +451,16 @@ async function _revertirPagoQr(pagoQrInicial, nuevoEstado) {
     const pagoQr = await PagoQr.findByPk(pagoQrInicial.id, { transaction: t, lock: t.LOCK.UPDATE });
     if (!pagoQr || pagoQr.estado !== 'pendiente') return; // ya resuelto por otra llamada concurrente
     await pagoQr.update({ estado: nuevoEstado }, { transaction: t });
-    await Pedido.update({ estado: pagoQr.estado_previo }, { where: { id: pagoQr.pedido_id }, transaction: t });
+
+    const pedido = await Pedido.findByPk(pagoQr.pedido_id, { transaction: t, lock: t.LOCK.UPDATE });
+    if (pedido && pedido.puntos_canjeados > 0) {
+      const cliente = await Cliente.findByPk(pedido.cliente_id, { transaction: t, lock: t.LOCK.UPDATE });
+      if (cliente) await cliente.update({ puntos: cliente.puntos + pedido.puntos_canjeados }, { transaction: t });
+    }
+    await Pedido.update(
+      { estado: pagoQr.estado_previo, puntos_canjeados: 0 },
+      { where: { id: pagoQr.pedido_id }, transaction: t }
+    );
   });
 }
 
@@ -402,6 +475,7 @@ async function _confirmarPagoQr(pagoQrInicial) {
     await _finalizarVenta({
       pedido, detalles, metodo_pago: 'qr', monto_recibido: pagoQr.monto_neto,
       descuento: pedido.descuento, propina: pedido.propina, usuario_id: pedido.usuario_id,
+      canjeYaReservado: true,
     }, t);
     await pagoQr.update({ estado: 'completado' }, { transaction: t });
     return pedido.id;
@@ -520,10 +594,10 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
   }
 
   const cfgFidelidad = await _configFidelidad();
-  const { descuento: descuentoPuntos } = await _resolverCanje(cliente_id, puntos_canjear, cfgFidelidad);
+  const { descuento: descuentoPuntos } = await _resolverCanje(cliente_id, puntos_canjear, cfgFidelidad, null, metodo_pago);
 
   const total = productos.reduce((sum, { linea }) => sum + linea.cantidad * linea.precio, 0);
-  const { descuento: descuentoCupon } = await _resolverCupon(cupon_codigo, total - parseFloat(descuento));
+  const { descuento: descuentoCupon } = await _resolverCupon(cupon_codigo, total - parseFloat(descuento), cliente_id);
   const monto_neto = Math.max(0, total - parseFloat(descuento) - descuentoPuntos - descuentoCupon + parseFloat(propina));
 
   if (metodo_pago === 'efectivo') {
@@ -565,7 +639,7 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
 
   if (metodo_pago === 'qr') {
     const pedidoPendiente = await Pedido.findByPk(pedidoId);
-    const pago_qr = await iniciarPagoQr(pedidoPendiente, { descuento, propina });
+    const pago_qr = await iniciarPagoQr(pedidoPendiente, { descuento, propina, puntos_canjear });
     emitir('restaurante:actualizar', { tipo: 'pedido_nuevo' }, sucursal_id);
     return { pedido: await obtener(pedidoId), pago_qr };
   }
@@ -668,8 +742,8 @@ async function cobrar(pedido_id, usuario_id, { metodo_pago, monto_recibido, desc
   }
 
   const cfgFidelidad = await _configFidelidad();
-  const { descuento: descuentoPuntos } = await _resolverCanje(pedido.cliente_id, puntos_canjear, cfgFidelidad);
-  const { descuento: descuentoCupon } = await _resolverCupon(cupon_codigo, parseFloat(pedido.total) - parseFloat(descuento));
+  const { descuento: descuentoPuntos } = await _resolverCanje(pedido.cliente_id, puntos_canjear, cfgFidelidad, null, metodo_pago);
+  const { descuento: descuentoCupon } = await _resolverCupon(cupon_codigo, parseFloat(pedido.total) - parseFloat(descuento), pedido.cliente_id);
   const monto_neto = Math.max(0, parseFloat(pedido.total) - parseFloat(descuento) - descuentoPuntos - descuentoCupon + parseFloat(propina));
 
   if (metodo_pago === 'efectivo' && (!monto_recibido || parseFloat(monto_recibido) < monto_neto)) {
@@ -677,10 +751,11 @@ async function cobrar(pedido_id, usuario_id, { metodo_pago, monto_recibido, desc
   }
 
   if (metodo_pago === 'qr') {
-    // El canje de puntos y de cupones no está soportado para QR (requeriría
-    // persistir el canje entre la generación del QR y su confirmación
-    // async); los puntos ganados sí se acreditan normalmente al confirmarse el pago.
-    const pago_qr = await iniciarPagoQr(pedido, { descuento, propina });
+    // El canje de cupón no está soportado para QR (requeriría persistirlo
+    // entre la generación del QR y su confirmación async, igual que se hizo
+    // con los puntos — ver iniciarPagoQr). El canje de puntos sí, si el
+    // negocio lo habilitó en Configuración: se reserva ahí mismo.
+    const pago_qr = await iniciarPagoQr(pedido, { descuento, propina, puntos_canjear });
     return { pedido: await obtener(pedido_id), pago_qr };
   }
 

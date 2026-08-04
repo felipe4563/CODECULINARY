@@ -1,9 +1,20 @@
+const { Op } = require('sequelize');
 const { LibroCaja, SesionCaja, Usuario } = require('../../models');
 
 const INCLUDE_LB = [
   { model: SesionCaja, as: 'sesion_caja', attributes: ['id', 'estado', 'abierto_en'] },
   { model: Usuario, as: 'usuario', attributes: ['id', 'nombre'] },
 ];
+
+// Offset fijo de Bolivia: un datetime sin offset se parsea en la hora local
+// del proceso de Node, que puede no coincidir con la del negocio (-04:00).
+function _filtroFecha(desde, hasta) {
+  if (!desde && !hasta) return {};
+  const range = {};
+  if (desde) range[Op.gte] = new Date(`${desde}T00:00:00-04:00`);
+  if (hasta) range[Op.lte] = new Date(`${hasta}T23:59:59-04:00`);
+  return { creado_en: range };
+}
 
 async function _verificarSesionEnAlcance(sesion_caja_id, alcance) {
   const sesion = await SesionCaja.findByPk(sesion_caja_id);
@@ -14,17 +25,20 @@ async function _verificarSesionEnAlcance(sesion_caja_id, alcance) {
   return sesion;
 }
 
-async function listar({ sesion_caja_id } = {}, alcance) {
+async function listar({ sesion_caja_id, desde, hasta } = {}, alcance) {
   if (sesion_caja_id) {
     await _verificarSesionEnAlcance(sesion_caja_id, alcance);
-    return LibroCaja.findAll({ where: { sesion_caja_id }, include: INCLUDE_LB, order: [['creado_en', 'DESC']] });
+    return LibroCaja.findAll({
+      where: { sesion_caja_id, ..._filtroFecha(desde, hasta) },
+      include: INCLUDE_LB, order: [['creado_en', 'DESC']],
+    });
   }
 
   const include = alcance && !alcance.acceso_todas
     ? [{ ...INCLUDE_LB[0], where: { sucursal_id: alcance.sucursal_id } }, INCLUDE_LB[1]]
     : INCLUDE_LB;
 
-  return LibroCaja.findAll({ include, order: [['creado_en', 'DESC']] });
+  return LibroCaja.findAll({ where: _filtroFecha(desde, hasta), include, order: [['creado_en', 'DESC']] });
 }
 
 async function crear(usuario_id, { sesion_caja_id, tipo, concepto, monto, metodo_pago = 'efectivo' }, alcance) {

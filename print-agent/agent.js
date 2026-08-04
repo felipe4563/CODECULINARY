@@ -464,6 +464,14 @@ function buildCaja(data) {
     if (descuentoCupon > 0) {
       var etiquetaCupon = 'Cupon' + (pedido.cupon ? ' (' + pedido.cupon.codigo + ')' : '');
       t.left().cols(etiquetaCupon, '-' + sym + ' ' + descuentoCupon.toFixed(2));
+      // Cupón generado por la promo de cumpleaños (ver cumpleanos.job.js en
+      // el backend — código con prefijo "CUMPLE"): además de la línea normal
+      // de descuento, un banner festivo con el nombre del cliente.
+      var esCuponCumple = pedido.cupon && /^CUMPLE/.test(pedido.cupon.codigo);
+      if (esCuponCumple) {
+        var nombreCumple = (pedido.cliente && pedido.cliente.nombre) ? pedido.cliente.nombre.toUpperCase() : '';
+        t.center().bold(true).line('*** FELIZ CUMPLEAÑOS' + (nombreCumple ? ' ' + nombreCumple : '') + ' ***').bold(false);
+      }
     }
     if (descuentoPuntos > 0) t.left().cols('Puntos canjeados (' + puntosCanjeados + ')', '-' + sym + ' ' + descuentoPuntos.toFixed(2));
     if (propina > 0) t.left().cols('Propina', sym + ' ' + propina.toFixed(2));

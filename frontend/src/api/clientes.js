@@ -11,3 +11,12 @@ export const crearCliente = (datos) =>
 
 export const actualizarCliente = (id, datos) =>
   api.put(`/clientes/${id}`, datos).then(r => r.data.datos);
+
+export const buscarClientePorDocumento = (numero) =>
+  api.get(`/clientes/buscar-documento/${encodeURIComponent(numero)}`).then(r => r.data.datos);
+
+export const buscarClientesPorNombre = (q) =>
+  api.get('/clientes/buscar-nombre', { params: { q } }).then(r => r.data.datos);
+
+export const buscarClientePorCodigo = (codigo) =>
+  api.get(`/clientes/buscar-codigo/${encodeURIComponent(codigo)}`).then(r => r.data.datos);

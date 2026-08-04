@@ -1,17 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermisos } from '../../hooks/usePermisos';
-import { getClientes, crearCliente, actualizarCliente } from '../../api/clientes';
+import { getClientes, crearCliente, actualizarCliente, buscarClientePorDocumento, buscarClientesPorNombre, buscarClientePorCodigo } from '../../api/clientes';
 import {
   Users, Plus, Search, X, Edit2, Phone, Mail, MapPin,
-  CreditCard, UserCircle, AlertTriangle, Star,
+  CreditCard, UserCircle, AlertTriangle, Star, Loader2,
 } from 'lucide-react';
 
 /* ─── helpers ─── */
 const fmtFecha = (s) =>
   s ? new Date(s).toLocaleDateString('es-BO', { dateStyle: 'medium' }) : '—';
-
-const TIPOS_DOC = ['CI', 'NIT', 'Pasaporte', 'RUC', 'Otro'];
 
 /* ─── avatar inicial ─── */
 function Avatar({ nombre, size = 'md' }) {
@@ -34,22 +32,99 @@ function ModalCliente({ cliente, onClose, onGuardar, loading }) {
     email:            cliente?.email            ?? '',
     telefono:         cliente?.telefono         ?? '',
     direccion:        cliente?.direccion        ?? '',
+    fecha_nacimiento: cliente?.fecha_nacimiento  ?? '',
   });
   const [error, setError] = useState('');
+  const [avisoBusqueda, setAvisoBusqueda] = useState('');
+  const [busquedaNombre, setBusquedaNombre] = useState('');
+  const [buscandoNombre, setBuscandoNombre] = useState(false);
+  const [mostrarBusquedaNombre, setMostrarBusquedaNombre] = useState(false);
+  const [busquedaCodigo, setBusquedaCodigo] = useState('');
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.nombre.trim()) { setError('El nombre es requerido'); return; }
     setError('');
-    onGuardar(form);
+    onGuardar({ ...form, fecha_nacimiento: form.fecha_nacimiento || null });
   };
 
   const esEdicion = !!cliente;
 
+  // Autocompletar por CI contra la API de Personas (registro civil) — busca
+  // automáticamente apenas hay suficientes dígitos, sin botón. Solo aplica
+  // al crear (en edición no queremos pisar datos ya guardados).
+  const buscarPorCi = useMutation({
+    mutationFn: (numero) => buscarClientePorDocumento(numero),
+    onSuccess: (datos, numero) => {
+      if (!datos) { setAvisoBusqueda('No se encontró ninguna persona con ese número de documento.'); return; }
+      setAvisoBusqueda('');
+      setForm(f => ({
+        ...f,
+        nombre: datos.nombre || f.nombre,
+        numero_documento: datos.numero_documento || numero,
+        fecha_nacimiento: datos.fecha_nacimiento || f.fecha_nacimiento,
+      }));
+    },
+    onError: (err) => setAvisoBusqueda(err?.response?.data?.mensaje ?? 'No se pudo consultar la API de personas'),
+  });
+
+  const documentoQuery = form.tipo_documento === 'CI' ? form.numero_documento.trim() : '';
+  const documentoListo = !esEdicion && documentoQuery.length >= 5;
+  const yaBuscadoRef = useRef('');
+  const mutarBuscarCi = buscarPorCi.mutate;
+
+  useEffect(() => {
+    if (!documentoListo || yaBuscadoRef.current === documentoQuery) return;
+    const id = setTimeout(() => {
+      yaBuscadoRef.current = documentoQuery;
+      mutarBuscarCi(documentoQuery);
+    }, 400);
+    return () => clearTimeout(id);
+  }, [documentoQuery, documentoListo, mutarBuscarCi]);
+
+  // Búsqueda por nombre, para cuando no se tiene a mano el número de
+  // documento — misma API de Personas, endpoint de texto libre.
+  const { data: resultadosNombre = [], isFetching: buscandoNombreCargando } = useQuery({
+    queryKey: ['personas-buscar-nombre', busquedaNombre],
+    queryFn: () => buscarClientesPorNombre(busquedaNombre.trim()),
+    enabled: buscandoNombre && busquedaNombre.trim().length >= 3,
+  });
+
+  function elegirResultadoNombre(p) {
+    setForm(f => ({
+      ...f,
+      nombre: p.nombre || f.nombre,
+      tipo_documento: 'CI',
+      numero_documento: p.numero_documento || f.numero_documento,
+      fecha_nacimiento: p.fecha_nacimiento || f.fecha_nacimiento,
+    }));
+    setBuscandoNombre(false);
+    setBusquedaNombre('');
+  }
+
+  // Por "código" (PK interna de la API de Personas, distinta del CI) — para
+  // los registros que la documentación marca como sin numero_documento, que
+  // no aparecen en el buscador de CI ni siempre en el de nombre.
+  const buscarPorCodigo = useMutation({
+    mutationFn: () => buscarClientePorCodigo(busquedaCodigo.trim()),
+    onSuccess: (datos) => {
+      if (!datos) { setAvisoBusqueda('No se encontró ninguna persona con ese código.'); return; }
+      setAvisoBusqueda('');
+      setForm(f => ({
+        ...f,
+        nombre: datos.nombre || f.nombre,
+        tipo_documento: 'CI',
+        numero_documento: datos.numero_documento || f.numero_documento,
+        fecha_nacimiento: datos.fecha_nacimiento || f.fecha_nacimiento,
+      }));
+    },
+    onError: (err) => setAvisoBusqueda(err?.response?.data?.mensaje ?? 'No se pudo consultar la API de personas'),
+  });
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md border border-border">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md border border-border max-h-[90vh] overflow-y-auto">
         {/* header */}
         <div className="px-6 py-4 rounded-t-2xl flex items-center justify-between bg-primary">
           <div className="flex items-center gap-3">
@@ -66,6 +141,82 @@ function ModalCliente({ cliente, onClose, onGuardar, loading }) {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {!esEdicion && (
+            <>
+              {/* buscar por código interno (primero) */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
+                  Buscar por código <span className="font-normal normal-case">(opcional, para autocompletar)</span>
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    value={busquedaCodigo}
+                    onChange={(e) => { setBusquedaCodigo(e.target.value); setAvisoBusqueda(''); }}
+                    placeholder="Ej: 7897245"
+                    className="flex-1 bg-background border border-input rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => buscarPorCodigo.mutate()}
+                    disabled={!busquedaCodigo.trim() || buscarPorCodigo.isPending}
+                    title="Buscar por código"
+                    className="shrink-0 flex items-center justify-center w-11 rounded-xl border border-input text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-50"
+                  >
+                    {buscarPorCodigo.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {avisoBusqueda && <p className="text-xs text-amber-600 dark:text-amber-400">{avisoBusqueda}</p>}
+
+              {/* buscar por nombre (opcional, si no se tiene el código) */}
+              {!mostrarBusquedaNombre ? (
+                <button
+                  type="button"
+                  onClick={() => setMostrarBusquedaNombre(true)}
+                  className="text-xs text-primary hover:underline"
+                >
+                  ¿No lo encuentra? Buscar por nombre completo
+                </button>
+              ) : (
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
+                    Buscar por nombre <span className="font-normal normal-case">(opcional, para autocompletar)</span>
+                  </label>
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      value={busquedaNombre}
+                      onChange={(e) => { setBusquedaNombre(e.target.value); setBuscandoNombre(true); }}
+                      onFocus={() => setBuscandoNombre(true)}
+                      placeholder="Ej: Juan Pérez"
+                      autoFocus
+                      className="w-full bg-background border border-input rounded-xl pl-9 pr-9 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
+                    />
+                    {buscandoNombreCargando && <Loader2 className="w-4 h-4 text-muted-foreground animate-spin absolute right-3 top-1/2 -translate-y-1/2" />}
+                  </div>
+                  {buscandoNombre && busquedaNombre.trim().length >= 3 && (
+                    <div className="border border-border rounded-xl overflow-hidden max-h-40 overflow-y-auto">
+                      {!buscandoNombreCargando && resultadosNombre.length === 0 ? (
+                        <p className="px-3 py-2 text-xs text-muted-foreground">Sin resultados</p>
+                      ) : resultadosNombre.map((p) => (
+                        <button
+                          key={p.codigo}
+                          type="button"
+                          onClick={() => elegirResultadoNombre(p)}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors flex items-center justify-between gap-2"
+                        >
+                          <span className="truncate text-foreground">{p.nombre}</span>
+                          {p.numero_documento && <span className="text-xs text-muted-foreground shrink-0">CI {p.numero_documento}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
           {/* nombre */}
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
@@ -81,29 +232,20 @@ function ModalCliente({ cliente, onClose, onGuardar, loading }) {
           </div>
 
           {/* documento */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
-                Tipo doc.
-              </label>
-              <select
-                value={form.tipo_documento}
-                onChange={set('tipo_documento')}
-                className="w-full rounded-xl border border-input bg-background text-foreground px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                {TIPOS_DOC.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
-                N° documento
-              </label>
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
+              N° documento
+            </label>
+            <div className="relative">
               <input
                 value={form.numero_documento}
-                onChange={set('numero_documento')}
+                onChange={(e) => { set('numero_documento')(e); setAvisoBusqueda(''); }}
                 placeholder="12345678"
-                className="w-full rounded-xl border border-input bg-background text-foreground px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full rounded-xl border border-input bg-background text-foreground px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring pr-8"
               />
+              {documentoListo && buscarPorCi.isPending && (
+                <Loader2 className="w-4 h-4 text-muted-foreground animate-spin absolute right-3 top-1/2 -translate-y-1/2" />
+              )}
             </div>
           </div>
 
@@ -134,17 +276,30 @@ function ModalCliente({ cliente, onClose, onGuardar, loading }) {
             </div>
           </div>
 
-          {/* dirección */}
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
-              Dirección
-            </label>
-            <input
-              value={form.direccion}
-              onChange={set('direccion')}
-              placeholder="Av. Principal #123..."
-              className="w-full rounded-xl border border-input bg-background text-foreground px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+          {/* dirección + fecha de nacimiento */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
+                Dirección
+              </label>
+              <input
+                value={form.direccion}
+                onChange={set('direccion')}
+                placeholder="Av. Principal #123..."
+                className="w-full rounded-xl border border-input bg-background text-foreground px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
+                Fecha de nacimiento
+              </label>
+              <input
+                type="date"
+                value={form.fecha_nacimiento}
+                onChange={set('fecha_nacimiento')}
+                className="w-full rounded-xl border border-input bg-background text-foreground px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
           </div>
 
           {error && (

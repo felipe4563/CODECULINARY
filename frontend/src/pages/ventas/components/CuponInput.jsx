@@ -8,12 +8,12 @@ import { validarCupon } from '../../../api/cupones';
 // viven en el padre porque necesita el descuento en Bs para recalcular el
 // total. La validación acá es solo una previsualización — el servidor
 // vuelve a validar y recién ahí marca el cupón como usado, al cobrar.
-export default function CuponInput({ subtotal, cupon, onAplicar, onQuitar }) {
+export default function CuponInput({ subtotal, cupon, onAplicar, onQuitar, clienteId }) {
   const [codigo, setCodigo] = useState('');
   const [error, setError] = useState(null);
 
   const aplicar = useMutation({
-    mutationFn: () => validarCupon(codigo.trim(), subtotal),
+    mutationFn: () => validarCupon(codigo.trim(), subtotal, clienteId),
     onSuccess: (datos) => {
       onAplicar(datos.codigo, datos.descuento);
       setCodigo('');

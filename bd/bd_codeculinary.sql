@@ -86,6 +86,7 @@ CREATE TABLE `clientes` (
   `email` varchar(255) DEFAULT NULL,
   `telefono` varchar(50) DEFAULT NULL,
   `direccion` varchar(255) DEFAULT NULL,
+  `fecha_nacimiento` date DEFAULT NULL,
   `puntos` int(11) NOT NULL DEFAULT 0,
   `creado_en` timestamp NOT NULL DEFAULT current_timestamp(),
   `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -173,7 +174,14 @@ INSERT INTO `configuraciones` (`id`, `clave`, `valor`, `creado_en`, `actualizado
 (31, 'flujo_cocina', 'fisico', '2026-07-31 14:37:43', '2026-07-31 14:37:43'),
 (32, 'fidelidad_activa', 'false', current_timestamp(), current_timestamp()),
 (33, 'puntos_por_bs', '1', current_timestamp(), current_timestamp()),
-(34, 'valor_punto_bs', '0.10', current_timestamp(), current_timestamp());
+(34, 'valor_punto_bs', '0.10', current_timestamp(), current_timestamp()),
+(35, 'fidelidad_canje_efectivo', 'true', current_timestamp(), current_timestamp()),
+(36, 'fidelidad_canje_qr', 'false', current_timestamp(), current_timestamp()),
+(37, 'cumple_activo', 'false', current_timestamp(), current_timestamp()),
+(38, 'cumple_dias_anticipacion', '5', current_timestamp(), current_timestamp()),
+(39, 'cumple_tipo', 'porcentaje', current_timestamp(), current_timestamp()),
+(40, 'cumple_valor', '10', current_timestamp(), current_timestamp()),
+(41, 'cumple_vigencia_dias', '10', current_timestamp(), current_timestamp());
 
 -- --------------------------------------------------------
 
@@ -186,9 +194,12 @@ CREATE TABLE `cupones` (
   `codigo` varchar(30) NOT NULL,
   `tipo` enum('fijo','porcentaje') NOT NULL DEFAULT 'fijo',
   `valor` decimal(10,2) NOT NULL,
+  `usos_maximos` int(10) UNSIGNED NOT NULL DEFAULT 1,
+  `usos_actuales` int(10) UNSIGNED NOT NULL DEFAULT 0,
+  `limite_por_cliente` int(10) UNSIGNED DEFAULT NULL,
+  `cliente_id` int(10) UNSIGNED DEFAULT NULL,
   `fecha_expiracion` date DEFAULT NULL,
   `activo` tinyint(1) NOT NULL DEFAULT 1,
-  `usado` tinyint(1) NOT NULL DEFAULT 0,
   `usado_en` datetime DEFAULT NULL,
   `creado_por` int(10) UNSIGNED DEFAULT NULL,
   `creado_en` timestamp NOT NULL DEFAULT current_timestamp()
@@ -830,7 +841,8 @@ ALTER TABLE `configuraciones`
 ALTER TABLE `cupones`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `codigo` (`codigo`),
-  ADD KEY `creado_por` (`creado_por`);
+  ADD KEY `creado_por` (`creado_por`),
+  ADD KEY `cliente_id` (`cliente_id`);
 
 --
 -- Indices de la tabla `detalle_arqueo`
@@ -1057,7 +1069,7 @@ ALTER TABLE `cupones`
 -- AUTO_INCREMENT de la tabla `configuraciones`
 --
 ALTER TABLE `configuraciones`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=35;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=42;
 
 --
 -- AUTO_INCREMENT de la tabla `detalle_arqueo`
@@ -1208,7 +1220,8 @@ ALTER TABLE `compras`
 -- Filtros para la tabla `cupones`
 --
 ALTER TABLE `cupones`
-  ADD CONSTRAINT `cupones_ibfk_1` FOREIGN KEY (`creado_por`) REFERENCES `usuarios` (`id`);
+  ADD CONSTRAINT `cupones_ibfk_1` FOREIGN KEY (`creado_por`) REFERENCES `usuarios` (`id`),
+  ADD CONSTRAINT `cupones_cliente_fk` FOREIGN KEY (`cliente_id`) REFERENCES `clientes` (`id`);
 
 --
 -- Filtros para la tabla `detalle_arqueo`

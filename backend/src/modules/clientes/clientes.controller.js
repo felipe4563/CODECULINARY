@@ -10,6 +10,21 @@ async function obtener(req, res, next) {
   catch (err) { next(err); }
 }
 
+async function buscarDocumento(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.buscarPorDocumento(req.params.numero) }); }
+  catch (err) { next(err); }
+}
+
+async function buscarNombre(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.buscarPorNombre(req.query.q) }); }
+  catch (err) { next(err); }
+}
+
+async function buscarCodigo(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.buscarPorCodigo(req.params.codigo) }); }
+  catch (err) { next(err); }
+}
+
 async function crear(req, res, next) {
   try {
     if (!req.body.nombre) return res.status(400).json({ ok: false, mensaje: 'nombre es requerido' });
@@ -22,4 +37,4 @@ async function actualizar(req, res, next) {
   catch (err) { next(err); }
 }
 
-module.exports = { listar, obtener, crear, actualizar };
+module.exports = { listar, obtener, crear, actualizar, buscarDocumento, buscarNombre, buscarCodigo };

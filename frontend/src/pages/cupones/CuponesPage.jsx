@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Ticket, Plus, Pencil, Trash2, AlertCircle, RefreshCw, Shuffle } from 'lucide-react';
+import { Ticket, Plus, Pencil, Trash2, AlertCircle, RefreshCw, Shuffle, Search, X, User } from 'lucide-react';
 import { getCupones, crearCupon, actualizarCupon, eliminarCupon } from '../../api/cupones';
+import { getClientes } from '../../api/clientes';
 import { usePermisos } from '../../hooks/usePermisos';
 import Modal from '../../components/ui/Modal';
 
 function BadgeEstado({ cupon }) {
-  if (cupon.usado) {
+  const agotado = cupon.usos_actuales >= cupon.usos_maximos;
+  if (agotado) {
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700/40 dark:text-gray-300">
-        Usado
+        Agotado
       </span>
     );
   }
@@ -18,6 +20,10 @@ function BadgeEstado({ cupon }) {
       {cupon.activo ? 'Activo' : 'Inactivo'}
     </span>
   );
+}
+
+function etiquetaUsos(cupon) {
+  return `${cupon.usos_actuales}/${cupon.usos_maximos} usos`;
 }
 
 function etiquetaValor(cupon) {
@@ -132,6 +138,10 @@ export default function CuponesPage() {
                   <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{etiquetaValor(c)}</span>
                   <BadgeEstado cupon={c} />
                 </div>
+                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span>{etiquetaUsos(c)}</span>
+                  {c.cliente && <span className="flex items-center gap-1"><User className="w-3 h-3" /> {c.cliente.nombre}</span>}
+                </div>
               </div>
             ))}
           </div>
@@ -144,6 +154,8 @@ export default function CuponesPage() {
                   <tr className="bg-muted border-b border-border">
                     <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Código</th>
                     <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Descuento</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Usos</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cliente</th>
                     <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Vencimiento</th>
                     <th className="px-5 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">Estado</th>
                     <th className="px-5 py-3" />
@@ -154,6 +166,11 @@ export default function CuponesPage() {
                     <tr key={c.id} className="hover:bg-muted/50 transition-colors">
                       <td className="px-5 py-3.5 font-semibold text-foreground font-mono">{c.codigo}</td>
                       <td className="px-5 py-3.5 font-semibold text-emerald-600 dark:text-emerald-400">{etiquetaValor(c)}</td>
+                      <td className="px-5 py-3.5 text-muted-foreground">
+                        {etiquetaUsos(c)}
+                        {c.limite_por_cliente ? <span className="block text-xs">(máx. {c.limite_por_cliente}/cliente)</span> : null}
+                      </td>
+                      <td className="px-5 py-3.5 text-muted-foreground">{c.cliente?.nombre ?? '—'}</td>
                       <td className="px-5 py-3.5 text-muted-foreground">{c.fecha_expiracion || 'Sin vencimiento'}</td>
                       <td className="px-5 py-3.5 text-center"><BadgeEstado cupon={c} /></td>
                       <td className="px-5 py-3.5">
@@ -192,7 +209,7 @@ export default function CuponesPage() {
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
               ¿Eliminar el cupón <span className="font-semibold text-foreground font-mono">"{confirmar.codigo}"</span>?
-              {confirmar.usado && ' Ya fue usado en una venta, así que solo se desactivará.'}
+              {confirmar.usos_actuales > 0 && ' Ya fue usado en una venta, así que solo se desactivará.'}
             </p>
             <div className="flex justify-end gap-3">
               <button onClick={() => setConfirmar(null)} className="px-4 py-2 rounded-xl text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
@@ -220,20 +237,37 @@ function ModalCupon({ cupon, onClose, onExito }) {
   const [valor, setValor]             = useState(cupon?.valor ?? '');
   const [activo, setActivo]           = useState(cupon?.activo ?? 1);
   const [fechaExpiracion, setFechaExpiracion] = useState(cupon?.fecha_expiracion ?? '');
+  const [usosMaximos, setUsosMaximos] = useState(cupon?.usos_maximos ?? 1);
+  const [limitePorCliente, setLimitePorCliente] = useState(cupon?.limite_por_cliente ?? '');
+  const [clienteExclusivo, setClienteExclusivo] = useState(cupon?.cliente ?? null);
+  const [buscarCliente, setBuscarCliente] = useState('');
+  const [buscandoCliente, setBuscandoCliente] = useState(false);
   const [error, setError] = useState(null);
+
+  const { data: resultadosCliente = [] } = useQuery({
+    queryKey: ['clientes-buscar-cupon', buscarCliente],
+    queryFn: () => getClientes({ buscar: buscarCliente }),
+    enabled: buscandoCliente && buscarCliente.trim().length >= 2,
+  });
 
   const guardar = useMutation({
     mutationFn: () => {
-      if (esNuevo) {
-        return crearCupon({ codigo, tipo, valor: parseFloat(valor), activo, fecha_expiracion: fechaExpiracion || null });
-      }
-      return actualizarCupon(cupon.id, { tipo, valor: parseFloat(valor), activo, fecha_expiracion: fechaExpiracion || null });
+      const comun = {
+        tipo, valor: parseFloat(valor), activo, fecha_expiracion: fechaExpiracion || null,
+        usos_maximos: parseInt(usosMaximos, 10) || 1,
+        limite_por_cliente: limitePorCliente === '' ? null : parseInt(limitePorCliente, 10),
+        cliente_id: clienteExclusivo?.id ?? null,
+      };
+      if (esNuevo) return crearCupon({ codigo, ...comun });
+      return actualizarCupon(cupon.id, comun);
     },
     onSuccess: onExito,
     onError: (err) => setError(err?.response?.data?.mensaje ?? 'Error al guardar el cupón'),
   });
 
-  const valido = codigo.trim().length >= 3 && parseFloat(valor) > 0 && (tipo !== 'porcentaje' || parseFloat(valor) <= 100);
+  const valido = codigo.trim().length >= 3 && parseFloat(valor) > 0 && (tipo !== 'porcentaje' || parseFloat(valor) <= 100)
+    && parseInt(usosMaximos, 10) >= 1
+    && (limitePorCliente === '' || parseInt(limitePorCliente, 10) >= 1);
 
   return (
     <Modal titulo={esNuevo ? 'Nuevo Cupón' : 'Editar Cupón'} onClose={onClose} ancho="max-w-md">
@@ -302,6 +336,75 @@ function ModalCupon({ cupon, onClose, onExito }) {
             type="date" value={fechaExpiracion} onChange={(e) => setFechaExpiracion(e.target.value)}
             className="w-full bg-background border border-input rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
           />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+              Límite total de usos <span className="text-destructive">*</span>
+            </label>
+            <input
+              type="number" min="1" step="1"
+              value={usosMaximos}
+              onChange={(e) => setUsosMaximos(e.target.value)}
+              className="w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
+            />
+            {!esNuevo && <p className="text-xs text-muted-foreground mt-1">Ya usado {cupon.usos_actuales} {cupon.usos_actuales === 1 ? 'vez' : 'veces'}.</p>}
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+              Límite por cliente <span className="font-normal normal-case">(opcional)</span>
+            </label>
+            <input
+              type="number" min="1" step="1"
+              value={limitePorCliente}
+              onChange={(e) => setLimitePorCliente(e.target.value)}
+              placeholder="Sin límite"
+              className="w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            Exclusivo de un cliente <span className="font-normal normal-case">(opcional, ej. promo de cumpleaños)</span>
+          </label>
+          {clienteExclusivo ? (
+            <div className="flex items-center justify-between gap-2 bg-muted/50 border border-border rounded-xl p-2.5">
+              <span className="flex items-center gap-2 text-sm text-foreground truncate">
+                <User className="w-4 h-4 text-primary shrink-0" /> {clienteExclusivo.nombre}
+              </span>
+              <button type="button" onClick={() => setClienteExclusivo(null)} className="p-1 rounded-lg text-muted-foreground hover:text-destructive transition-colors shrink-0">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="relative">
+              <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                value={buscarCliente}
+                onChange={(e) => { setBuscarCliente(e.target.value); setBuscandoCliente(true); }}
+                onFocus={() => setBuscandoCliente(true)}
+                placeholder="Buscar por nombre o documento..."
+                className="w-full bg-background border border-input rounded-xl pl-9 pr-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
+              />
+              {buscandoCliente && buscarCliente.trim().length >= 2 && (
+                <div className="mt-1 border border-border rounded-xl overflow-hidden max-h-36 overflow-y-auto">
+                  {resultadosCliente.length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-muted-foreground">Sin resultados</p>
+                  ) : resultadosCliente.map((cl) => (
+                    <button
+                      key={cl.id} type="button"
+                      onClick={() => { setClienteExclusivo(cl); setBuscandoCliente(false); setBuscarCliente(''); }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors text-foreground truncate"
+                    >
+                      {cl.nombre}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-3">

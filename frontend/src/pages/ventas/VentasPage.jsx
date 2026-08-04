@@ -14,7 +14,7 @@ import { getCombosActivos } from '../../api/combos';
 import { getPromocionesActivas } from '../../api/promociones';
 import ClienteFidelidad from './components/ClienteFidelidad';
 import CuponInput from './components/CuponInput';
-import { BASE_URL } from '../../api/configuracion';
+import { BASE_URL, getConfiguracion } from '../../api/configuracion';
 import { usePermisos } from '../../hooks/usePermisos';
 import { useAuth } from '../../hooks/useAuth';
 import { imprimirLocal, reimprimirConFallback } from '../../utils/impresionLocal';
@@ -163,6 +163,10 @@ export default function VentasPage() {
     }]);
   }
 
+  function comboContenido(combo) {
+    return (combo.productos || []).map((p) => `${p.ComboProducto?.cantidad ?? 1}x ${p.nombre}`).join(', ');
+  }
+
   function agregarCombo(combo) {
     setCarrito((prev) => {
       const existente = prev.find((it) => it.combo_id === combo.id);
@@ -172,6 +176,7 @@ export default function VentasPage() {
       return [...prev, {
         linea_id: nuevoLineaId(), combo_id: combo.id, nombre: `Combo: ${combo.nombre}`,
         precio: parseFloat(combo.precio), cantidad: 1, nota: null,
+        combo_contenido: comboContenido(combo),
       }];
     });
   }
@@ -297,6 +302,11 @@ export default function VentasPage() {
                   <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
                     <Gift className="w-3.5 h-3.5 text-primary shrink-0" /> {combo.nombre}
                   </span>
+                  {combo.productos?.length > 0 && (
+                    <span className="text-[11px] text-muted-foreground max-w-[220px] truncate">
+                      {comboContenido(combo)}
+                    </span>
+                  )}
                   <span className="text-xs font-bold text-primary">Bs {parseFloat(combo.precio).toFixed(2)}</span>
                 </button>
               ))}
@@ -388,6 +398,7 @@ export default function VentasPage() {
                   <div key={it.linea_id} className="px-4 py-2.5 flex items-center gap-2">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">{it.nombre}</p>
+                      {it.combo_contenido && <p className="text-xs text-muted-foreground/80 italic truncate">{it.combo_contenido}</p>}
                       {it.nota && <p className="text-xs text-amber-600 dark:text-amber-400 truncate">{it.nota}</p>}
                       {it.peso != null ? (
                         <p className="text-xs text-muted-foreground">{it.peso.toFixed(3)} kg × Bs {it.precio_kg.toFixed(2)}/kg</p>
@@ -569,8 +580,11 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
   const [descuentoPuntos, setDescuentoPuntos] = useState(0);
   const [cuponAplicado, setCuponAplicado] = useState(null); // { codigo, descuento } | null
 
+  const { data: config = {} } = useQuery({ queryKey: ['configuracion'], queryFn: getConfiguracion, staleTime: 60_000 });
+  const puedeCanjearPuntos = metodo === 'qr' ? config.fidelidad_canje_qr === 'true' : config.fidelidad_canje_efectivo !== 'false';
+
   const descuentoCupon = cuponAplicado?.descuento ?? 0;
-  const totalFinal = metodo === 'efectivo' ? Math.max(0, total - descuentoPuntos - descuentoCupon) : total;
+  const totalFinal = Math.max(0, total - (puedeCanjearPuntos ? descuentoPuntos : 0) - (metodo === 'efectivo' ? descuentoCupon : 0));
 
   const reimprimir = useMutation({
     mutationFn: () => reimprimirVenta(ventaExitosa.pedidoId),
@@ -588,7 +602,7 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
       monto_recibido: totalFinal,
       sesion_caja_id: sesionCajaId,
       cliente_id: clienteFidelidad?.id,
-      puntos_canjear: metodo === 'efectivo' ? puntosCanjear : 0,
+      puntos_canjear: puedeCanjearPuntos ? puntosCanjear : 0,
       cupon_codigo: metodo === 'efectivo' ? cuponAplicado?.codigo : undefined,
     }),
     onSuccess: (resultado) => {
@@ -660,7 +674,7 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
       <div className="space-y-5">
         <div className="bg-muted rounded-xl p-4 text-center">
           <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Total a cobrar</p>
-          {metodo === 'efectivo' && (descuentoPuntos > 0 || descuentoCupon > 0) ? (
+          {(puedeCanjearPuntos && descuentoPuntos > 0) || (metodo === 'efectivo' && descuentoCupon > 0) ? (
             <>
               <p className="text-sm text-muted-foreground line-through">Bs {total.toFixed(2)}</p>
               <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">Bs {totalFinal.toFixed(2)}</p>
@@ -675,6 +689,7 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
           onCambiarCliente={setClienteFidelidad}
           puntosCanjear={puntosCanjear}
           onCambiarPuntos={(puntos, descuento) => { setPuntosCanjear(puntos); setDescuentoPuntos(descuento); }}
+          metodoPago={metodo}
         />
 
         <CuponInput
@@ -682,6 +697,7 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
           cupon={cuponAplicado}
           onAplicar={(codigo, descuento) => setCuponAplicado({ codigo, descuento })}
           onQuitar={() => setCuponAplicado(null)}
+          clienteId={clienteFidelidad?.id}
         />
 
         <div>

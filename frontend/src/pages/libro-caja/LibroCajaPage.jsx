@@ -6,7 +6,7 @@ import { getEstadoCajas, getSesiones } from '../../api/caja';
 import {
   Plus, TrendingUp, TrendingDown, DollarSign,
   Search, Filter, X, ChevronDown, ChevronUp,
-  ArrowUpCircle, ArrowDownCircle, BookOpen,
+  ArrowUpCircle, ArrowDownCircle, BookOpen, CalendarRange,
 } from 'lucide-react';
 
 /* ─── Helpers ─────────────────────────────────────────────────── */
@@ -273,6 +273,8 @@ export default function LibroCajaPage() {
 
   const [buscar,    setBuscar]    = useState('');
   const [filtroTipo, setFiltroTipo] = useState('todos');   // todos | ingreso | egreso
+  const [desde, setDesde] = useState('');
+  const [hasta, setHasta] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [toast,     setToast]     = useState(null);
 
@@ -283,8 +285,8 @@ export default function LibroCajaPage() {
 
   /* ─── queries ───────────────────────────────────────────────── */
   const { data: movimientos = [], isLoading } = useQuery({
-    queryKey: ['libro-caja'],
-    queryFn: () => getLibroCaja(),
+    queryKey: ['libro-caja', desde, hasta],
+    queryFn: () => getLibroCaja({ desde: desde || undefined, hasta: hasta || undefined }),
     enabled: puedoVer,
     staleTime: 30_000,
   });
@@ -436,10 +438,42 @@ export default function LibroCajaPage() {
             </div>
           </div>
 
+          {/* filtro de fechas */}
+          <div className="flex flex-wrap items-end gap-3 mt-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
+              <CalendarRange className="w-4 h-4" />
+              <span className="text-xs font-semibold uppercase tracking-wide">Rango de fechas</span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-muted-foreground">Desde</label>
+              <input
+                type="date" value={desde} onChange={e => setDesde(e.target.value)}
+                max={hasta || undefined}
+                className="px-3 py-1.5 rounded-lg border border-input bg-background text-foreground text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-muted-foreground">Hasta</label>
+              <input
+                type="date" value={hasta} onChange={e => setHasta(e.target.value)}
+                min={desde || undefined}
+                className="px-3 py-1.5 rounded-lg border border-input bg-background text-foreground text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            {(desde || hasta) && (
+              <button
+                onClick={() => { setDesde(''); setHasta(''); }}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+              >
+                <X className="w-3.5 h-3.5" /> Limpiar
+              </button>
+            )}
+          </div>
+
           {/* contador */}
           <p className="text-xs text-muted-foreground mt-2.5">
             {filtrados.length} registro{filtrados.length !== 1 ? 's' : ''}
-            {(buscar || filtroTipo !== 'todos') ? ' encontrados' : ' en total'}
+            {(buscar || filtroTipo !== 'todos' || desde || hasta) ? ' encontrados' : ' en total'}
           </p>
         </div>
 
