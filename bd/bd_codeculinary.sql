@@ -482,11 +482,8 @@ CREATE TABLE `productos` (
   `id` int(10) UNSIGNED NOT NULL,
   `categoria_id` int(10) UNSIGNED NOT NULL,
   `nombre` varchar(255) NOT NULL,
-  `codigo_barras` varchar(255) DEFAULT NULL,
-  `codigo` varchar(100) DEFAULT NULL,
   `precio` decimal(10,2) NOT NULL,
   `es_pesable` tinyint(1) NOT NULL DEFAULT 0,
-  `costo` decimal(10,2) DEFAULT NULL,
   `stock` int(11) DEFAULT NULL,
   `es_vendible` tinyint(1) NOT NULL DEFAULT 1,
   `imagen` varchar(255) DEFAULT NULL,
@@ -937,7 +934,6 @@ ALTER TABLE `permisos`
 --
 ALTER TABLE `productos`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `productos_barcode_unique` (`codigo_barras`),
   ADD KEY `categoria_id` (`categoria_id`);
 
 --

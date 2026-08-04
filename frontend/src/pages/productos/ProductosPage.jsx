@@ -395,7 +395,6 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar }) {
                                 </span>
                               )}
                             </div>
-                            {prod.codigo && <p className="text-xs text-muted-foreground">{prod.codigo}</p>}
                           </div>
                         </div>
                       </td>

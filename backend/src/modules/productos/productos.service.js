@@ -176,7 +176,7 @@ async function obtenerProducto(id, alcance) {
   return _normalizarGruposOpciones(conStock);
 }
 
-async function crearProducto({ categoria_id, nombre, codigo_barras, codigo, precio, costo, stock, sucursal_id, es_vendible, imagen, grupos_opciones, es_pesable }, alcance) {
+async function crearProducto({ categoria_id, nombre, precio, stock, sucursal_id, es_vendible, imagen, grupos_opciones, es_pesable }, alcance) {
   let sucursalDestino;
   const conStock = stock !== undefined && stock !== null;
 
@@ -192,7 +192,7 @@ async function crearProducto({ categoria_id, nombre, codigo_barras, codigo, prec
   }
 
   const producto = await sequelize.transaction(async (t) => {
-    const p = await Producto.create({ categoria_id, nombre, codigo_barras, codigo, precio, costo, stock: conStock ? 0 : null, es_vendible, imagen, es_pesable }, { transaction: t });
+    const p = await Producto.create({ categoria_id, nombre, precio, stock: conStock ? 0 : null, es_vendible, imagen, es_pesable }, { transaction: t });
     await _sincronizarGruposOpciones(p.id, grupos_opciones, t);
     return p;
   });

@@ -9,7 +9,10 @@ async function listar() {
 
 // Promociones vigentes ahora mismo — usadas por el POS para descontar el precio.
 async function listarActivas() {
-  const promos = await Promocion.findAll({ where: { activo: 1 } });
+  // Orden ascendente por id: el frontend arma un mapa producto_id → promo
+  // pisando con la última que procesa, así que acá se devuelve en el mismo
+  // orden que espera (la más reciente queda última = la que gana).
+  const promos = await Promocion.findAll({ where: { activo: 1 }, order: [['id', 'ASC']] });
   return promos.filter((p) => estaActivoHoy(p));
 }
 

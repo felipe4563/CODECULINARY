@@ -35,7 +35,12 @@ async function _extraPorOpciones(opcion_ids = []) {
 // desde lo que muestre el catálogo que ya tenga el cliente en pantalla.
 async function _precioConPromocion(producto) {
   const base = parseFloat(producto.precio);
-  const promo = await Promocion.findOne({ where: { producto_id: producto.id, activo: 1 } });
+  // Si hay más de una promoción activa para el mismo producto, gana la más
+  // reciente — mismo criterio que usa el frontend al armar su mapa de
+  // promociones (la última que procesa pisa a las anteriores). Sin este
+  // orden explícito, el resultado dependía del plan de ejecución de MySQL y
+  // podía no coincidir con lo que el cliente vio en pantalla al cobrar.
+  const promo = await Promocion.findOne({ where: { producto_id: producto.id, activo: 1 }, order: [['id', 'DESC']] });
   if (!promo || !estaActivoHoy(promo)) return base;
   const descuento = promo.tipo === 'porcentaje' ? base * (parseFloat(promo.valor) / 100) : parseFloat(promo.valor);
   return Math.max(0, base - descuento);
@@ -86,6 +91,16 @@ async function _resolverCanje(cliente_id, puntos_canjear, cfg, transaction, meto
 // en detalle_pedidos, según si el producto se vende por peso o por unidad.
 // `precioBase` ya viene con la promoción aplicada (ver _precioConPromocion) y
 // `extra` es la suma de precio_adicional de las opciones elegidas (ej. sabor).
+// `monto_recibido` en efectivo se autocompleta en el frontend a partir del
+// total ya calculado ahí (el cajero no lo tipea), así que una diferencia de
+// fracción de centavo entre ese cálculo y el recálculo del backend (p. ej.
+// por redondeo de punto flotante en descuentos porcentuales) no debería
+// bloquear la venta — solo importa la diferencia a nivel de centavo real.
+function _montoInsuficiente(monto_recibido, monto_neto) {
+  if (!monto_recibido) return true;
+  return parseFloat(monto_recibido) < monto_neto - 0.005;
+}
+
 function _datosLinea(item, producto, precioBase, extra = 0) {
   if (producto.es_pesable) {
     const pesoCrudo = parseFloat(item.peso);
@@ -600,10 +615,8 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
   const { descuento: descuentoCupon } = await _resolverCupon(cupon_codigo, total - parseFloat(descuento), cliente_id);
   const monto_neto = Math.max(0, total - parseFloat(descuento) - descuentoPuntos - descuentoCupon + parseFloat(propina));
 
-  if (metodo_pago === 'efectivo') {
-    if (!monto_recibido || parseFloat(monto_recibido) < monto_neto) {
-      throw Object.assign(new Error('Monto recibido insuficiente'), { status: 400 });
-    }
+  if (metodo_pago === 'efectivo' && _montoInsuficiente(monto_recibido, monto_neto)) {
+    throw Object.assign(new Error('Monto recibido insuficiente'), { status: 400 });
   }
 
   const numero_llevar = tipo === 'llevar' ? await _siguienteNumeroLlevar() : null;
@@ -746,7 +759,7 @@ async function cobrar(pedido_id, usuario_id, { metodo_pago, monto_recibido, desc
   const { descuento: descuentoCupon } = await _resolverCupon(cupon_codigo, parseFloat(pedido.total) - parseFloat(descuento), pedido.cliente_id);
   const monto_neto = Math.max(0, parseFloat(pedido.total) - parseFloat(descuento) - descuentoPuntos - descuentoCupon + parseFloat(propina));
 
-  if (metodo_pago === 'efectivo' && (!monto_recibido || parseFloat(monto_recibido) < monto_neto)) {
+  if (metodo_pago === 'efectivo' && _montoInsuficiente(monto_recibido, monto_neto)) {
     throw Object.assign(new Error('Monto recibido insuficiente'), { status: 400 });
   }
 
