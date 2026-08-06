@@ -1,5 +1,5 @@
-import { useMemo, useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -9,6 +9,7 @@ import { useThemeStore } from '../store/themeStore';
 import { getVentas } from '../api/ventas';
 import { getEstadoCajas } from '../api/caja';
 import { getLibroCaja } from '../api/libroCaja';
+import socket from '../socket';
 import { TrendingUp, TrendingDown, PiggyBank, ShoppingBag, Wallet, XCircle, CalendarDays } from 'lucide-react';
 
 /* ─── Paleta de colores ───────────────────────────────────────── */
@@ -170,6 +171,7 @@ export default function Dashboard() {
   const { modo }    = useThemeStore();
   const isDark      = modo === 'dark';
   const { isXs, isSm } = useScreenSize();
+  const qc = useQueryClient();
 
   const gridColor  = isDark ? '#1f2937' : '#f9fafb';
   const tickColor  = isDark ? '#9ca3af' : '#6b7280';
@@ -189,11 +191,14 @@ export default function Dashboard() {
   const [añoVal, setAñoVal] = useState(String(hoy.getFullYear()));
 
   /* ─── queries ───────────────────────────────────────────────── */
+  // El socket (ver más abajo) empuja la actualización al instante ante
+  // cualquier venta/gasto nuevo; este polling queda solo como respaldo por
+  // si el socket se desconecta.
   const { data: ventas = [], isLoading: cvVentas } = useQuery({
     queryKey: ['ventas-dashboard'],
     queryFn: getVentas,
     enabled: puedeVerVentas,
-    refetchInterval: 60_000,
+    refetchInterval: 5 * 60_000,
     staleTime: 30_000,
   });
 
@@ -201,7 +206,7 @@ export default function Dashboard() {
     queryKey: ['caja-estado', usuario?.sucursal_activa?.id],
     queryFn: () => getEstadoCajas(usuario?.sucursal_activa?.id),
     enabled: puedeVerCaja && !!usuario?.sucursal_activa?.id,
-    refetchInterval: 60_000,
+    refetchInterval: 5 * 60_000,
     staleTime: 30_000,
   });
 
@@ -209,9 +214,20 @@ export default function Dashboard() {
     queryKey: ['libro-caja-dashboard'],
     queryFn: getLibroCaja,
     enabled: puedeVerGastos,
-    refetchInterval: 60_000,
+    refetchInterval: 5 * 60_000,
     staleTime: 30_000,
   });
+
+  const invalidarDashboard = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ['ventas-dashboard'] });
+    qc.invalidateQueries({ queryKey: ['caja-estado'] });
+    qc.invalidateQueries({ queryKey: ['libro-caja-dashboard'] });
+  }, [qc]);
+
+  useEffect(() => {
+    socket.on('restaurante:actualizar', invalidarDashboard);
+    return () => socket.off('restaurante:actualizar', invalidarDashboard);
+  }, [invalidarDashboard]);
 
   // agrega las sesiones abiertas de todas las cajas de la sucursal para el widget del dashboard
   const cajaActiva = useMemo(() => {

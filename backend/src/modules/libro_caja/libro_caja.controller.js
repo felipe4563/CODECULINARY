@@ -11,12 +11,9 @@ async function listar(req, res, next) {
 
 async function crear(req, res, next) {
   try {
-    const { tipo, concepto, monto, sesion_caja_id } = req.body;
+    const { tipo, concepto, monto } = req.body;
     if (!tipo || !concepto || monto === undefined) {
       return res.status(400).json({ ok: false, mensaje: 'tipo, concepto y monto son requeridos' });
-    }
-    if (!sesion_caja_id) {
-      return res.status(400).json({ ok: false, mensaje: 'sesion_caja_id es requerido' });
     }
     res.status(201).json({ ok: true, datos: await svc.crear(req.usuario.id, req.body, _alcance(req)) });
   } catch (err) { next(err); }

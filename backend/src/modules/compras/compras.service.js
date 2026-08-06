@@ -1,5 +1,6 @@
-const { Proveedor, Compra, DetalleCompra, Producto, sequelize } = require('../../models');
+const { Proveedor, Compra, DetalleCompra, Producto, LibroCaja, sequelize } = require('../../models');
 const { ajustarStockSucursal } = require('../inventario/stock.service');
+const { emitir } = require('../../socket');
 
 const INCLUDE_COMPRA = [
   { model: Proveedor, as: 'proveedor', attributes: ['id', 'nombre'] },
@@ -88,7 +89,24 @@ async function recibirCompra(id, usuario_id, alcance) {
       });
     }
     await compra.update({ estado: 'recibido' }, { transaction: t });
+
+    // Toda compra recibida es plata que sale del negocio, así que se anota
+    // como egreso en el libro de caja igual que cualquier otro gasto — sin
+    // sesión de caja, porque una compra a proveedor no pasa por una caja
+    // registradora abierta.
+    await LibroCaja.create({
+      sesion_caja_id: null,
+      usuario_id,
+      tipo: 'egreso',
+      concepto: `Compra #${compra.id} - ${compra.proveedor?.nombre || 'proveedor'}`,
+      monto: compra.total,
+      metodo_pago: 'efectivo',
+    }, { transaction: t });
   });
+
+  // Avisa a pantallas abiertas (ej. Dashboard) para que refresquen sin
+  // esperar al polling — mismo patrón que ventas.service.js usa para ventas.
+  emitir('restaurante:actualizar', { tipo: 'gasto_nuevo' }, compra.sucursal_id);
 
   return obtenerCompra(id, alcance);
 }
