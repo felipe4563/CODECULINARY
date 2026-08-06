@@ -11,6 +11,16 @@ const UsuariosSucursales = sequelize.define('usuarios_sucursales', {
   sucursal_id: { type: DataTypes.INTEGER.UNSIGNED },
 }, { tableName: 'usuarios_sucursales', timestamps: false });
 
+const CuponProductos = sequelize.define('cupon_productos', {
+  cupon_id: { type: DataTypes.INTEGER.UNSIGNED },
+  producto_id: { type: DataTypes.INTEGER.UNSIGNED },
+}, { tableName: 'cupon_productos', timestamps: false });
+
+const PromocionProductos = sequelize.define('promocion_productos', {
+  promocion_id: { type: DataTypes.INTEGER.UNSIGNED },
+  producto_id: { type: DataTypes.INTEGER.UNSIGNED },
+}, { tableName: 'promocion_productos', timestamps: false });
+
 const Rol = require('./Rol');
 const Permiso = require('./Permiso');
 const Usuario = require('./Usuario');
@@ -41,6 +51,8 @@ const Combo = require('./Combo');
 const ComboProducto = require('./ComboProducto');
 const Promocion = require('./Promocion');
 const Cupon = require('./Cupon');
+const RuletaPremio = require('./RuletaPremio');
+const RuletaGiro = require('./RuletaGiro');
 
 // Roles y Permisos
 Rol.belongsToMany(Permiso, { through: RolesPermisos, foreignKey: 'rol_id', otherKey: 'permiso_id', as: 'permisos' });
@@ -85,13 +97,25 @@ DetallePedido.belongsTo(Combo, { foreignKey: 'combo_id', as: 'combo' });
 // Combos y promociones
 Combo.belongsToMany(Producto, { through: ComboProducto, foreignKey: 'combo_id', otherKey: 'producto_id', as: 'productos' });
 Producto.belongsToMany(Combo, { through: ComboProducto, foreignKey: 'producto_id', otherKey: 'combo_id', as: 'combos' });
-Promocion.belongsTo(Producto, { foreignKey: 'producto_id', as: 'producto' });
-Producto.hasMany(Promocion, { foreignKey: 'producto_id', as: 'promociones' });
+// Una promoción puede afectar a varios productos (ver migración 033).
+Promocion.belongsToMany(Producto, { through: PromocionProductos, foreignKey: 'promocion_id', otherKey: 'producto_id', as: 'productos' });
+Producto.belongsToMany(Promocion, { through: PromocionProductos, foreignKey: 'producto_id', otherKey: 'promocion_id', as: 'promociones' });
 
 // Cupones
 Pedido.belongsTo(Cupon, { foreignKey: 'cupon_id', as: 'cupon' });
 Cupon.belongsTo(Usuario, { foreignKey: 'creado_por', as: 'creador' });
 Cupon.belongsTo(Cliente, { foreignKey: 'cliente_id', as: 'cliente' });
+// Productos a los que se restringe el cupón (opcional — sin filas acá,
+// el cupón descuenta sobre todo el carrito, como siempre).
+Cupon.belongsToMany(Producto, { through: CuponProductos, foreignKey: 'cupon_id', otherKey: 'producto_id', as: 'productos' });
+
+// Ruleta de premios
+RuletaGiro.belongsTo(Cliente, { foreignKey: 'cliente_id', as: 'cliente' });
+RuletaGiro.belongsTo(RuletaPremio, { foreignKey: 'premio_id', as: 'premio' });
+RuletaGiro.belongsTo(Cupon, { foreignKey: 'cupon_id', as: 'cupon' });
+RuletaGiro.belongsTo(Usuario, { foreignKey: 'usuario_id', as: 'usuario' });
+RuletaPremio.belongsTo(Producto, { foreignKey: 'producto_id', as: 'producto' });
+RuletaPremio.belongsTo(Combo, { foreignKey: 'combo_id', as: 'combo' });
 
 // SesionCaja
 SesionCaja.belongsTo(Usuario, { foreignKey: 'usuario_id', as: 'usuario' });
@@ -163,4 +187,5 @@ module.exports = {
   PagoQr,
   Combo, ComboProducto, Promocion,
   Cupon,
+  RuletaPremio, RuletaGiro,
 };

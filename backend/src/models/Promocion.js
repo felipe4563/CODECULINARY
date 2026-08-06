@@ -3,7 +3,6 @@ const sequelize = require('../config/database');
 
 const Promocion = sequelize.define('Promocion', {
   id: { type: DataTypes.INTEGER.UNSIGNED, primaryKey: true, autoIncrement: true },
-  producto_id: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
   nombre: { type: DataTypes.STRING(150) },
   tipo: { type: DataTypes.ENUM('porcentaje', 'monto'), allowNull: false, defaultValue: 'porcentaje' },
   valor: { type: DataTypes.DECIMAL(10, 2), allowNull: false },

@@ -40,7 +40,13 @@ async function _precioConPromocion(producto) {
   // promociones (la última que procesa pisa a las anteriores). Sin este
   // orden explícito, el resultado dependía del plan de ejecución de MySQL y
   // podía no coincidir con lo que el cliente vio en pantalla al cobrar.
-  const promo = await Promocion.findOne({ where: { producto_id: producto.id, activo: 1 }, order: [['id', 'DESC']] });
+  // Una promoción puede afectar a varios productos (belongsToMany) — se
+  // filtra vía el `where` sobre la asociación, equivalente a un INNER JOIN.
+  const promo = await Promocion.findOne({
+    where: { activo: 1 },
+    include: [{ model: Producto, as: 'productos', attributes: [], where: { id: producto.id }, through: { attributes: [] } }],
+    order: [['id', 'DESC']],
+  });
   if (!promo || !estaActivoHoy(promo)) return base;
   const descuento = promo.tipo === 'porcentaje' ? base * (parseFloat(promo.valor) / 100) : parseFloat(promo.valor);
   return redondearAMedio(Math.max(0, base - descuento));
@@ -281,7 +287,7 @@ async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, 
     ({ puntos: puntosCanjeados, descuento: descuentoPuntos, cliente: clienteBloqueado } =
       await _resolverCanje(pedido.cliente_id, puntos_canjear, cfgFidelidad, transaction, metodo_pago));
     ({ cupon, descuento: descuentoCupon } =
-      await _resolverCupon(cupon_codigo, parseFloat(pedido.total) - parseFloat(descuento), pedido.cliente_id, transaction));
+      await _resolverCupon(cupon_codigo, parseFloat(pedido.total) - parseFloat(descuento), pedido.cliente_id, transaction, detalles));
   }
 
   const monto_neto = Math.max(0, parseFloat(pedido.total) - parseFloat(descuento) - descuentoPuntos - descuentoCupon + parseFloat(propina));
@@ -401,7 +407,7 @@ async function _emitirImpresion(pedido, metodo_pago, cambio, sucursal_id, numero
  * total ya calculado) y deja el pedido en 'pendiente_pago' hasta que se
  * confirme (ver consultarEstadoPagoQr / procesarWebhookPagoQr).
  */
-async function iniciarPagoQr(pedido, { descuento = 0, propina = 0, puntos_canjear = 0, cupon_codigo } = {}) {
+async function iniciarPagoQr(pedido, { descuento = 0, propina = 0, puntos_canjear = 0, cupon_codigo, items } = {}) {
   const cfgFidelidad = await _configFidelidad();
 
   // El monto que se le cobra al cliente por CodePay queda fijo desde que se
@@ -433,7 +439,7 @@ async function iniciarPagoQr(pedido, { descuento = 0, propina = 0, puntos_canjea
   if (cupon_codigo) {
     try {
       await sequelize.transaction(async (t) => {
-        const { cupon, descuento: desc } = await _resolverCupon(cupon_codigo, parseFloat(pedido.total) - parseFloat(descuento), pedido.cliente_id, t);
+        const { cupon, descuento: desc } = await _resolverCupon(cupon_codigo, parseFloat(pedido.total) - parseFloat(descuento), pedido.cliente_id, t, items);
         await cupon.update({ usos_actuales: cupon.usos_actuales + 1, usado_en: new Date() }, { transaction: t });
         await pedido.update({ cupon_id: cupon.id, descuento_cupon: desc }, { transaction: t });
         cuponReservado = cupon;
@@ -658,7 +664,8 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
   const { descuento: descuentoPuntos } = await _resolverCanje(cliente_id, puntos_canjear, cfgFidelidad, null, metodo_pago);
 
   const total = productos.reduce((sum, { linea }) => sum + linea.cantidad * linea.precio, 0);
-  const { descuento: descuentoCupon } = await _resolverCupon(cupon_codigo, total - parseFloat(descuento), cliente_id);
+  const itemsCupon = productos.map(({ item, combo, linea }) => ({ producto_id: combo ? null : item.producto_id, cantidad: linea.cantidad, precio: linea.precio }));
+  const { descuento: descuentoCupon } = await _resolverCupon(cupon_codigo, total - parseFloat(descuento), cliente_id, undefined, itemsCupon);
   const monto_neto = Math.max(0, total - parseFloat(descuento) - descuentoPuntos - descuentoCupon + parseFloat(propina));
 
   if (metodo_pago === 'efectivo' && _montoInsuficiente(monto_recibido, monto_neto)) {
@@ -686,7 +693,7 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
         combo_id: combo ? item.combo_id : null,
         cantidad: linea.cantidad, precio: linea.precio, peso: linea.peso, nota: item.nota,
       }, { transaction: t });
-      detalles.push({ producto_id: combo ? null : item.producto_id, combo_id: combo ? item.combo_id : null, cantidad: linea.cantidad });
+      detalles.push({ producto_id: combo ? null : item.producto_id, combo_id: combo ? item.combo_id : null, cantidad: linea.cantidad, precio: linea.precio });
     }
 
     if (metodo_pago !== 'qr') {
@@ -698,7 +705,7 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
 
   if (metodo_pago === 'qr') {
     const pedidoPendiente = await Pedido.findByPk(pedidoId);
-    const pago_qr = await iniciarPagoQr(pedidoPendiente, { descuento, propina, puntos_canjear, cupon_codigo });
+    const pago_qr = await iniciarPagoQr(pedidoPendiente, { descuento, propina, puntos_canjear, cupon_codigo, items: itemsCupon });
     emitir('restaurante:actualizar', { tipo: 'pedido_nuevo' }, sucursal_id);
     return { pedido: await obtener(pedidoId), pago_qr };
   }
@@ -802,7 +809,8 @@ async function cobrar(pedido_id, usuario_id, { metodo_pago, monto_recibido, desc
 
   const cfgFidelidad = await _configFidelidad();
   const { descuento: descuentoPuntos } = await _resolverCanje(pedido.cliente_id, puntos_canjear, cfgFidelidad, null, metodo_pago);
-  const { descuento: descuentoCupon } = await _resolverCupon(cupon_codigo, parseFloat(pedido.total) - parseFloat(descuento), pedido.cliente_id);
+  const itemsCupon = pedido.detalles.map((d) => ({ producto_id: d.producto_id, cantidad: d.cantidad, precio: parseFloat(d.precio) }));
+  const { descuento: descuentoCupon } = await _resolverCupon(cupon_codigo, parseFloat(pedido.total) - parseFloat(descuento), pedido.cliente_id, undefined, itemsCupon);
   const monto_neto = Math.max(0, parseFloat(pedido.total) - parseFloat(descuento) - descuentoPuntos - descuentoCupon + parseFloat(propina));
 
   if (metodo_pago === 'efectivo' && _montoInsuficiente(monto_recibido, monto_neto)) {
@@ -812,11 +820,11 @@ async function cobrar(pedido_id, usuario_id, { metodo_pago, monto_recibido, desc
   if (metodo_pago === 'qr') {
     // El cupón (igual que los puntos) se reserva dentro de iniciarPagoQr,
     // porque el monto cobrado por QR queda fijo desde que se genera.
-    const pago_qr = await iniciarPagoQr(pedido, { descuento, propina, puntos_canjear, cupon_codigo });
+    const pago_qr = await iniciarPagoQr(pedido, { descuento, propina, puntos_canjear, cupon_codigo, items: itemsCupon });
     return { pedido: await obtener(pedido_id), pago_qr };
   }
 
-  const detalles = pedido.detalles.map((d) => ({ producto_id: d.producto_id, combo_id: d.combo_id, cantidad: d.cantidad }));
+  const detalles = pedido.detalles.map((d) => ({ producto_id: d.producto_id, combo_id: d.combo_id, cantidad: d.cantidad, precio: parseFloat(d.precio) }));
   await sequelize.transaction((t) => _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, descuento, propina, usuario_id, puntos_canjear, cupon_codigo }, t));
 
   const cobrado = await obtener(pedido_id);

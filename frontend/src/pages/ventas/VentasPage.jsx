@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   RefreshCw, AlertCircle, Package, ShoppingCart, ShoppingBag,
-  Plus, Minus, Trash2, CreditCard, Wallet, ChevronRight, LayoutGrid, CheckCircle2, Gift,
+  Plus, Minus, Trash2, CreditCard, Wallet, ChevronRight, LayoutGrid, CheckCircle2, Gift, Disc3,
 } from 'lucide-react';
 import { getMesas } from '../../api/mesas';
 import { getVentas, crearVentaCompleta, cobrarVenta, reimprimirVenta } from '../../api/ventas';
@@ -14,6 +14,7 @@ import { getCombosActivos } from '../../api/combos';
 import { getPromocionesActivas } from '../../api/promociones';
 import ClienteFidelidad from './components/ClienteFidelidad';
 import CuponInput from './components/CuponInput';
+import GirarRuletaPanel from '../ruleta/GirarRuletaPanel';
 import { getConfiguracion } from '../../api/configuracion';
 import { usePermisos } from '../../hooks/usePermisos';
 import { useAuth } from '../../hooks/useAuth';
@@ -570,6 +571,8 @@ export default function VentasPage() {
 /* ─── Modal Cobrar ──────────────────────────────────────────────────────── */
 
 function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId, onClose, onExito }) {
+  const qc = useQueryClient();
+  const { tienePermiso } = usePermisos();
   const [metodo, setMetodo] = useState('efectivo');
   const [notas, setNotas] = useState('');
   const [error, setError] = useState(null);
@@ -579,6 +582,7 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
   const [puntosCanjear, setPuntosCanjear] = useState(0);
   const [descuentoPuntos, setDescuentoPuntos] = useState(0);
   const [cuponAplicado, setCuponAplicado] = useState(null); // { codigo, descuento } | null
+  const [mostrarRuleta, setMostrarRuleta] = useState(false);
 
   const { data: config = {} } = useQuery({ queryKey: ['configuracion'], queryFn: getConfiguracion, staleTime: 60_000 });
   const puedeCanjearPuntos = metodo === 'qr' ? config.fidelidad_canje_qr === 'true' : config.fidelidad_canje_efectivo !== 'false';
@@ -670,6 +674,7 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
   }
 
   return (
+    <>
     <Modal titulo="Cobrar orden" onClose={onClose} ancho="max-w-sm">
       <div className="space-y-5">
         <div className="bg-muted rounded-xl p-4 text-center">
@@ -698,7 +703,18 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
           onAplicar={(codigo, descuento) => setCuponAplicado({ codigo, descuento })}
           onQuitar={() => setCuponAplicado(null)}
           clienteId={clienteFidelidad?.id}
+          items={carrito.map((it) => ({ producto_id: it.producto_id, cantidad: it.cantidad, precio: it.precio }))}
         />
+
+        {clienteFidelidad?.id && tienePermiso('ruleta', 'girar') && (
+          <button
+            type="button"
+            onClick={() => setMostrarRuleta(true)}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-dashed border-primary/50 text-primary hover:bg-primary/10 text-sm font-semibold transition-colors"
+          >
+            <Disc3 className="w-4 h-4" /> Girar Ruleta de Premios
+          </button>
+        )}
 
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Método de pago</p>
@@ -744,5 +760,16 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
         </div>
       </div>
     </Modal>
+
+    {mostrarRuleta && clienteFidelidad?.id && (
+      <Modal titulo="Ruleta de Premios" onClose={() => setMostrarRuleta(false)} ancho="max-w-sm">
+        <GirarRuletaPanel
+          cliente={clienteFidelidad}
+          layout="stack"
+          onGanoPremio={() => qc.invalidateQueries({ queryKey: ['cupones-disponibles', clienteFidelidad.id] })}
+        />
+      </Modal>
+    )}
+    </>
   );
 }

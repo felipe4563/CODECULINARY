@@ -580,6 +580,7 @@ export default function PedidoPage() {
         <ModalCobrar
           total={total}
           pedidoId={id}
+          detalles={pedido.detalles}
           onClose={() => setModalCobrar(false)}
           onExito={() => {
             qc.invalidateQueries({ queryKey: ['mesas'] });
@@ -626,7 +627,7 @@ export default function PedidoPage() {
 
 /* ─── Modal Cobrar ──────────────────────────────────────────────────────── */
 
-function ModalCobrar({ total, pedidoId, onClose, onExito }) {
+function ModalCobrar({ total, pedidoId, detalles, onClose, onExito }) {
   const [metodo, setMetodo] = useState('efectivo');
   const [error, setError] = useState(null);
   const [pagoQr, setPagoQr] = useState(null);
@@ -741,6 +742,7 @@ function ModalCobrar({ total, pedidoId, onClose, onExito }) {
           onAplicar={(codigo, descuento) => setCuponAplicado({ codigo, descuento })}
           onQuitar={() => setCuponAplicado(null)}
           clienteId={clienteFidelidad?.id}
+          items={(detalles || []).map((d) => ({ producto_id: d.producto_id, cantidad: d.cantidad, precio: parseFloat(d.precio) }))}
         />
 
         {/* Método de pago */}

@@ -21,6 +21,7 @@ const MODULO_LABELS = {
   combos:       'Combos',
   promociones:  'Promociones',
   cupones:      'Cupones',
+  ruleta:       'Ruleta',
   clientes:     'Clientes',
   configuracion:'Configuración',
   roles:        'Roles',
@@ -36,6 +37,7 @@ const MODULO_COLOR = {
   combos:       'pink',
   promociones:  'lime',
   cupones:      'fuchsia',
+  ruleta:       'red',
   inventario:   'purple',
   compras:      'orange',
   proveedores:  'amber',
@@ -62,6 +64,7 @@ const COLOR_CLASSES = {
   pink:    'bg-pink-50   dark:bg-pink-900/20   text-pink-700   dark:text-pink-400   border-pink-200   dark:border-pink-800',
   lime:    'bg-lime-50   dark:bg-lime-900/20   text-lime-700   dark:text-lime-400   border-lime-200   dark:border-lime-800',
   fuchsia: 'bg-fuchsia-50 dark:bg-fuchsia-900/20 text-fuchsia-700 dark:text-fuchsia-400 border-fuchsia-200 dark:border-fuchsia-800',
+  red:     'bg-red-50    dark:bg-red-900/20    text-red-700    dark:text-red-400    border-red-200    dark:border-red-800',
 };
 
 /* ─────────────────────────────────────────────────────── página principal ── */

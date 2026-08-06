@@ -20,6 +20,11 @@ function etiquetaValor(promo) {
   return promo.tipo === 'porcentaje' ? `-${parseFloat(promo.valor)}%` : `-Bs ${parseFloat(promo.valor).toFixed(2)}`;
 }
 
+function etiquetaProductos(promo) {
+  if (!promo.productos || promo.productos.length === 0) return '—';
+  return promo.productos.map((p) => p.nombre).join(', ');
+}
+
 export default function PromocionesPage() {
   const { tienePermiso } = usePermisos();
   const qc = useQueryClient();
@@ -98,7 +103,7 @@ export default function PromocionesPage() {
                       <Tag className="w-4 h-4 text-primary" />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-foreground truncate">{p.producto?.nombre ?? '—'}</p>
+                      <p className="font-semibold text-foreground truncate">{etiquetaProductos(p)}</p>
                       <p className="text-xs text-muted-foreground">{p.nombre || 'Sin nombre'}</p>
                     </div>
                   </div>
@@ -142,8 +147,8 @@ export default function PromocionesPage() {
                 <tbody className="divide-y divide-border">
                   {promociones.map((p) => (
                     <tr key={p.id} className="hover:bg-muted/50 transition-colors">
-                      <td className="px-5 py-3.5">
-                        <div className="font-semibold text-foreground">{p.producto?.nombre ?? '—'}</div>
+                      <td className="px-5 py-3.5 max-w-[240px]">
+                        <div className="font-semibold text-foreground truncate" title={etiquetaProductos(p)}>{etiquetaProductos(p)}</div>
                         {p.nombre && <div className="text-xs text-muted-foreground">{p.nombre}</div>}
                       </td>
                       <td className="px-5 py-3.5 font-semibold text-emerald-600 dark:text-emerald-400">{etiquetaValor(p)}</td>
@@ -184,7 +189,7 @@ export default function PromocionesPage() {
         <Modal titulo="Eliminar promoción" onClose={() => setConfirmar(null)} ancho="max-w-sm">
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              ¿Eliminar la promoción de <span className="font-semibold text-foreground">"{confirmar.producto?.nombre}"</span>?
+              ¿Eliminar la promoción <span className="font-semibold text-foreground">"{confirmar.nombre || etiquetaProductos(confirmar)}"</span>?
             </p>
             <div className="flex justify-end gap-3">
               <button onClick={() => setConfirmar(null)} className="px-4 py-2 rounded-xl text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
@@ -207,7 +212,7 @@ export default function PromocionesPage() {
 
 function ModalPromocion({ promocion, onClose, onExito }) {
   const esNuevo = !promocion;
-  const [productoId, setProductoId]   = useState(promocion?.producto_id ?? '');
+  const [productosIds, setProductosIds] = useState(promocion?.productos?.map((p) => p.id) ?? []);
   const [nombre, setNombre]           = useState(promocion?.nombre ?? '');
   const [tipo, setTipo]               = useState(promocion?.tipo ?? 'porcentaje');
   const [valor, setValor]             = useState(promocion?.valor ?? '');
@@ -219,10 +224,14 @@ function ModalPromocion({ promocion, onClose, onExito }) {
 
   const { data: catalogo = [] } = useQuery({ queryKey: ['productos-catalogo'], queryFn: () => getProductos({ solo_vendibles: true }) });
 
+  function alternarProducto(id) {
+    setProductosIds((prev) => (prev.includes(id) ? prev.filter((pid) => pid !== id) : [...prev, id]));
+  }
+
   const guardar = useMutation({
     mutationFn: () => {
       const datos = {
-        producto_id: parseInt(productoId, 10), nombre: nombre.trim() || null, tipo, valor: parseFloat(valor), activo,
+        producto_ids: productosIds, nombre: nombre.trim() || null, tipo, valor: parseFloat(valor), activo,
         fecha_inicio: fechaInicio || null, fecha_fin: fechaFin || null, dias_semana: diasSemana,
       };
       return esNuevo ? crearPromocion(datos) : actualizarPromocion(promocion.id, datos);
@@ -231,23 +240,32 @@ function ModalPromocion({ promocion, onClose, onExito }) {
     onError: (err) => setError(err?.response?.data?.mensaje ?? 'Error al guardar la promoción'),
   });
 
-  const valido = !!productoId && parseFloat(valor) > 0 && (tipo !== 'porcentaje' || parseFloat(valor) <= 100);
+  const valido = productosIds.length > 0 && parseFloat(valor) > 0 && (tipo !== 'porcentaje' || parseFloat(valor) <= 100);
 
   return (
     <Modal titulo={esNuevo ? 'Nueva Promoción' : 'Editar Promoción'} onClose={onClose} ancho="max-w-md">
       <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
-        <div>
-          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
-            Producto <span className="text-destructive">*</span>
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            Productos <span className="text-destructive">*</span> <span className="font-normal normal-case">(puede ser más de uno)</span>
           </label>
-          <select
-            value={productoId}
-            onChange={(e) => { setProductoId(e.target.value); setError(null); }}
-            className="w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
-          >
-            <option value="">Elegir producto...</option>
-            {catalogo.map((p) => <option key={p.id} value={p.id}>{p.nombre} — Bs {parseFloat(p.precio).toFixed(2)}</option>)}
-          </select>
+          <div className="border border-border rounded-xl max-h-40 overflow-y-auto divide-y divide-border">
+            {catalogo.map((p) => (
+              <label key={p.id} className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer hover:bg-muted/50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={productosIds.includes(p.id)}
+                  onChange={() => { alternarProducto(p.id); setError(null); }}
+                  className="rounded border-input"
+                />
+                <span className="text-foreground truncate flex-1">{p.nombre}</span>
+                <span className="text-xs text-muted-foreground shrink-0">Bs {parseFloat(p.precio).toFixed(2)}</span>
+              </label>
+            ))}
+          </div>
+          {productosIds.length > 0 && (
+            <p className="text-xs text-muted-foreground">{productosIds.length} producto{productosIds.length !== 1 ? 's' : ''} seleccionado{productosIds.length !== 1 ? 's' : ''}.</p>
+          )}
         </div>
 
         <div>

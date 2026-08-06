@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Ticket, Plus, Pencil, Trash2, AlertCircle, RefreshCw, Shuffle, Search, X, User } from 'lucide-react';
+import { Ticket, Plus, Pencil, Trash2, AlertCircle, RefreshCw, Shuffle, Search, X, User, Package } from 'lucide-react';
 import { getCupones, crearCupon, actualizarCupon, eliminarCupon } from '../../api/cupones';
 import { getClientes } from '../../api/clientes';
+import { getProductos } from '../../api/productos';
 import { usePermisos } from '../../hooks/usePermisos';
 import Modal from '../../components/ui/Modal';
 
@@ -28,6 +29,11 @@ function etiquetaUsos(cupon) {
 
 function etiquetaValor(cupon) {
   return cupon.tipo === 'porcentaje' ? `-${parseFloat(cupon.valor)}%` : `-Bs ${parseFloat(cupon.valor).toFixed(2)}`;
+}
+
+function etiquetaAplicaA(cupon) {
+  if (!cupon.productos || cupon.productos.length === 0) return 'Todo el pedido';
+  return cupon.productos.map((p) => p.nombre).join(', ');
 }
 
 function generarCodigo() {
@@ -142,6 +148,11 @@ export default function CuponesPage() {
                   <span>{etiquetaUsos(c)}</span>
                   {c.cliente && <span className="flex items-center gap-1"><User className="w-3 h-3" /> {c.cliente.nombre}</span>}
                 </div>
+                {c.productos && c.productos.length > 0 && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                    <Package className="w-3 h-3 shrink-0" /> {etiquetaAplicaA(c)}
+                  </p>
+                )}
               </div>
             ))}
           </div>
@@ -154,6 +165,7 @@ export default function CuponesPage() {
                   <tr className="bg-muted border-b border-border">
                     <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Código</th>
                     <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Descuento</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Aplica a</th>
                     <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Usos</th>
                     <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cliente</th>
                     <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Vencimiento</th>
@@ -166,6 +178,7 @@ export default function CuponesPage() {
                     <tr key={c.id} className="hover:bg-muted/50 transition-colors">
                       <td className="px-5 py-3.5 font-semibold text-foreground font-mono">{c.codigo}</td>
                       <td className="px-5 py-3.5 font-semibold text-emerald-600 dark:text-emerald-400">{etiquetaValor(c)}</td>
+                      <td className="px-5 py-3.5 text-muted-foreground max-w-[220px] truncate" title={etiquetaAplicaA(c)}>{etiquetaAplicaA(c)}</td>
                       <td className="px-5 py-3.5 text-muted-foreground">
                         {etiquetaUsos(c)}
                         {c.limite_por_cliente ? <span className="block text-xs">(máx. {c.limite_por_cliente}/cliente)</span> : null}
@@ -242,6 +255,7 @@ function ModalCupon({ cupon, onClose, onExito }) {
   const [clienteExclusivo, setClienteExclusivo] = useState(cupon?.cliente ?? null);
   const [buscarCliente, setBuscarCliente] = useState('');
   const [buscandoCliente, setBuscandoCliente] = useState(false);
+  const [productosIds, setProductosIds] = useState(cupon?.productos?.map((p) => p.id) ?? []);
   const [error, setError] = useState(null);
 
   const { data: resultadosCliente = [] } = useQuery({
@@ -250,6 +264,15 @@ function ModalCupon({ cupon, onClose, onExito }) {
     enabled: buscandoCliente && buscarCliente.trim().length >= 2,
   });
 
+  const { data: productos = [] } = useQuery({
+    queryKey: ['productos-para-cupon'],
+    queryFn: () => getProductos(),
+  });
+
+  function alternarProducto(id) {
+    setProductosIds((prev) => (prev.includes(id) ? prev.filter((pid) => pid !== id) : [...prev, id]));
+  }
+
   const guardar = useMutation({
     mutationFn: () => {
       const comun = {
@@ -257,6 +280,7 @@ function ModalCupon({ cupon, onClose, onExito }) {
         usos_maximos: parseInt(usosMaximos, 10) || 1,
         limite_por_cliente: limitePorCliente === '' ? null : parseInt(limitePorCliente, 10),
         cliente_id: clienteExclusivo?.id ?? null,
+        producto_ids: productosIds,
       };
       if (esNuevo) return crearCupon({ codigo, ...comun });
       return actualizarCupon(cupon.id, comun);
@@ -265,7 +289,7 @@ function ModalCupon({ cupon, onClose, onExito }) {
     onError: (err) => setError(err?.response?.data?.mensaje ?? 'Error al guardar el cupón'),
   });
 
-  const valido = codigo.trim().length >= 3 && parseFloat(valor) > 0 && (tipo !== 'porcentaje' || parseFloat(valor) <= 100)
+  const valido = codigo.trim().length >= 2 && parseFloat(valor) > 0 && (tipo !== 'porcentaje' || parseFloat(valor) <= 100)
     && parseInt(usosMaximos, 10) >= 1
     && (limitePorCliente === '' || parseInt(limitePorCliente, 10) >= 1);
 
@@ -363,6 +387,29 @@ function ModalCupon({ cupon, onClose, onExito }) {
               className="w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
             />
           </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            Aplica solo a ciertos productos <span className="font-normal normal-case">(opcional — si no marcás ninguno, descuenta sobre todo el pedido)</span>
+          </label>
+          <div className="border border-border rounded-xl max-h-40 overflow-y-auto divide-y divide-border">
+            {productos.map((p) => (
+              <label key={p.id} className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer hover:bg-muted/50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={productosIds.includes(p.id)}
+                  onChange={() => alternarProducto(p.id)}
+                  className="rounded border-input"
+                />
+                <span className="text-foreground truncate flex-1">{p.nombre}</span>
+                <span className="text-xs text-muted-foreground shrink-0">Bs {parseFloat(p.precio).toFixed(2)}</span>
+              </label>
+            ))}
+          </div>
+          {productosIds.length > 0 && (
+            <p className="text-xs text-muted-foreground">{productosIds.length} producto{productosIds.length !== 1 ? 's' : ''} seleccionado{productosIds.length !== 1 ? 's' : ''}.</p>
+          )}
         </div>
 
         <div className="space-y-1.5">

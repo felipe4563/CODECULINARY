@@ -22,6 +22,7 @@ import PerfilPage from '../pages/perfil/PerfilPage';
 import CombosPage from '../pages/combos/CombosPage';
 import PromocionesPage from '../pages/promociones/PromocionesPage';
 import CuponesPage from '../pages/cupones/CuponesPage';
+import RuletaPage from '../pages/ruleta/RuletaPage';
 
 export const router = createBrowserRouter(
   [
@@ -39,6 +40,7 @@ export const router = createBrowserRouter(
             { path: '/combos',            element: <CombosPage /> },
             { path: '/promociones',       element: <PromocionesPage /> },
             { path: '/cupones',           element: <CuponesPage /> },
+            { path: '/ruleta',            element: <RuletaPage /> },
             { path: '/configuracion',        element: <Navigate to="/configuracion/negocio" replace /> },
             { path: '/configuracion/:tab',   element: <ConfiguracionPage /> },
             { path: '/caja',             element: <CajaPage /> },

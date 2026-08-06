@@ -1,8 +1,11 @@
 const { Sequelize, Op } = require('sequelize');
-const { Cupon, Pedido, Cliente } = require('../../models');
+const { Cupon, Pedido, Cliente, Producto } = require('../../models');
 const { estaActivoHoy } = require('../../utils/disponibilidad');
 
-const INCLUDE_CUPON = [{ model: Cliente, as: 'cliente', attributes: ['id', 'nombre'], required: false }];
+const INCLUDE_CUPON = [
+  { model: Cliente, as: 'cliente', attributes: ['id', 'nombre'], required: false },
+  { model: Producto, as: 'productos', attributes: ['id', 'nombre'], through: { attributes: [] }, required: false },
+];
 
 function _normalizarCodigo(codigo) {
   return (codigo || '').trim().toUpperCase();
@@ -46,7 +49,7 @@ async function obtener(id) {
   return cupon;
 }
 
-async function crear({ codigo, tipo = 'fijo', valor, fecha_expiracion, activo = 1, usos_maximos = 1, limite_por_cliente, cliente_id }, usuario_id) {
+async function crear({ codigo, tipo = 'fijo', valor, fecha_expiracion, activo = 1, usos_maximos = 1, limite_por_cliente, cliente_id, producto_ids }, usuario_id) {
   const codigoNorm = _normalizarCodigo(codigo);
   if (!codigoNorm) throw Object.assign(new Error('El código es requerido'), { status: 400 });
   _validarTipoValor(tipo, valor);
@@ -60,10 +63,11 @@ async function crear({ codigo, tipo = 'fijo', valor, fecha_expiracion, activo = 
     usos_maximos: usos_maximos || 1, limite_por_cliente: limite_por_cliente || null,
     cliente_id: cliente_id || null, creado_por: usuario_id || null,
   });
+  if (producto_ids && producto_ids.length > 0) await creado.setProductos(producto_ids);
   return obtener(creado.id);
 }
 
-async function actualizar(id, { tipo, valor, fecha_expiracion, activo, usos_maximos, limite_por_cliente, cliente_id }) {
+async function actualizar(id, { tipo, valor, fecha_expiracion, activo, usos_maximos, limite_por_cliente, cliente_id, producto_ids }) {
   const cupon = await obtener(id);
   const tipoFinal = tipo ?? cupon.tipo;
   const valorFinal = valor ?? cupon.valor;
@@ -87,6 +91,7 @@ async function actualizar(id, { tipo, valor, fecha_expiracion, activo, usos_maxi
   if (limite_por_cliente !== undefined) datos.limite_por_cliente = limite_por_cliente || null;
   if (cliente_id !== undefined) datos.cliente_id = cliente_id || null;
   await cupon.update(datos);
+  if (producto_ids !== undefined) await cupon.setProductos(producto_ids || []);
   return obtener(id);
 }
 
@@ -110,11 +115,16 @@ async function eliminar(id) {
 // cobros concurrentes con el mismo código no superen su límite de usos.
 // `cliente_id` es el cliente de la venta (si se eligió uno) — hace falta
 // para los cupones exclusivos de un cliente o con límite por cliente.
-async function resolver(codigo, subtotal, cliente_id, transaction) {
+// `items`: líneas del carrito ({ producto_id, cantidad, precio }) — solo se
+// usan si el cupón está restringido a ciertos productos (ver más abajo); si
+// el cupón no tiene productos asociados, el descuento sigue calculándose
+// sobre `subtotal` (todo el carrito), como siempre.
+async function resolver(codigo, subtotal, cliente_id, transaction, items) {
   if (!codigo) return { cupon: null, descuento: 0 };
   const codigoNorm = _normalizarCodigo(codigo);
   const cupon = await Cupon.findOne({
     where: { codigo: codigoNorm },
+    include: [{ model: Producto, as: 'productos', attributes: ['id'], through: { attributes: [] }, required: false }],
     ...(transaction ? { transaction, lock: transaction.LOCK.UPDATE } : {}),
   });
   if (!cupon || !cupon.activo) {
@@ -141,14 +151,26 @@ async function resolver(codigo, subtotal, cliente_id, transaction) {
       throw Object.assign(new Error('Este cliente ya alcanzó el límite de usos de este cupón'), { status: 400 });
     }
   }
-  const bruto = cupon.tipo === 'porcentaje' ? subtotal * (parseFloat(cupon.valor) / 100) : parseFloat(cupon.valor);
-  return { cupon, descuento: Math.min(subtotal, Math.max(0, bruto)) };
+
+  let base = subtotal;
+  if (cupon.productos && cupon.productos.length > 0) {
+    const idsAplicables = new Set(cupon.productos.map((p) => p.id));
+    base = (items || []).reduce((sum, it) => (
+      it.producto_id && idsAplicables.has(Number(it.producto_id)) ? sum + it.cantidad * parseFloat(it.precio) : sum
+    ), 0);
+    if (base === 0) {
+      throw Object.assign(new Error('Este cupón solo aplica a ciertos productos que no están en el pedido'), { status: 400 });
+    }
+  }
+
+  const bruto = cupon.tipo === 'porcentaje' ? base * (parseFloat(cupon.valor) / 100) : parseFloat(cupon.valor);
+  return { cupon, descuento: Math.min(base, Math.max(0, bruto)) };
 }
 
 // Previsualización pública (sin transacción) para el checkout: valida y
 // devuelve el descuento calculado, sin persistir nada.
-async function validar(codigo, subtotal, cliente_id) {
-  const { cupon, descuento } = await resolver(codigo, subtotal, cliente_id);
+async function validar(codigo, subtotal, cliente_id, items) {
+  const { cupon, descuento } = await resolver(codigo, subtotal, cliente_id, undefined, items);
   return { codigo: cupon.codigo, tipo: cupon.tipo, valor: parseFloat(cupon.valor), descuento };
 }
 

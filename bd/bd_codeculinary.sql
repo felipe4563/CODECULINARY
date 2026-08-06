@@ -181,7 +181,12 @@ INSERT INTO `configuraciones` (`id`, `clave`, `valor`, `creado_en`, `actualizado
 (38, 'cumple_dias_anticipacion', '5', current_timestamp(), current_timestamp()),
 (39, 'cumple_tipo', 'porcentaje', current_timestamp(), current_timestamp()),
 (40, 'cumple_valor', '10', current_timestamp(), current_timestamp()),
-(41, 'cumple_vigencia_dias', '10', current_timestamp(), current_timestamp());
+(41, 'cumple_vigencia_dias', '10', current_timestamp(), current_timestamp()),
+(42, 'ruleta_activa', 'false', current_timestamp(), current_timestamp()),
+(43, 'ruleta_costo_puntos', '10', current_timestamp(), current_timestamp()),
+(44, 'ruleta_max_giros_periodo', '1', current_timestamp(), current_timestamp()),
+(45, 'ruleta_periodo', 'dia', current_timestamp(), current_timestamp()),
+(46, 'ruleta_vigencia_dias_premio', '7', current_timestamp(), current_timestamp());
 
 -- --------------------------------------------------------
 
@@ -203,6 +208,17 @@ CREATE TABLE `cupones` (
   `usado_en` datetime DEFAULT NULL,
   `creado_por` int(10) UNSIGNED DEFAULT NULL,
   `creado_en` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `cupon_productos`
+--
+
+CREATE TABLE `cupon_productos` (
+  `cupon_id` int(10) UNSIGNED NOT NULL,
+  `producto_id` int(10) UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -470,7 +486,12 @@ INSERT INTO `permisos` (`id`, `modulo`, `accion`, `descripcion`) VALUES
 (56, 'cupones', 'ver', 'Ver cupones'),
 (57, 'cupones', 'crear', 'Crear cupones'),
 (58, 'cupones', 'editar', 'Editar cupones'),
-(59, 'cupones', 'eliminar', 'Eliminar cupones');
+(59, 'cupones', 'eliminar', 'Eliminar cupones'),
+(60, 'ruleta', 'ver', 'Ver ruleta de premios'),
+(61, 'ruleta', 'girar', 'Girar la ruleta por un cliente'),
+(62, 'ruleta', 'crear', 'Crear premios de la ruleta'),
+(63, 'ruleta', 'editar', 'Editar premios de la ruleta'),
+(64, 'ruleta', 'eliminar', 'Eliminar premios de la ruleta');
 
 -- --------------------------------------------------------
 
@@ -500,7 +521,6 @@ CREATE TABLE `productos` (
 
 CREATE TABLE `promociones` (
   `id` int(10) UNSIGNED NOT NULL,
-  `producto_id` int(10) UNSIGNED NOT NULL,
   `nombre` varchar(150) DEFAULT NULL,
   `tipo` enum('porcentaje','monto') NOT NULL DEFAULT 'porcentaje',
   `valor` decimal(10,2) NOT NULL,
@@ -510,6 +530,17 @@ CREATE TABLE `promociones` (
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `creado_en` timestamp NOT NULL DEFAULT current_timestamp(),
   `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `promocion_productos`
+--
+
+CREATE TABLE `promocion_productos` (
+  `promocion_id` int(10) UNSIGNED NOT NULL,
+  `producto_id` int(10) UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -672,6 +703,11 @@ INSERT INTO `roles_permisos` (`rol_id`, `permiso_id`) VALUES
 (1, 57),
 (1, 58),
 (1, 59),
+(1, 60),
+(1, 61),
+(1, 62),
+(1, 63),
+(1, 64),
 (2, 1),
 (2, 2),
 (2, 3),
@@ -689,6 +725,43 @@ INSERT INTO `roles_permisos` (`rol_id`, `permiso_id`) VALUES
 (2, 29),
 (2, 30),
 (2, 31);
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `ruleta_premios`
+--
+
+CREATE TABLE `ruleta_premios` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `nombre` varchar(100) NOT NULL,
+  `tipo` enum('porcentaje','fijo','producto_gratis','combo_gratis','nada') NOT NULL DEFAULT 'nada',
+  `valor` decimal(10,2) DEFAULT NULL,
+  `producto_id` int(10) UNSIGNED DEFAULT NULL,
+  `combo_id` int(10) UNSIGNED DEFAULT NULL,
+  `peso` int(10) UNSIGNED NOT NULL DEFAULT 1,
+  `color` varchar(20) DEFAULT NULL,
+  `activo` tinyint(1) NOT NULL DEFAULT 1,
+  `orden` int(11) NOT NULL DEFAULT 0,
+  `creado_en` timestamp NOT NULL DEFAULT current_timestamp(),
+  `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `ruleta_giros`
+--
+
+CREATE TABLE `ruleta_giros` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `cliente_id` int(10) UNSIGNED NOT NULL,
+  `premio_id` int(10) UNSIGNED NOT NULL,
+  `cupon_id` int(10) UNSIGNED DEFAULT NULL,
+  `usuario_id` int(10) UNSIGNED NOT NULL,
+  `puntos_gastados` int(11) NOT NULL,
+  `creado_en` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 
@@ -842,6 +915,13 @@ ALTER TABLE `cupones`
   ADD KEY `cliente_id` (`cliente_id`);
 
 --
+-- Indices de la tabla `cupon_productos`
+--
+ALTER TABLE `cupon_productos`
+  ADD PRIMARY KEY (`cupon_id`,`producto_id`),
+  ADD KEY `producto_id` (`producto_id`);
+
+--
 -- Indices de la tabla `detalle_arqueo`
 --
 ALTER TABLE `detalle_arqueo`
@@ -940,7 +1020,13 @@ ALTER TABLE `productos`
 -- Indices de la tabla `promociones`
 --
 ALTER TABLE `promociones`
-  ADD PRIMARY KEY (`id`),
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indices de la tabla `promocion_productos`
+--
+ALTER TABLE `promocion_productos`
+  ADD PRIMARY KEY (`promocion_id`,`producto_id`),
   ADD KEY `producto_id` (`producto_id`);
 
 --
@@ -984,6 +1070,24 @@ ALTER TABLE `roles`
 ALTER TABLE `roles_permisos`
   ADD PRIMARY KEY (`rol_id`,`permiso_id`),
   ADD KEY `permiso_id` (`permiso_id`);
+
+--
+-- Indices de la tabla `ruleta_premios`
+--
+ALTER TABLE `ruleta_premios`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `producto_id` (`producto_id`),
+  ADD KEY `combo_id` (`combo_id`);
+
+--
+-- Indices de la tabla `ruleta_giros`
+--
+ALTER TABLE `ruleta_giros`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `cliente_id` (`cliente_id`),
+  ADD KEY `premio_id` (`premio_id`),
+  ADD KEY `cupon_id` (`cupon_id`),
+  ADD KEY `usuario_id` (`usuario_id`);
 
 --
 -- Indices de la tabla `sesiones_caja`
@@ -1131,7 +1235,7 @@ ALTER TABLE `pedidos`
 -- AUTO_INCREMENT de la tabla `permisos`
 --
 ALTER TABLE `permisos`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=60;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=65;
 
 --
 -- AUTO_INCREMENT de la tabla `promociones`
@@ -1162,6 +1266,18 @@ ALTER TABLE `registros_inventario`
 --
 ALTER TABLE `roles`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+
+--
+-- AUTO_INCREMENT de la tabla `ruleta_premios`
+--
+ALTER TABLE `ruleta_premios`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT de la tabla `ruleta_giros`
+--
+ALTER TABLE `ruleta_giros`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `sesiones_caja`
@@ -1218,6 +1334,13 @@ ALTER TABLE `compras`
 ALTER TABLE `cupones`
   ADD CONSTRAINT `cupones_ibfk_1` FOREIGN KEY (`creado_por`) REFERENCES `usuarios` (`id`),
   ADD CONSTRAINT `cupones_cliente_fk` FOREIGN KEY (`cliente_id`) REFERENCES `clientes` (`id`);
+
+--
+-- Filtros para la tabla `cupon_productos`
+--
+ALTER TABLE `cupon_productos`
+  ADD CONSTRAINT `cupon_productos_cupon_fk` FOREIGN KEY (`cupon_id`) REFERENCES `cupones` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `cupon_productos_producto_fk` FOREIGN KEY (`producto_id`) REFERENCES `productos` (`id`);
 
 --
 -- Filtros para la tabla `detalle_arqueo`
@@ -1291,10 +1414,11 @@ ALTER TABLE `productos`
   ADD CONSTRAINT `productos_ibfk_1` FOREIGN KEY (`categoria_id`) REFERENCES `categorias` (`id`) ON DELETE CASCADE;
 
 --
--- Filtros para la tabla `promociones`
+-- Filtros para la tabla `promocion_productos`
 --
-ALTER TABLE `promociones`
-  ADD CONSTRAINT `promociones_ibfk_1` FOREIGN KEY (`producto_id`) REFERENCES `productos` (`id`) ON DELETE CASCADE;
+ALTER TABLE `promocion_productos`
+  ADD CONSTRAINT `promocion_productos_promocion_fk` FOREIGN KEY (`promocion_id`) REFERENCES `promociones` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `promocion_productos_producto_fk` FOREIGN KEY (`producto_id`) REFERENCES `productos` (`id`);
 
 --
 -- Filtros para la tabla `producto_grupos_opciones`
@@ -1324,6 +1448,22 @@ ALTER TABLE `registros_inventario`
 ALTER TABLE `roles_permisos`
   ADD CONSTRAINT `roles_permisos_ibfk_1` FOREIGN KEY (`rol_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `roles_permisos_ibfk_2` FOREIGN KEY (`permiso_id`) REFERENCES `permisos` (`id`) ON DELETE CASCADE;
+
+--
+-- Filtros para la tabla `ruleta_premios`
+--
+ALTER TABLE `ruleta_premios`
+  ADD CONSTRAINT `ruleta_premios_producto_fk` FOREIGN KEY (`producto_id`) REFERENCES `productos` (`id`),
+  ADD CONSTRAINT `ruleta_premios_combo_fk` FOREIGN KEY (`combo_id`) REFERENCES `combos` (`id`);
+
+--
+-- Filtros para la tabla `ruleta_giros`
+--
+ALTER TABLE `ruleta_giros`
+  ADD CONSTRAINT `ruleta_giros_cliente_fk` FOREIGN KEY (`cliente_id`) REFERENCES `clientes` (`id`),
+  ADD CONSTRAINT `ruleta_giros_premio_fk` FOREIGN KEY (`premio_id`) REFERENCES `ruleta_premios` (`id`),
+  ADD CONSTRAINT `ruleta_giros_cupon_fk` FOREIGN KEY (`cupon_id`) REFERENCES `cupones` (`id`),
+  ADD CONSTRAINT `ruleta_giros_usuario_fk` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`id`);
 
 --
 -- Filtros para la tabla `sesiones_caja`

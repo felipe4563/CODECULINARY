@@ -16,7 +16,7 @@ function etiquetaValor(c) {
 // Si el cliente tiene cupones exclusivos asignados a él, se listan para
 // elegir en vez de tener que dictar/tipear el código — los cupones públicos
 // (promociones abiertas) siguen ingresándose a mano en el campo de texto.
-export default function CuponInput({ subtotal, cupon, onAplicar, onQuitar, clienteId }) {
+export default function CuponInput({ subtotal, cupon, onAplicar, onQuitar, clienteId, items }) {
   const [codigo, setCodigo] = useState('');
   const [error, setError] = useState(null);
 
@@ -27,7 +27,7 @@ export default function CuponInput({ subtotal, cupon, onAplicar, onQuitar, clien
   });
 
   const aplicar = useMutation({
-    mutationFn: (codigoParam) => validarCupon(codigoParam, subtotal, clienteId),
+    mutationFn: (codigoParam) => validarCupon(codigoParam, subtotal, clienteId, items),
     onSuccess: (datos) => {
       onAplicar(datos.codigo, datos.descuento);
       setCodigo('');

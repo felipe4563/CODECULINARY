@@ -27,6 +27,7 @@ const perfilRoutes = require('./modules/perfil/perfil.routes');
 const combosRoutes = require('./modules/combos/combos.routes');
 const promocionesRoutes = require('./modules/promociones/promociones.routes');
 const cuponesRoutes = require('./modules/cupones/cupones.routes');
+const ruletaRoutes = require('./modules/ruleta/ruleta.routes');
 const codepayWebhookRoutes = require('./webhooks/codepay.webhook.routes');
 
 const app = express();
@@ -69,6 +70,7 @@ app.use('/api/v1/perfil', perfilRoutes);
 app.use('/api/v1/combos', combosRoutes);
 app.use('/api/v1/promociones', promocionesRoutes);
 app.use('/api/v1/cupones', cuponesRoutes);
+app.use('/api/v1/ruleta', ruletaRoutes);
 app.use('/api/v1/uploads', uploadsRoutes);
 
 app.use(manejarErrores);
