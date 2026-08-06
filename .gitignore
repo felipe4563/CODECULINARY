@@ -12,6 +12,7 @@ node_modules/
 .env
 
 # Dumps de base de datos (no subir datos/backups al repo)
+bd/
 
 # Archivos subidos por usuarios (imágenes de productos, logo, etc.)
 backend/uploads/*
