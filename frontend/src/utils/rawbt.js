@@ -51,22 +51,40 @@ export async function imprimirBluetoothCocina(datosCocina) {
   dispararRawBT(buildCocina(datosCocina));
 }
 
-function esperar(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+// Espera a que la pestaña recupere el foco (el usuario corta el ticket a
+// mano y vuelve a la app) antes de seguir. A diferencia de un `setTimeout`
+// fijo, esto no se pierde si Android pausa la pestaña en segundo plano
+// mientras está abierta la app RawBT — el evento `visibilitychange` sí se
+// dispara de forma confiable cuando el usuario vuelve, sea que haya tardado
+// 2 segundos o 20 cortando el papel. `timeoutMaxMs` es una red de seguridad
+// por si el evento nunca llega (navegador raro, no vuelve a la app): no se
+// queda esperando para siempre, dispara igual pasado ese tiempo.
+function esperarVolverALaApp(timeoutMaxMs = 60_000) {
+  return new Promise((resolve) => {
+    let seOcultoAlMenosUnaVez = document.hidden;
+    let timer;
+    const limpiar = () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      clearTimeout(timer);
+    };
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        seOcultoAlMenosUnaVez = true;
+        return;
+      }
+      if (seOcultoAlMenosUnaVez) { limpiar(); resolve(); }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    timer = setTimeout(() => { limpiar(); resolve(); }, timeoutMaxMs);
+  });
 }
 
-// Cuando una venta genera AMBOS tickets (caja y cocina) por Bluetooth, no se
-// pueden disparar casi al mismo tiempo: el primer `rawbt:` le saca el foco a
-// la pestaña (Android cambia a la app RawBT), y si el segundo dispara
-// mientras la página está en segundo plano, se pierde en silencio — se
-// veía como "solo imprimió cocina" (que no espera nada, sale al toque)
-// mientras el de caja (que espera el logo) llegaba tarde y no imprimía. Acá
-// se esperan uno a la vez, con una pausa de por medio para que RawBT
-// termine de procesar el primero y la pestaña recupere el foco.
-const PAUSA_ENTRE_TICKETS_MS = 2000;
-
+// Cuando una venta genera AMBOS tickets (caja y cocina) por Bluetooth: se
+// imprime caja, se espera a que la persona corte el papel y vuelva a la
+// app (ver esperarVolverALaApp), y recién ahí se imprime cocina — separados
+// de verdad, con el tiempo que haga falta, en vez de una tira continua.
 export async function imprimirBluetoothTickets(datosCaja, datosCocina) {
   if (datosCaja) await imprimirBluetoothCaja(datosCaja);
-  if (datosCaja && datosCocina) await esperar(PAUSA_ENTRE_TICKETS_MS);
+  if (datosCaja && datosCocina) await esperarVolverALaApp();
   if (datosCocina) await imprimirBluetoothCocina(datosCocina);
 }
