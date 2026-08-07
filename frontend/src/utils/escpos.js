@@ -17,23 +17,32 @@ export const LOGO_MAX_PX = 240;
 
 // print-agent/agent.js (impresora física) prueba cp850/cp1252/ascii según
 // config.json porque cada impresora/PC es distinta. Acá no hay ese control
-// por dispositivo, y las impresoras térmicas portátiles clon casi nunca
-// respetan bien cp850: un byte no soportado (típicamente la "ñ") no solo
-// sale mal esa letra, corrompe el resto de la línea. Por eso, a diferencia
-// del agente, acá se va directo a "ascii" (sin tildes, pero nunca se rompe)
-// en vez de arriesgar cp850 como default.
-const CODEPAGE = 'ascii';
+// por dispositivo todavía, así que se usa un único default para todas las
+// impresoras Bluetooth: cp850 falló en la práctica (la "ñ" corrompía el
+// resto de la línea en impresoras clon), así que se pasa a cp1252 — otra
+// tabla de códigos estándar de Windows, con bytes distintos para las
+// mismas letras, que muchas impresoras clon sí soportan.
+const CODEPAGE = 'cp1252';
 const TABLA_ESC_T = { cp850: 2, cp1252: 16, ascii: 0 };
+const MAPA_CP1252 = {
+  'á':0xE1,'é':0xE9,'í':0xED,'ó':0xF3,'ú':0xFA,
+  'Á':0xC1,'É':0xC9,'Í':0xCD,'Ó':0xD3,'Ú':0xDA,
+  'ñ':0xF1,'Ñ':0xD1,'ü':0xFC,'Ü':0xDC,
+  '¡':0xA1,'¿':0xBF,'°':0xB0,'·':0xB7,
+  '★':0x2A,'—':0x2D,
+};
 const REEMPLAZO_ASCII = {
   'á':'a','é':'e','í':'i','ó':'o','ú':'u',
   'Á':'A','É':'E','Í':'I','Ó':'O','Ú':'U',
   'ñ':'n','Ñ':'N','ü':'u','Ü':'U',
-  '¡':'!','¿':'?','°':'o','·':'.',
+  // Sin equivalente ASCII razonable: se eliminan en vez de dejar un "?"
+  // duelto — "¿Sabor?" se leía peor como "?Sabor?" que sin el signo inicial.
+  '¡':'','¿':'','°':'o','·':'.',
   '★':'*','—':'-',
 };
 
 function quitarAcentos(str) {
-  return str.replace(/[áéíóúÁÉÍÓÚñÑüÜ¡¿°·★—]/g, (ch) => REEMPLAZO_ASCII[ch] || ch);
+  return str.replace(/[áéíóúÁÉÍÓÚñÑüÜ¡¿°·★—]/g, (ch) => REEMPLAZO_ASCII[ch] ?? ch);
 }
 
 class Esc {
@@ -55,14 +64,13 @@ class Esc {
   dblH() { return this.raw([0x1D, 0x21, 0x01]); }
   dblW() { return this.raw([0x1D, 0x21, 0x10]); }
   text(s) {
-    const str = quitarAcentos(String(s != null ? s : ''));
+    let str = String(s != null ? s : '');
+    if (CODEPAGE === 'ascii') str = quitarAcentos(str);
     for (let ci = 0; ci < str.length; ci++) {
-      const code = str.charCodeAt(ci);
-      // Todo queda en ASCII puro (7 bits) a propósito — ver el porqué en el
-      // comentario de CODEPAGE más arriba. Cualquier símbolo fuera de ASCII
-      // que no esté en REEMPLAZO_ASCII cae en '?' en vez de mandar un byte
-      // alto que la impresora podría no soportar.
-      this.b.push(code < 128 ? code : 0x3F);
+      const ch = str[ci];
+      const code = ch.charCodeAt(0);
+      const byte = CODEPAGE === 'cp1252' ? MAPA_CP1252[ch] : undefined;
+      this.b.push(byte != null ? byte : (code < 128 ? code : 0x3F));
     }
     return this;
   }
@@ -188,7 +196,11 @@ function buildCaja(data, logo) {
     t.rule('-');
   }
 
-  t.lf(1).center().line('Gracias por su preferencia').center().line(nombre).lf(3).cut();
+  // Sin `.cut()`: las impresoras Bluetooth portátiles casi nunca tienen
+  // cuchilla automática, así que ese comando solo alimentaba papel de más
+  // (interpretado como avance sin nada que cortar) — se corta a mano contra
+  // el borde dentado de la impresora, con poco margen alcanza.
+  t.lf(1).center().line('Gracias por su preferencia').center().line(nombre).lf(2);
   return t.build();
 }
 
@@ -257,7 +269,7 @@ function buildCocina(data) {
     t.rule('#');
   }
 
-  t.center().line('-- ticket de cocina --').lf(3).cut();
+  t.center().line('-- ticket de cocina --').lf(2);
   return t.build();
 }
 

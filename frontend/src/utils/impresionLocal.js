@@ -1,6 +1,6 @@
 import { imprimirTicketVenta } from './ticketVenta';
 import { imprimirTicketCocina } from './ticketCocina';
-import { imprimirBluetoothCaja, imprimirBluetoothCocina } from './rawbt';
+import { imprimirBluetoothCaja, imprimirBluetoothCocina, imprimirBluetoothTickets } from './rawbt';
 
 // Manda el ticket directo al agente de impresión instalado en ESTA PC
 // (http://127.0.0.1, nunca sale a Internet). Es el camino principal de
@@ -36,21 +36,30 @@ export function imprimirLocal(datosImpresion, { forzar = false } = {}) {
   if (!datosImpresion) return;
   const base = `http://127.0.0.1:${PUERTO_AGENTE_LOCAL}`;
   const qs = forzar ? '?forzar=1' : '';
-  if (datosImpresion.caja) {
-    if (datosImpresion.caja.modo_impresion === 'bluetooth') {
-      imprimirBluetoothCaja(datosImpresion.caja);
-    } else {
-      postConTimeout(`${base}/imprimir/caja${qs}`, datosImpresion.caja).catch(() => {
-        // Sin agente local en esta PC: no pasa nada, el socket.io del backend
-        // ya mandó el mismo ticket como respaldo.
-      });
+  const cajaBT = datosImpresion.caja?.modo_impresion === 'bluetooth';
+  const cocinaBT = datosImpresion.cocina?.modo_impresion === 'bluetooth';
+
+  // Los dos tickets Bluetooth no pueden dispararse en paralelo (ver el
+  // porqué en rawbt.js) — si ambos son Bluetooth, van encadenados con pausa.
+  if (cajaBT && cocinaBT) {
+    imprimirBluetoothTickets(datosImpresion.caja, datosImpresion.cocina);
+  } else {
+    if (datosImpresion.caja) {
+      if (cajaBT) {
+        imprimirBluetoothCaja(datosImpresion.caja);
+      } else {
+        postConTimeout(`${base}/imprimir/caja${qs}`, datosImpresion.caja).catch(() => {
+          // Sin agente local en esta PC: no pasa nada, el socket.io del backend
+          // ya mandó el mismo ticket como respaldo.
+        });
+      }
     }
-  }
-  if (datosImpresion.cocina) {
-    if (datosImpresion.cocina.modo_impresion === 'bluetooth') {
-      imprimirBluetoothCocina(datosImpresion.cocina);
-    } else {
-      postConTimeout(`${base}/imprimir/cocina${qs}`, datosImpresion.cocina).catch(() => {});
+    if (datosImpresion.cocina) {
+      if (cocinaBT) {
+        imprimirBluetoothCocina(datosImpresion.cocina);
+      } else {
+        postConTimeout(`${base}/imprimir/cocina${qs}`, datosImpresion.cocina).catch(() => {});
+      }
     }
   }
 }
@@ -64,11 +73,18 @@ export function imprimirLocal(datosImpresion, { forzar = false } = {}) {
 export function reimprimirConFallback(datosImpresion) {
   if (!datosImpresion) return;
   const base = `http://127.0.0.1:${PUERTO_AGENTE_LOCAL}`;
+  const cajaBT = datosImpresion.caja?.modo_impresion === 'bluetooth';
+  const cocinaBT = datosImpresion.cocina?.modo_impresion === 'bluetooth';
+
+  if (cajaBT && cocinaBT) {
+    // No hay agente/local host de por medio en este modo — reimprimir es
+    // simplemente volver a disparar RawBT, sin fallback al navegador.
+    imprimirBluetoothTickets(datosImpresion.caja, datosImpresion.cocina);
+    return;
+  }
 
   if (datosImpresion.caja) {
-    if (datosImpresion.caja.modo_impresion === 'bluetooth') {
-      // No hay agente/local host de por medio en este modo — reimprimir es
-      // simplemente volver a disparar RawBT, sin fallback al navegador.
+    if (cajaBT) {
       imprimirBluetoothCaja(datosImpresion.caja);
     } else {
       postConTimeout(`${base}/imprimir/caja?forzar=1`, datosImpresion.caja).catch(() => {
@@ -78,7 +94,7 @@ export function reimprimirConFallback(datosImpresion) {
     }
   }
   if (datosImpresion.cocina) {
-    if (datosImpresion.cocina.modo_impresion === 'bluetooth') {
+    if (cocinaBT) {
       imprimirBluetoothCocina(datosImpresion.cocina);
     } else {
       postConTimeout(`${base}/imprimir/cocina?forzar=1`, datosImpresion.cocina).catch(() => {

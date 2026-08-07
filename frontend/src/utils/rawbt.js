@@ -50,3 +50,23 @@ export async function imprimirBluetoothCaja(datosCaja) {
 export async function imprimirBluetoothCocina(datosCocina) {
   dispararRawBT(buildCocina(datosCocina));
 }
+
+function esperar(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Cuando una venta genera AMBOS tickets (caja y cocina) por Bluetooth, no se
+// pueden disparar casi al mismo tiempo: el primer `rawbt:` le saca el foco a
+// la pestaña (Android cambia a la app RawBT), y si el segundo dispara
+// mientras la página está en segundo plano, se pierde en silencio — se
+// veía como "solo imprimió cocina" (que no espera nada, sale al toque)
+// mientras el de caja (que espera el logo) llegaba tarde y no imprimía. Acá
+// se esperan uno a la vez, con una pausa de por medio para que RawBT
+// termine de procesar el primero y la pestaña recupere el foco.
+const PAUSA_ENTRE_TICKETS_MS = 2000;
+
+export async function imprimirBluetoothTickets(datosCaja, datosCocina) {
+  if (datosCaja) await imprimirBluetoothCaja(datosCaja);
+  if (datosCaja && datosCocina) await esperar(PAUSA_ENTRE_TICKETS_MS);
+  if (datosCocina) await imprimirBluetoothCocina(datosCocina);
+}
