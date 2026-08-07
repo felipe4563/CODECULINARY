@@ -1,5 +1,6 @@
 import { imprimirTicketVenta } from './ticketVenta';
 import { imprimirTicketCocina } from './ticketCocina';
+import { imprimirBluetoothCaja, imprimirBluetoothCocina } from './rawbt';
 
 // Manda el ticket directo al agente de impresión instalado en ESTA PC
 // (http://127.0.0.1, nunca sale a Internet). Es el camino principal de
@@ -25,18 +26,32 @@ function postConTimeout(url, body) {
 // imprimir dos veces el mismo pedido cuando llega por socket y local casi
 // al mismo tiempo). Úsalo solo para una reimpresión explícita pedida por el
 // usuario (botón "Imprimir de nuevo"), nunca para el auto-print inicial.
+// `modo_impresion` viaja en cada payload (lo agrega el backend según la caja
+// que hizo la venta — ver _emitirImpresion en ventas.service.js): 'fisica'
+// sigue el camino de siempre (agente de Windows local), 'bluetooth' arma el
+// ticket ESC/POS acá mismo y lo manda por RawBT (ver rawbt.js) — no pasa por
+// ningún agente ni por el local host, así que no tiene sentido de "respaldo
+// por socket" como el modo físico.
 export function imprimirLocal(datosImpresion, { forzar = false } = {}) {
   if (!datosImpresion) return;
   const base = `http://127.0.0.1:${PUERTO_AGENTE_LOCAL}`;
   const qs = forzar ? '?forzar=1' : '';
   if (datosImpresion.caja) {
-    postConTimeout(`${base}/imprimir/caja${qs}`, datosImpresion.caja).catch(() => {
-      // Sin agente local en esta PC: no pasa nada, el socket.io del backend
-      // ya mandó el mismo ticket como respaldo.
-    });
+    if (datosImpresion.caja.modo_impresion === 'bluetooth') {
+      imprimirBluetoothCaja(datosImpresion.caja);
+    } else {
+      postConTimeout(`${base}/imprimir/caja${qs}`, datosImpresion.caja).catch(() => {
+        // Sin agente local en esta PC: no pasa nada, el socket.io del backend
+        // ya mandó el mismo ticket como respaldo.
+      });
+    }
   }
   if (datosImpresion.cocina) {
-    postConTimeout(`${base}/imprimir/cocina${qs}`, datosImpresion.cocina).catch(() => {});
+    if (datosImpresion.cocina.modo_impresion === 'bluetooth') {
+      imprimirBluetoothCocina(datosImpresion.cocina);
+    } else {
+      postConTimeout(`${base}/imprimir/cocina${qs}`, datosImpresion.cocina).catch(() => {});
+    }
   }
 }
 
@@ -51,15 +66,25 @@ export function reimprimirConFallback(datosImpresion) {
   const base = `http://127.0.0.1:${PUERTO_AGENTE_LOCAL}`;
 
   if (datosImpresion.caja) {
-    postConTimeout(`${base}/imprimir/caja?forzar=1`, datosImpresion.caja).catch(() => {
-      const { pedido, metodo_pago, config, numero_orden_diario } = datosImpresion.caja;
-      imprimirTicketVenta(pedido, { total: pedido.total, metodo_pago }, config, numero_orden_diario);
-    });
+    if (datosImpresion.caja.modo_impresion === 'bluetooth') {
+      // No hay agente/local host de por medio en este modo — reimprimir es
+      // simplemente volver a disparar RawBT, sin fallback al navegador.
+      imprimirBluetoothCaja(datosImpresion.caja);
+    } else {
+      postConTimeout(`${base}/imprimir/caja?forzar=1`, datosImpresion.caja).catch(() => {
+        const { pedido, metodo_pago, config, numero_orden_diario } = datosImpresion.caja;
+        imprimirTicketVenta(pedido, { total: pedido.total, metodo_pago }, config, numero_orden_diario);
+      });
+    }
   }
   if (datosImpresion.cocina) {
-    postConTimeout(`${base}/imprimir/cocina?forzar=1`, datosImpresion.cocina).catch(() => {
-      const { pedido, config, numero_orden_diario } = datosImpresion.cocina;
-      imprimirTicketCocina(pedido, config, numero_orden_diario);
-    });
+    if (datosImpresion.cocina.modo_impresion === 'bluetooth') {
+      imprimirBluetoothCocina(datosImpresion.cocina);
+    } else {
+      postConTimeout(`${base}/imprimir/cocina?forzar=1`, datosImpresion.cocina).catch(() => {
+        const { pedido, config, numero_orden_diario } = datosImpresion.cocina;
+        imprimirTicketCocina(pedido, config, numero_orden_diario);
+      });
+    }
   }
 }

@@ -45,6 +45,7 @@ CREATE TABLE `cajas` (
   `id` int(10) UNSIGNED NOT NULL,
   `sucursal_id` int(10) UNSIGNED NOT NULL,
   `nombre` varchar(100) NOT NULL,
+  `modo_impresion` enum('fisica','bluetooth') NOT NULL DEFAULT 'fisica',
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `creado_en` timestamp NULL DEFAULT current_timestamp(),
   `actualizado_en` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -54,8 +55,8 @@ CREATE TABLE `cajas` (
 -- Volcado de datos para la tabla `cajas`
 --
 
-INSERT INTO `cajas` (`id`, `sucursal_id`, `nombre`, `activo`, `creado_en`, `actualizado_en`) VALUES
-(1, 1, 'Caja 1', 1, '2026-07-24 12:23:54', '2026-07-24 12:23:54');
+INSERT INTO `cajas` (`id`, `sucursal_id`, `nombre`, `modo_impresion`, `activo`, `creado_en`, `actualizado_en`) VALUES
+(1, 1, 'Caja 1', 'fisica', 1, '2026-07-24 12:23:54', '2026-07-24 12:23:54');
 
 -- --------------------------------------------------------
 
@@ -186,7 +187,8 @@ INSERT INTO `configuraciones` (`id`, `clave`, `valor`, `creado_en`, `actualizado
 (43, 'ruleta_costo_puntos', '10', current_timestamp(), current_timestamp()),
 (44, 'ruleta_max_giros_periodo', '1', current_timestamp(), current_timestamp()),
 (45, 'ruleta_periodo', 'dia', current_timestamp(), current_timestamp()),
-(46, 'ruleta_vigencia_dias_premio', '7', current_timestamp(), current_timestamp());
+(46, 'ruleta_vigencia_dias_premio', '7', current_timestamp(), current_timestamp()),
+(47, 'cocina_destino', 'centralizada', current_timestamp(), current_timestamp());
 
 -- --------------------------------------------------------
 
@@ -739,7 +741,7 @@ CREATE TABLE `ruleta_premios` (
   `valor` decimal(10,2) DEFAULT NULL,
   `producto_id` int(10) UNSIGNED DEFAULT NULL,
   `combo_id` int(10) UNSIGNED DEFAULT NULL,
-  `peso` int(10) UNSIGNED NOT NULL DEFAULT 1,
+  `probabilidad` int(10) UNSIGNED NOT NULL DEFAULT 1,
   `color` varchar(20) DEFAULT NULL,
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `orden` int(11) NOT NULL DEFAULT 0,

@@ -152,7 +152,7 @@ function TabPremios() {
                 <tr className="bg-muted border-b border-border">
                   <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Premio</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Valor</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Peso</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Probabilidad</th>
                   <th className="px-5 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">Estado</th>
                   <th className="px-5 py-3" />
                 </tr>
@@ -165,7 +165,7 @@ function TabPremios() {
                       {p.nombre}
                     </td>
                     <td className="px-5 py-3.5 text-muted-foreground">{etiquetaValor(p)}</td>
-                    <td className="px-5 py-3.5 text-muted-foreground">{p.peso}</td>
+                    <td className="px-5 py-3.5 text-muted-foreground">{p.probabilidad}</td>
                     <td className="px-5 py-3.5 text-center">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${p.activo ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
                         {p.activo ? 'Activo' : 'Inactivo'}
@@ -233,7 +233,7 @@ function ModalPremio({ premio, onClose, onExito }) {
   const [valor, setValor] = useState(premio?.valor ?? '');
   const [productoId, setProductoId] = useState(premio?.producto_id ?? '');
   const [comboId, setComboId] = useState(premio?.combo_id ?? '');
-  const [peso, setPeso] = useState(premio?.peso ?? 10);
+  const [probabilidad, setProbabilidad] = useState(premio?.probabilidad ?? 10);
   const [color, setColor] = useState(premio?.color ?? '#ef4444');
   const [activo, setActivo] = useState(premio?.activo ?? 1);
   const [orden, setOrden] = useState(premio?.orden ?? 0);
@@ -264,7 +264,7 @@ function ModalPremio({ premio, onClose, onExito }) {
         valor: (tipo === 'porcentaje' || tipo === 'fijo') ? parseFloat(valor) : null,
         producto_id: tipo === 'producto_gratis' ? parseInt(productoId, 10) : null,
         combo_id: tipo === 'combo_gratis' ? parseInt(comboId, 10) : null,
-        peso: parseInt(peso, 10), color, activo, orden: parseInt(orden, 10) || 0,
+        probabilidad: parseInt(probabilidad, 10), color, activo, orden: parseInt(orden, 10) || 0,
       };
       return esNuevo ? crearPremioRuleta(datos) : actualizarPremioRuleta(premio.id, datos);
     },
@@ -272,7 +272,7 @@ function ModalPremio({ premio, onClose, onExito }) {
     onError: (err) => setError(err?.response?.data?.mensaje ?? 'Error al guardar el premio'),
   });
 
-  const valido = nombre.trim().length >= 2 && parseInt(peso, 10) >= 1
+  const valido = nombre.trim().length >= 2 && parseInt(probabilidad, 10) >= 1
     && (
       tipo === 'nada'
       || (tipo === 'producto_gratis' && !!productoId)
@@ -371,12 +371,12 @@ function ModalPremio({ premio, onClose, onExito }) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
-              Peso (probabilidad relativa) <span className="text-destructive">*</span>
+              Probabilidad <span className="text-destructive">*</span>
             </label>
             <input
               type="number" min="1" step="1"
-              value={peso}
-              onChange={(e) => setPeso(e.target.value)}
+              value={probabilidad}
+              onChange={(e) => setProbabilidad(e.target.value)}
               className="w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
             />
           </div>
@@ -402,7 +402,7 @@ function ModalPremio({ premio, onClose, onExito }) {
         </div>
 
         <p className="text-xs text-muted-foreground bg-muted rounded-xl p-3">
-          A mayor peso, más chance tiene de salir en el giro — el tamaño del segmento en la ruleta refleja esta probabilidad.
+          A mayor probabilidad (relativa a la suma de todos los premios activos), más chance tiene de salir en el giro. Todos los segmentos se dibujan del mismo tamaño en la ruleta — la probabilidad no afecta el diseño, solo el sorteo.
         </p>
 
         <div className="flex items-center gap-3">

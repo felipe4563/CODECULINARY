@@ -188,7 +188,7 @@ export default function Sidebar({ visible, onCerrar }) {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
+        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5 scrollbar-hide">
           {gruposVisibles.map((grupo) => {
             const plegado = !!seccionesColapsadas[grupo.key];
             return (

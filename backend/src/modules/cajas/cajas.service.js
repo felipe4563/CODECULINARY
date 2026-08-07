@@ -21,19 +21,28 @@ async function listarPublico(sucursal_id) {
   });
 }
 
-async function crear({ sucursal_id, nombre, activo = 1 }) {
-  if (!sucursal_id) throw Object.assign(new Error('sucursal_id es requerido'), { status: 400 });
-  if (!nombre || !nombre.trim()) throw Object.assign(new Error('El nombre es requerido'), { status: 400 });
-  const sucursal = await Sucursal.findByPk(sucursal_id);
-  if (!sucursal) throw Object.assign(new Error('Sucursal no encontrada'), { status: 404 });
-  return Caja.create({ sucursal_id, nombre: nombre.trim(), activo });
+function _validarModoImpresion(modo_impresion) {
+  if (modo_impresion !== undefined && !['fisica', 'bluetooth'].includes(modo_impresion)) {
+    throw Object.assign(new Error("modo_impresion debe ser 'fisica' o 'bluetooth'"), { status: 400 });
+  }
 }
 
-async function actualizar(id, { nombre, activo }) {
+async function crear({ sucursal_id, nombre, modo_impresion = 'fisica', activo = 1 }) {
+  if (!sucursal_id) throw Object.assign(new Error('sucursal_id es requerido'), { status: 400 });
+  if (!nombre || !nombre.trim()) throw Object.assign(new Error('El nombre es requerido'), { status: 400 });
+  _validarModoImpresion(modo_impresion);
+  const sucursal = await Sucursal.findByPk(sucursal_id);
+  if (!sucursal) throw Object.assign(new Error('Sucursal no encontrada'), { status: 404 });
+  return Caja.create({ sucursal_id, nombre: nombre.trim(), modo_impresion, activo });
+}
+
+async function actualizar(id, { nombre, modo_impresion, activo }) {
   const caja = await Caja.findByPk(id);
   if (!caja) throw Object.assign(new Error('Caja no encontrada'), { status: 404 });
+  _validarModoImpresion(modo_impresion);
   const datos = {};
   if (nombre !== undefined) datos.nombre = nombre;
+  if (modo_impresion !== undefined) datos.modo_impresion = modo_impresion;
   if (activo !== undefined) datos.activo = activo;
   await caja.update(datos);
   return caja;

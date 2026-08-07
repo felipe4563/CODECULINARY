@@ -1,6 +1,6 @@
 const { Op } = require('sequelize');
 const {
-  Pedido, DetallePedido, Mesa, Producto, Cliente, SesionCaja, LibroCaja, Configuracion, PagoQr, Opcion, Combo, Promocion, Cupon, sequelize,
+  Pedido, DetallePedido, Mesa, Producto, Cliente, SesionCaja, Caja, LibroCaja, Configuracion, PagoQr, Opcion, Combo, Promocion, Cupon, sequelize,
 } = require('../../models');
 const { emitir } = require('../../socket');
 const { ajustarStockSucursal } = require('../inventario/stock.service');
@@ -360,7 +360,7 @@ async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, 
 }
 
 async function _emitirImpresion(pedido, metodo_pago, cambio, sucursal_id, numeroOrdenDiarioOverride) {
-  const cfgRows = await Configuracion.findAll({ where: { clave: ['nombre_negocio', 'simbolo_moneda', 'direccion', 'telefono', 'flujo_cocina'] } });
+  const cfgRows = await Configuracion.findAll({ where: { clave: ['nombre_negocio', 'simbolo_moneda', 'direccion', 'telefono', 'flujo_cocina', 'cocina_destino', 'logo'] } });
   const cfg = cfgRows.reduce((o, r) => { o[r.clave] = r.valor; return o; }, {});
 
   // Los llamadores normales (crearCompleta, cobrar, _confirmarPagoQr) no
@@ -377,23 +377,36 @@ async function _emitirImpresion(pedido, metodo_pago, cambio, sucursal_id, numero
 
   // El ticket de caja va solo a la sala de la caja que hizo la venta (no a
   // toda la sucursal): si hay dos cajas en la misma sucursal, cada una tiene
-  // su propio agente/impresora y no deben imprimirse tickets cruzados.
+  // su propio agente/impresora (o celular) y no deben imprimirse tickets
+  // cruzados. `modo_impresion` viaja en el payload para que el navegador que
+  // hizo la venta sepa, sin otra consulta, si tiene que mandarlo al agente
+  // local (física) o armar el ESC/POS y disparar RawBT (bluetooth).
   let caja_id = null;
+  let modo_impresion = 'fisica';
   if (pedido.sesion_caja_id) {
-    const sesion = await SesionCaja.findByPk(pedido.sesion_caja_id, { attributes: ['caja_id'] });
+    const sesion = await SesionCaja.findByPk(pedido.sesion_caja_id, {
+      attributes: ['caja_id'],
+      include: [{ model: Caja, as: 'caja', attributes: ['modo_impresion'] }],
+    });
     caja_id = sesion ? sesion.caja_id : null;
+    modo_impresion = sesion?.caja?.modo_impresion || 'fisica';
   }
 
-  const datosCaja = { pedido: pedido.toJSON(), metodo_pago, cambio, config: cfg, numero_orden_diario };
+  const datosCaja = { pedido: pedido.toJSON(), metodo_pago, cambio, config: cfg, numero_orden_diario, modo_impresion };
   emitir('print:caja', datosCaja, sucursal_id, caja_id);
 
   let datosCocina = null;
   if (cfg.flujo_cocina === 'fisico') {
-    // La cocina, en cambio, suele ser una sola impresora compartida por toda
-    // la sucursal, sin importar qué caja vendió — se sigue emitiendo a nivel
-    // de sucursal.
-    datosCocina = { pedido: pedido.toJSON(), config: cfg, numero_orden_diario };
-    emitir('print:cocina', datosCocina, sucursal_id);
+    datosCocina = { pedido: pedido.toJSON(), config: cfg, numero_orden_diario, modo_impresion };
+    if (cfg.cocina_destino === 'por_caja') {
+      // Cada caja imprime su propio ticket de cocina junto con el de venta
+      // — para negocios chicos sin una estación de cocina fija compartida.
+      emitir('print:cocina', datosCocina, sucursal_id, caja_id);
+    } else {
+      // Modo por defecto: un solo destino de cocina compartido por toda la
+      // sucursal, sin importar qué caja vendió.
+      emitir('print:cocina', datosCocina, sucursal_id);
+    }
   }
 
   // Se devuelve además del emit por socket para que el navegador que hizo la

@@ -41,14 +41,15 @@ function _sumarDias(fecha, dias) {
 }
 
 // Sorteo ponderado: cada premio tiene más chance de salir cuanto mayor sea
-// su `peso` relativo a la suma total — igual criterio que usa el frontend
-// para dibujar el tamaño de cada segmento (peso/total = ángulo del segmento),
-// así que la probabilidad real coincide con lo que se ve en la ruleta.
+// su `probabilidad` relativa a la suma total. El tamaño visual del segmento
+// en la ruleta es siempre parejo (no refleja la probabilidad) — es a
+// propósito, para que la rueda se vea estéticamente equilibrada aunque las
+// probabilidades reales no lo estén.
 function _sortear(premios) {
-  const total = premios.reduce((s, p) => s + p.peso, 0);
+  const total = premios.reduce((s, p) => s + p.probabilidad, 0);
   let r = Math.random() * total;
   for (const premio of premios) {
-    r -= premio.peso;
+    r -= premio.probabilidad;
     if (r <= 0) return premio;
   }
   return premios[premios.length - 1];
@@ -69,7 +70,7 @@ async function listarPremiosActivos() {
   return RuletaPremio.findAll({ where: { activo: 1 }, include: INCLUDE_PREMIO, order: [['orden', 'ASC'], ['id', 'ASC']] });
 }
 
-async function _validarPremio({ nombre, tipo, valor, peso, producto_id, combo_id }) {
+async function _validarPremio({ nombre, tipo, valor, probabilidad, producto_id, combo_id }) {
   if (!nombre || !nombre.trim()) throw Object.assign(new Error('El nombre es requerido'), { status: 400 });
   if (!TIPOS_PREMIO.includes(tipo)) {
     throw Object.assign(new Error("El tipo debe ser 'porcentaje', 'fijo', 'producto_gratis', 'combo_gratis' o 'nada'"), { status: 400 });
@@ -90,32 +91,32 @@ async function _validarPremio({ nombre, tipo, valor, peso, producto_id, combo_id
     const combo = await Combo.findByPk(combo_id);
     if (!combo) throw Object.assign(new Error('El combo seleccionado no existe'), { status: 400 });
   }
-  if (!(parseInt(peso, 10) >= 1)) throw Object.assign(new Error('El peso debe ser al menos 1'), { status: 400 });
+  if (!(parseInt(probabilidad, 10) >= 1)) throw Object.assign(new Error('La probabilidad debe ser al menos 1'), { status: 400 });
 }
 
-async function crearPremio({ nombre, tipo = 'nada', valor, peso = 1, color, activo = 1, orden = 0, producto_id, combo_id }) {
-  await _validarPremio({ nombre, tipo, valor, peso, producto_id, combo_id });
+async function crearPremio({ nombre, tipo = 'nada', valor, probabilidad = 1, color, activo = 1, orden = 0, producto_id, combo_id }) {
+  await _validarPremio({ nombre, tipo, valor, probabilidad, producto_id, combo_id });
   return RuletaPremio.create({
     nombre: nombre.trim(),
     tipo,
     valor: (tipo === 'porcentaje' || tipo === 'fijo') ? valor : null,
     producto_id: tipo === 'producto_gratis' ? producto_id : null,
     combo_id: tipo === 'combo_gratis' ? combo_id : null,
-    peso, color: color || null, activo, orden,
+    probabilidad, color: color || null, activo, orden,
   });
 }
 
-async function actualizarPremio(id, { nombre, tipo, valor, peso, color, activo, orden, producto_id, combo_id }) {
+async function actualizarPremio(id, { nombre, tipo, valor, probabilidad, color, activo, orden, producto_id, combo_id }) {
   const premio = await RuletaPremio.findByPk(id);
   if (!premio) throw Object.assign(new Error('Premio no encontrado'), { status: 404 });
 
   const tipoFinal = tipo ?? premio.tipo;
   const valorFinal = valor ?? premio.valor;
-  const pesoFinal = peso ?? premio.peso;
+  const probabilidadFinal = probabilidad ?? premio.probabilidad;
   const productoFinal = producto_id !== undefined ? producto_id : premio.producto_id;
   const comboFinal = combo_id !== undefined ? combo_id : premio.combo_id;
-  if (nombre !== undefined || tipo !== undefined || valor !== undefined || peso !== undefined || producto_id !== undefined || combo_id !== undefined) {
-    await _validarPremio({ nombre: nombre ?? premio.nombre, tipo: tipoFinal, valor: valorFinal, peso: pesoFinal, producto_id: productoFinal, combo_id: comboFinal });
+  if (nombre !== undefined || tipo !== undefined || valor !== undefined || probabilidad !== undefined || producto_id !== undefined || combo_id !== undefined) {
+    await _validarPremio({ nombre: nombre ?? premio.nombre, tipo: tipoFinal, valor: valorFinal, probabilidad: probabilidadFinal, producto_id: productoFinal, combo_id: comboFinal });
   }
 
   const datos = {};
@@ -124,7 +125,7 @@ async function actualizarPremio(id, { nombre, tipo, valor, peso, color, activo, 
   if (valor !== undefined || tipo !== undefined) datos.valor = (tipoFinal === 'porcentaje' || tipoFinal === 'fijo') ? valorFinal : null;
   if (producto_id !== undefined || tipo !== undefined) datos.producto_id = tipoFinal === 'producto_gratis' ? productoFinal : null;
   if (combo_id !== undefined || tipo !== undefined) datos.combo_id = tipoFinal === 'combo_gratis' ? comboFinal : null;
-  if (peso !== undefined) datos.peso = peso;
+  if (probabilidad !== undefined) datos.probabilidad = probabilidad;
   if (color !== undefined) datos.color = color || null;
   if (activo !== undefined) datos.activo = activo;
   if (orden !== undefined) datos.orden = orden;

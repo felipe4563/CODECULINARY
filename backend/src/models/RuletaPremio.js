@@ -8,7 +8,7 @@ const RuletaPremio = sequelize.define('RuletaPremio', {
   valor: { type: DataTypes.DECIMAL(10, 2) },
   producto_id: { type: DataTypes.INTEGER.UNSIGNED },
   combo_id: { type: DataTypes.INTEGER.UNSIGNED },
-  peso: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 1 },
+  probabilidad: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 1 },
   color: { type: DataTypes.STRING(20) },
   activo: { type: DataTypes.TINYINT(1), defaultValue: 1 },
   orden: { type: DataTypes.INTEGER, defaultValue: 0 },

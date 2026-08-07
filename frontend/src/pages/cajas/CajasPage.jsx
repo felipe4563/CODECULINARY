@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Landmark, Plus, Pencil, Trash2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Landmark, Plus, Pencil, Trash2, AlertCircle, RefreshCw, Printer, Bluetooth } from 'lucide-react';
 import { getCajas, crearCaja, actualizarCaja, eliminarCaja } from '../../api/cajas';
 import { getSucursales } from '../../api/sucursales';
 import { usePermisos } from '../../hooks/usePermisos';
@@ -10,6 +10,16 @@ function BadgeEstado({ activo }) {
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${activo ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
       {activo ? 'Activa' : 'Inactiva'}
+    </span>
+  );
+}
+
+function BadgeModoImpresion({ modo }) {
+  const esBluetooth = modo === 'bluetooth';
+  const Icono = esBluetooth ? Bluetooth : Printer;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${esBluetooth ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-muted text-muted-foreground'}`}>
+      <Icono className="w-3 h-3" /> {esBluetooth ? 'Bluetooth' : 'Física'}
     </span>
   );
 }
@@ -124,7 +134,10 @@ export default function CajasPage() {
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-2">
                   <p className="text-xs text-muted-foreground truncate">{c.sucursal?.nombre ?? '—'}</p>
-                  <BadgeEstado activo={c.activo} />
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <BadgeModoImpresion modo={c.modo_impresion} />
+                    <BadgeEstado activo={c.activo} />
+                  </div>
                 </div>
               </div>
             ))}
@@ -138,6 +151,7 @@ export default function CajasPage() {
                   <tr className="bg-muted border-b border-border">
                     <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Caja</th>
                     <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Sucursal</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Impresión</th>
                     <th className="px-5 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wide">Estado</th>
                     <th className="px-5 py-3" />
                   </tr>
@@ -155,6 +169,9 @@ export default function CajasPage() {
                       </td>
                       <td className="px-5 py-3.5 text-muted-foreground">
                         {c.sucursal?.nombre ?? '—'}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <BadgeModoImpresion modo={c.modo_impresion} />
                       </td>
                       <td className="px-5 py-3.5 text-center">
                         <BadgeEstado activo={c.activo} />
@@ -236,16 +253,17 @@ export default function CajasPage() {
 
 function ModalCaja({ caja, sucursales, onClose, onExito }) {
   const esNuevo = !caja;
-  const [sucursalId, setSucursalId] = useState(caja?.sucursal_id ?? (sucursales[0]?.id ?? ''));
-  const [nombre, setNombre]         = useState(caja?.nombre ?? '');
-  const [activo, setActivo]         = useState(caja?.activo ?? 1);
-  const [error, setError]           = useState(null);
+  const [sucursalId, setSucursalId]       = useState(caja?.sucursal_id ?? (sucursales[0]?.id ?? ''));
+  const [nombre, setNombre]               = useState(caja?.nombre ?? '');
+  const [modoImpresion, setModoImpresion] = useState(caja?.modo_impresion ?? 'fisica');
+  const [activo, setActivo]               = useState(caja?.activo ?? 1);
+  const [error, setError]                 = useState(null);
 
   const guardar = useMutation({
     mutationFn: () => {
       const datos = esNuevo
-        ? { sucursal_id: parseInt(sucursalId), nombre: nombre.trim() }
-        : { nombre: nombre.trim(), activo };
+        ? { sucursal_id: parseInt(sucursalId), nombre: nombre.trim(), modo_impresion: modoImpresion }
+        : { nombre: nombre.trim(), modo_impresion: modoImpresion, activo };
       return esNuevo ? crearCaja(datos) : actualizarCaja(caja.id, datos);
     },
     onSuccess: onExito,
@@ -280,6 +298,32 @@ function ModalCaja({ caja, sucursales, onClose, onExito }) {
             placeholder="Ej: Caja 1, Caja Mostrador"
             className="w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
           />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Modo de impresión</label>
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              type="button" onClick={() => setModoImpresion('fisica')}
+              className={`flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium border transition-colors ${
+                modoImpresion === 'fisica' ? 'bg-primary border-primary text-primary-foreground' : 'border-input text-muted-foreground hover:border-primary/50'
+              }`}
+            >
+              <Printer className="w-3.5 h-3.5" /> Física
+            </button>
+            <button
+              type="button" onClick={() => setModoImpresion('bluetooth')}
+              className={`flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium border transition-colors ${
+                modoImpresion === 'bluetooth' ? 'bg-primary border-primary text-primary-foreground' : 'border-input text-muted-foreground hover:border-primary/50'
+              }`}
+            >
+              <Bluetooth className="w-3.5 h-3.5" /> Bluetooth (celular)
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1.5">
+            {modoImpresion === 'fisica'
+              ? 'Impresora fija conectada a una PC con el agente de impresión instalado.'
+              : 'Impresora térmica portátil emparejada por Bluetooth con la app RawBT en el celular que usa esta caja.'}
+          </p>
         </div>
         {!esNuevo && (
           <div className="flex items-center gap-3">

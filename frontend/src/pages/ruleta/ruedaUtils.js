@@ -14,16 +14,14 @@ export function etiquetaValor(p) {
   return '—';
 }
 
-// Reparte 360° entre los premios proporcionalmente a su `peso` — la
-// probabilidad real de cada uno (decidida en el backend) coincide con el
-// tamaño del segmento que se ve en la ruleta, nada queda "escondido".
+// Reparte 360° en partes IGUALES entre los premios — a propósito no usa
+// `probabilidad` acá: la probabilidad real de cada premio se decide en el
+// backend (ver _sortear en ruleta.service.js), pero el tamaño del segmento
+// se mantiene parejo para que la ruleta se vea estéticamente equilibrada
+// aunque las probabilidades reales no lo estén.
 export function calcularSegmentos(premios) {
-  const total = premios.reduce((s, p) => s + p.peso, 0) || 1;
-  let acumulado = 0;
-  return premios.map((p, i) => {
-    const tam = (p.peso / total) * 360;
-    const seg = { ...p, anguloInicio: acumulado, anguloTam: tam, color: p.color || PALETA_DEFAULT[i % PALETA_DEFAULT.length] };
-    acumulado += tam;
-    return seg;
-  });
+  const tam = 360 / (premios.length || 1);
+  return premios.map((p, i) => ({
+    ...p, anguloInicio: tam * i, anguloTam: tam, color: p.color || PALETA_DEFAULT[i % PALETA_DEFAULT.length],
+  }));
 }

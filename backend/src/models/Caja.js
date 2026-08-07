@@ -5,6 +5,7 @@ const Caja = sequelize.define('Caja', {
   id: { type: DataTypes.INTEGER.UNSIGNED, primaryKey: true, autoIncrement: true },
   sucursal_id: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
   nombre: { type: DataTypes.STRING(100), allowNull: false },
+  modo_impresion: { type: DataTypes.ENUM('fisica', 'bluetooth'), allowNull: false, defaultValue: 'fisica' },
   activo: { type: DataTypes.TINYINT(1), defaultValue: 1 },
 }, {
   tableName: 'cajas',
