@@ -10,24 +10,20 @@
 // ancho_papel_bluetooth en el modelo Caja) — 58mm imprime ~32 columnas con
 // la fuente normal, 80mm ~48, igual que la impresora de mostrador.
 const COLS_POR_ANCHO = { '58mm': 32, '80mm': 48 };
-// Ancho del raster del logo en píxeles, redondeado a múltiplo de 8 (ver
-// logoEscPos.js) — corresponde al área imprimible real de cada ancho de
-// papel a 203dpi (8 dots/mm): ~48mm y ~72mm imprimibles respectivamente.
-export const ANCHO_LOGO_POR_PAPEL = { '58mm': 384, '80mm': 576 };
+// Tamaño máximo del logo en píxeles (a 203dpi, 8 dots/mm) — ~30x30mm,
+// pensado como un logo chico arriba del ticket, no ocupar todo el ancho del
+// papel. Es el mismo para 58mm y 80mm: 30mm entra cómodo en ambos.
+export const LOGO_MAX_PX = 240;
 
-// Mismas tablas que print-agent/agent.js — ver ahí el porqué de las tres
-// variantes (algunas impresoras térmicas clon no respetan cp850 tal como lo
-// documenta Epson).
-const MAPA_CP850 = {
-  'á':0xA0,'é':0x82,'í':0xA1,'ó':0xA2,'ú':0xA3,
-  'Á':0xB5,'É':0x90,'Í':0xD6,'Ó':0xE0,'Ú':0xE9,
-  'ñ':0xA4,'Ñ':0xA5,'ü':0x81,'Ü':0x9A,
-  '¡':0xAD,'¿':0xA8,'°':0xF8,'·':0xFA,
-  '★':0x2A,'—':0x2D,
-};
-// Solo cp850 por ahora (mismo default que print-agent/agent.js) — si alguna
-// impresora Bluetooth saca tildes rotas, se puede exponer cp1252/ascii como
-// opción después, igual que hace el agente de Windows con su config.json.
+// print-agent/agent.js (impresora física) prueba cp850/cp1252/ascii según
+// config.json porque cada impresora/PC es distinta. Acá no hay ese control
+// por dispositivo, y las impresoras térmicas portátiles clon casi nunca
+// respetan bien cp850: un byte no soportado (típicamente la "ñ") no solo
+// sale mal esa letra, corrompe el resto de la línea. Por eso, a diferencia
+// del agente, acá se va directo a "ascii" (sin tildes, pero nunca se rompe)
+// en vez de arriesgar cp850 como default.
+const CODEPAGE = 'ascii';
+const TABLA_ESC_T = { cp850: 2, cp1252: 16, ascii: 0 };
 const REEMPLAZO_ASCII = {
   'á':'a','é':'e','í':'i','ó':'o','ú':'u',
   'Á':'A','É':'E','Í':'I','Ó':'O','Ú':'U',
@@ -35,10 +31,6 @@ const REEMPLAZO_ASCII = {
   '¡':'!','¿':'?','°':'o','·':'.',
   '★':'*','—':'-',
 };
-const TABLA_ESC_T = { cp850: 2, cp1252: 16, ascii: 0 };
-
-const CODEPAGE = 'cp850';
-const MAPA_ACTIVO = MAPA_CP850;
 
 function quitarAcentos(str) {
   return str.replace(/[áéíóúÁÉÍÓÚñÑüÜ¡¿°·★—]/g, (ch) => REEMPLAZO_ASCII[ch] || ch);
@@ -63,13 +55,14 @@ class Esc {
   dblH() { return this.raw([0x1D, 0x21, 0x01]); }
   dblW() { return this.raw([0x1D, 0x21, 0x10]); }
   text(s) {
-    let str = String(s != null ? s : '');
-    if (CODEPAGE === 'ascii') str = quitarAcentos(str);
+    const str = quitarAcentos(String(s != null ? s : ''));
     for (let ci = 0; ci < str.length; ci++) {
-      const ch = str[ci];
-      const code = ch.charCodeAt(0);
-      const byte = MAPA_ACTIVO[ch];
-      this.b.push(byte != null ? byte : (code < 128 ? code : 0x3F));
+      const code = str.charCodeAt(ci);
+      // Todo queda en ASCII puro (7 bits) a propósito — ver el porqué en el
+      // comentario de CODEPAGE más arriba. Cualquier símbolo fuera de ASCII
+      // que no esté en REEMPLAZO_ASCII cae en '?' en vez de mandar un byte
+      // alto que la impresora podría no soportar.
+      this.b.push(code < 128 ? code : 0x3F);
     }
     return this;
   }

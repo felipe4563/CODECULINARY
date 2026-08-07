@@ -15,12 +15,17 @@ function cargarImagen(url) {
   });
 }
 
-// `maxAnchoPx` se redondea hacia abajo al múltiplo de 8 más cercano — el
-// formato raster empaqueta 8 píxeles por byte, una fila no puede terminar a
-// mitad de byte.
-export async function logoAEscPos(url, maxAnchoPx = 240, umbral = 160) {
+// Encaja el logo dentro de un cuadro de `maxAnchoPx` x `maxAltoPx` sin
+// deformarlo (mismo criterio "object-fit: contain"): antes solo se limitaba
+// el ancho y la altura salía proporcional al original, así que un logo
+// panorámico terminaba ocupando todo el ancho del papel en vez de un tamaño
+// chico arriba del ticket. `anchoFinal` se redondea hacia abajo al múltiplo
+// de 8 más cercano — el formato raster empaqueta 8 píxeles por byte, una
+// fila no puede terminar a mitad de byte.
+export async function logoAEscPos(url, maxAnchoPx = 240, maxAltoPx = 240, umbral = 160) {
   const img = await cargarImagen(url);
-  const anchoBytes = Math.max(1, Math.floor(Math.min(maxAnchoPx, img.width) / 8));
+  const escala = Math.min(maxAnchoPx / img.width, maxAltoPx / img.height, 1);
+  const anchoBytes = Math.max(1, Math.floor((img.width * escala) / 8));
   const anchoFinal = anchoBytes * 8;
   const altoPx = Math.max(1, Math.round(img.height * (anchoFinal / img.width)));
 
