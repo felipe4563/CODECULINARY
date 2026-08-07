@@ -46,6 +46,7 @@ CREATE TABLE `cajas` (
   `sucursal_id` int(10) UNSIGNED NOT NULL,
   `nombre` varchar(100) NOT NULL,
   `modo_impresion` enum('fisica','bluetooth') NOT NULL DEFAULT 'fisica',
+  `ancho_papel_bluetooth` enum('58mm','80mm') NOT NULL DEFAULT '80mm',
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `creado_en` timestamp NULL DEFAULT current_timestamp(),
   `actualizado_en` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -55,8 +56,8 @@ CREATE TABLE `cajas` (
 -- Volcado de datos para la tabla `cajas`
 --
 
-INSERT INTO `cajas` (`id`, `sucursal_id`, `nombre`, `modo_impresion`, `activo`, `creado_en`, `actualizado_en`) VALUES
-(1, 1, 'Caja 1', 'fisica', 1, '2026-07-24 12:23:54', '2026-07-24 12:23:54');
+INSERT INTO `cajas` (`id`, `sucursal_id`, `nombre`, `modo_impresion`, `ancho_papel_bluetooth`, `activo`, `creado_en`, `actualizado_en`) VALUES
+(1, 1, 'Caja 1', 'fisica', '80mm', 1, '2026-07-24 12:23:54', '2026-07-24 12:23:54');
 
 -- --------------------------------------------------------
 

@@ -27,22 +27,31 @@ function _validarModoImpresion(modo_impresion) {
   }
 }
 
-async function crear({ sucursal_id, nombre, modo_impresion = 'fisica', activo = 1 }) {
+function _validarAnchoPapel(ancho_papel_bluetooth) {
+  if (ancho_papel_bluetooth !== undefined && !['58mm', '80mm'].includes(ancho_papel_bluetooth)) {
+    throw Object.assign(new Error("ancho_papel_bluetooth debe ser '58mm' o '80mm'"), { status: 400 });
+  }
+}
+
+async function crear({ sucursal_id, nombre, modo_impresion = 'fisica', ancho_papel_bluetooth = '80mm', activo = 1 }) {
   if (!sucursal_id) throw Object.assign(new Error('sucursal_id es requerido'), { status: 400 });
   if (!nombre || !nombre.trim()) throw Object.assign(new Error('El nombre es requerido'), { status: 400 });
   _validarModoImpresion(modo_impresion);
+  _validarAnchoPapel(ancho_papel_bluetooth);
   const sucursal = await Sucursal.findByPk(sucursal_id);
   if (!sucursal) throw Object.assign(new Error('Sucursal no encontrada'), { status: 404 });
-  return Caja.create({ sucursal_id, nombre: nombre.trim(), modo_impresion, activo });
+  return Caja.create({ sucursal_id, nombre: nombre.trim(), modo_impresion, ancho_papel_bluetooth, activo });
 }
 
-async function actualizar(id, { nombre, modo_impresion, activo }) {
+async function actualizar(id, { nombre, modo_impresion, ancho_papel_bluetooth, activo }) {
   const caja = await Caja.findByPk(id);
   if (!caja) throw Object.assign(new Error('Caja no encontrada'), { status: 404 });
   _validarModoImpresion(modo_impresion);
+  _validarAnchoPapel(ancho_papel_bluetooth);
   const datos = {};
   if (nombre !== undefined) datos.nombre = nombre;
   if (modo_impresion !== undefined) datos.modo_impresion = modo_impresion;
+  if (ancho_papel_bluetooth !== undefined) datos.ancho_papel_bluetooth = ancho_papel_bluetooth;
   if (activo !== undefined) datos.activo = activo;
   await caja.update(datos);
   return caja;

@@ -6,7 +6,14 @@
 // arma el backend en `_emitirImpresion`), para que el ticket salga igual
 // sin importar el canal.
 
-const COLS = 32; // impresoras portátiles Bluetooth suelen ser de 58mm (32 cols), no 80mm (48 cols) como la de mostrador
+// Columnas de texto según el ancho de papel configurado en la caja (ver
+// ancho_papel_bluetooth en el modelo Caja) — 58mm imprime ~32 columnas con
+// la fuente normal, 80mm ~48, igual que la impresora de mostrador.
+const COLS_POR_ANCHO = { '58mm': 32, '80mm': 48 };
+// Ancho del raster del logo en píxeles, redondeado a múltiplo de 8 (ver
+// logoEscPos.js) — corresponde al área imprimible real de cada ancho de
+// papel a 203dpi (8 dots/mm): ~48mm y ~72mm imprimibles respectivamente.
+export const ANCHO_LOGO_POR_PAPEL = { '58mm': 384, '80mm': 576 };
 
 // Mismas tablas que print-agent/agent.js — ver ahí el porqué de las tres
 // variantes (algunas impresoras térmicas clon no respetan cp850 tal como lo
@@ -38,7 +45,10 @@ function quitarAcentos(str) {
 }
 
 class Esc {
-  constructor() { this.b = []; }
+  constructor(anchoPapel = '80mm') {
+    this.b = [];
+    this.anchoCols = COLS_POR_ANCHO[anchoPapel] || COLS_POR_ANCHO['80mm'];
+  }
   raw(bytes) { this.b.push(...bytes); return this; }
   init() { return this.raw([0x1B, 0x40]); }
   charset() { return this.raw([0x1B, 0x74, TABLA_ESC_T[CODEPAGE]]); }
@@ -64,11 +74,11 @@ class Esc {
     return this;
   }
   line(s) { return this.text(s != null ? s : '').lf(); }
-  rule(c) { const ch = c || '-'; return this.line(ch.repeat(COLS)); }
+  rule(c) { const ch = c || '-'; return this.line(ch.repeat(this.anchoCols)); }
   cols(left, right) {
     const r = String(right != null ? right : '');
     const l = String(left != null ? left : '');
-    const lw = COLS - r.length;
+    const lw = this.anchoCols - r.length;
     const lp = l.length > lw ? l.substring(0, Math.max(0, lw - 1)) + '.' : l.padEnd(lw);
     return this.line(lp + r);
   }
@@ -105,7 +115,7 @@ function buildCaja(data, logo) {
   const descuentoPuntos = Math.max(0, subtotalLineas - descuento - descuentoCupon + propina - total);
   const hayAjustes = descuento > 0 || descuentoCupon > 0 || descuentoPuntos > 0 || propina > 0;
 
-  const t = new Esc();
+  const t = new Esc(data.ancho_papel_bluetooth);
   t.init().charset();
 
   if (logo) t.center().imagen(logo.anchoBytes, logo.alto, logo.datos).lf();
@@ -192,7 +202,7 @@ function buildCaja(data, logo) {
 function buildCocina(data) {
   const pedido = data.pedido;
   const cfg = data.config || {};
-  const t = new Esc();
+  const t = new Esc(data.ancho_papel_bluetooth);
   const esLlevar = pedido.tipo === 'llevar';
   const nLevar = pedido.numero_llevar != null ? pedido.numero_llevar : pedido.id;
   const nOrden = String(data.numero_orden_diario != null ? data.numero_orden_diario : (esLlevar ? nLevar : pedido.id)).padStart(3, '0');

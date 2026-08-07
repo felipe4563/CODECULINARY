@@ -383,21 +383,23 @@ async function _emitirImpresion(pedido, metodo_pago, cambio, sucursal_id, numero
   // local (física) o armar el ESC/POS y disparar RawBT (bluetooth).
   let caja_id = null;
   let modo_impresion = 'fisica';
+  let ancho_papel_bluetooth = '80mm';
   if (pedido.sesion_caja_id) {
     const sesion = await SesionCaja.findByPk(pedido.sesion_caja_id, {
       attributes: ['caja_id'],
-      include: [{ model: Caja, as: 'caja', attributes: ['modo_impresion'] }],
+      include: [{ model: Caja, as: 'caja', attributes: ['modo_impresion', 'ancho_papel_bluetooth'] }],
     });
     caja_id = sesion ? sesion.caja_id : null;
     modo_impresion = sesion?.caja?.modo_impresion || 'fisica';
+    ancho_papel_bluetooth = sesion?.caja?.ancho_papel_bluetooth || '80mm';
   }
 
-  const datosCaja = { pedido: pedido.toJSON(), metodo_pago, cambio, config: cfg, numero_orden_diario, modo_impresion };
+  const datosCaja = { pedido: pedido.toJSON(), metodo_pago, cambio, config: cfg, numero_orden_diario, modo_impresion, ancho_papel_bluetooth };
   emitir('print:caja', datosCaja, sucursal_id, caja_id);
 
   let datosCocina = null;
   if (cfg.flujo_cocina === 'fisico') {
-    datosCocina = { pedido: pedido.toJSON(), config: cfg, numero_orden_diario, modo_impresion };
+    datosCocina = { pedido: pedido.toJSON(), config: cfg, numero_orden_diario, modo_impresion, ancho_papel_bluetooth };
     if (cfg.cocina_destino === 'por_caja') {
       // Cada caja imprime su propio ticket de cocina junto con el de venta
       // — para negocios chicos sin una estación de cocina fija compartida.

@@ -14,12 +14,12 @@ function BadgeEstado({ activo }) {
   );
 }
 
-function BadgeModoImpresion({ modo }) {
+function BadgeModoImpresion({ modo, anchoPapel }) {
   const esBluetooth = modo === 'bluetooth';
   const Icono = esBluetooth ? Bluetooth : Printer;
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${esBluetooth ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-muted text-muted-foreground'}`}>
-      <Icono className="w-3 h-3" /> {esBluetooth ? 'Bluetooth' : 'Física'}
+      <Icono className="w-3 h-3" /> {esBluetooth ? `Bluetooth ${anchoPapel || '80mm'}` : 'Física'}
     </span>
   );
 }
@@ -135,7 +135,7 @@ export default function CajasPage() {
                 <div className="mt-2 flex items-center justify-between gap-2">
                   <p className="text-xs text-muted-foreground truncate">{c.sucursal?.nombre ?? '—'}</p>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <BadgeModoImpresion modo={c.modo_impresion} />
+                    <BadgeModoImpresion modo={c.modo_impresion} anchoPapel={c.ancho_papel_bluetooth} />
                     <BadgeEstado activo={c.activo} />
                   </div>
                 </div>
@@ -171,7 +171,7 @@ export default function CajasPage() {
                         {c.sucursal?.nombre ?? '—'}
                       </td>
                       <td className="px-5 py-3.5">
-                        <BadgeModoImpresion modo={c.modo_impresion} />
+                        <BadgeModoImpresion modo={c.modo_impresion} anchoPapel={c.ancho_papel_bluetooth} />
                       </td>
                       <td className="px-5 py-3.5 text-center">
                         <BadgeEstado activo={c.activo} />
@@ -256,14 +256,15 @@ function ModalCaja({ caja, sucursales, onClose, onExito }) {
   const [sucursalId, setSucursalId]       = useState(caja?.sucursal_id ?? (sucursales[0]?.id ?? ''));
   const [nombre, setNombre]               = useState(caja?.nombre ?? '');
   const [modoImpresion, setModoImpresion] = useState(caja?.modo_impresion ?? 'fisica');
+  const [anchoPapel, setAnchoPapel]       = useState(caja?.ancho_papel_bluetooth ?? '80mm');
   const [activo, setActivo]               = useState(caja?.activo ?? 1);
   const [error, setError]                 = useState(null);
 
   const guardar = useMutation({
     mutationFn: () => {
       const datos = esNuevo
-        ? { sucursal_id: parseInt(sucursalId), nombre: nombre.trim(), modo_impresion: modoImpresion }
-        : { nombre: nombre.trim(), modo_impresion: modoImpresion, activo };
+        ? { sucursal_id: parseInt(sucursalId), nombre: nombre.trim(), modo_impresion: modoImpresion, ancho_papel_bluetooth: anchoPapel }
+        : { nombre: nombre.trim(), modo_impresion: modoImpresion, ancho_papel_bluetooth: anchoPapel, activo };
       return esNuevo ? crearCaja(datos) : actualizarCaja(caja.id, datos);
     },
     onSuccess: onExito,
@@ -325,6 +326,32 @@ function ModalCaja({ caja, sucursales, onClose, onExito }) {
               : 'Impresora térmica portátil emparejada por Bluetooth con la app RawBT en el celular que usa esta caja.'}
           </p>
         </div>
+        {modoImpresion === 'bluetooth' && (
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Ancho de papel</label>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button" onClick={() => setAnchoPapel('58mm')}
+                className={`py-2 rounded-xl text-xs font-medium border transition-colors ${
+                  anchoPapel === '58mm' ? 'bg-primary border-primary text-primary-foreground' : 'border-input text-muted-foreground hover:border-primary/50'
+                }`}
+              >
+                58mm
+              </button>
+              <button
+                type="button" onClick={() => setAnchoPapel('80mm')}
+                className={`py-2 rounded-xl text-xs font-medium border transition-colors ${
+                  anchoPapel === '80mm' ? 'bg-primary border-primary text-primary-foreground' : 'border-input text-muted-foreground hover:border-primary/50'
+                }`}
+              >
+                80mm
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1.5">
+              Ancho real de la impresora portátil — si el ticket sale angosto con espacio de sobra, probablemente está en 58mm pero la impresora es de 80mm (o viceversa).
+            </p>
+          </div>
+        )}
         {!esNuevo && (
           <div className="flex items-center gap-3">
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Estado</label>

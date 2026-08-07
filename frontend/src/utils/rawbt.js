@@ -4,21 +4,26 @@
 // y se disparan como una URL con esquema `rawbt:`, que Android le pasa
 // automáticamente a RawBT si está instalado — mismo mecanismo que "compartir"
 // a otra app.
-import { buildCaja, buildCocina } from './escpos';
+import { buildCaja, buildCocina, ANCHO_LOGO_POR_PAPEL } from './escpos';
 import { logoAEscPos } from './logoEscPos';
 import { logoSrc } from '../api/configuracion';
 
-// El logo no cambia entre tickets — se cachea por URL para no re-rasterizarlo
-// (leer imagen + canvas + recorrer píxeles) en cada venta.
-let _logoCache = null; // { url, promise }
+// El logo no cambia entre tickets — se cachea por URL+ancho para no
+// re-rasterizarlo (leer imagen + canvas + recorrer píxeles) en cada venta.
+// El ancho entra en la clave porque la misma caja siempre imprime al mismo
+// ancho, pero dos cajas Bluetooth con papel distinto (58mm/80mm) no pueden
+// compartir el raster de un logo ya escalado para el otro ancho.
+let _logoCache = null; // { key, promise }
 
-function obtenerLogoRasterizado(cfg) {
+function obtenerLogoRasterizado(cfg, anchoPapel) {
   const url = logoSrc(cfg?.logo);
   if (!url) return Promise.resolve(null);
-  if (_logoCache?.url === url) return _logoCache.promise;
+  const key = url + '|' + anchoPapel;
+  if (_logoCache?.key === key) return _logoCache.promise;
+  const maxAnchoPx = ANCHO_LOGO_POR_PAPEL[anchoPapel] || ANCHO_LOGO_POR_PAPEL['80mm'];
   // Si falla (imagen corrupta, CORS, etc.) el ticket igual sale, solo sin logo.
-  const promise = logoAEscPos(url).catch(() => null);
-  _logoCache = { url, promise };
+  const promise = logoAEscPos(url, maxAnchoPx).catch(() => null);
+  _logoCache = { key, promise };
   return promise;
 }
 
@@ -41,7 +46,7 @@ function dispararRawBT(bytes) {
 }
 
 export async function imprimirBluetoothCaja(datosCaja) {
-  const logo = await obtenerLogoRasterizado(datosCaja.config);
+  const logo = await obtenerLogoRasterizado(datosCaja.config, datosCaja.ancho_papel_bluetooth);
   dispararRawBT(buildCaja(datosCaja, logo));
 }
 
