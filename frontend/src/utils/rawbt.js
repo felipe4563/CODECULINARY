@@ -47,44 +47,12 @@ export async function imprimirBluetoothCaja(datosCaja) {
   dispararRawBT(buildCaja(datosCaja, logo));
 }
 
+// Cuando hay que imprimir también el de cocina, este NO se dispara solo
+// (ver por qué en store/impresionStore.js: un segundo `rawbt:` automático
+// —por tiempo fijo o esperando que la pestaña recupere el foco— no salía
+// confiable). En su lugar, quien maneje la impresora aprieta el botón
+// "Imprimir cocina" (BotonCocinaPendiente.jsx) cuando ya cortó el ticket de
+// caja y está lista/o — este export es lo que ese botón termina llamando.
 export async function imprimirBluetoothCocina(datosCocina) {
   dispararRawBT(buildCocina(datosCocina));
-}
-
-// Espera a que la pestaña recupere el foco (el usuario corta el ticket a
-// mano y vuelve a la app) antes de seguir. A diferencia de un `setTimeout`
-// fijo, esto no se pierde si Android pausa la pestaña en segundo plano
-// mientras está abierta la app RawBT — el evento `visibilitychange` sí se
-// dispara de forma confiable cuando el usuario vuelve, sea que haya tardado
-// 2 segundos o 20 cortando el papel. `timeoutMaxMs` es una red de seguridad
-// por si el evento nunca llega (navegador raro, no vuelve a la app): no se
-// queda esperando para siempre, dispara igual pasado ese tiempo.
-function esperarVolverALaApp(timeoutMaxMs = 60_000) {
-  return new Promise((resolve) => {
-    let seOcultoAlMenosUnaVez = document.hidden;
-    let timer;
-    const limpiar = () => {
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-      clearTimeout(timer);
-    };
-    const onVisibilityChange = () => {
-      if (document.hidden) {
-        seOcultoAlMenosUnaVez = true;
-        return;
-      }
-      if (seOcultoAlMenosUnaVez) { limpiar(); resolve(); }
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    timer = setTimeout(() => { limpiar(); resolve(); }, timeoutMaxMs);
-  });
-}
-
-// Cuando una venta genera AMBOS tickets (caja y cocina) por Bluetooth: se
-// imprime caja, se espera a que la persona corte el papel y vuelva a la
-// app (ver esperarVolverALaApp), y recién ahí se imprime cocina — separados
-// de verdad, con el tiempo que haga falta, en vez de una tira continua.
-export async function imprimirBluetoothTickets(datosCaja, datosCocina) {
-  if (datosCaja) await imprimirBluetoothCaja(datosCaja);
-  if (datosCaja && datosCocina) await esperarVolverALaApp();
-  if (datosCocina) await imprimirBluetoothCocina(datosCocina);
 }

@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import ForzarCambioContrasena from './ForzarCambioContrasena';
+import BotonCocinaPendiente from './BotonCocinaPendiente';
 import { useAuthStore } from '../../store/authStore';
 
 export default function Layout() {
@@ -12,6 +13,7 @@ export default function Layout() {
   return (
     <div className="flex h-screen bg-background overflow-hidden transition-colors">
       {debeCambiarContrasena && <ForzarCambioContrasena />}
+      <BotonCocinaPendiente />
       <Sidebar
         visible={sidebarVisible}
         onCerrar={() => setSidebarVisible(false)}

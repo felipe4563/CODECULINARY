@@ -1,6 +1,7 @@
 import { imprimirTicketVenta } from './ticketVenta';
 import { imprimirTicketCocina } from './ticketCocina';
-import { imprimirBluetoothCaja, imprimirBluetoothCocina, imprimirBluetoothTickets } from './rawbt';
+import { imprimirBluetoothCaja, imprimirBluetoothCocina } from './rawbt';
+import { useImpresionStore } from '../store/impresionStore';
 
 // Manda el ticket directo al agente de impresión instalado en ESTA PC
 // (http://127.0.0.1, nunca sale a Internet). Es el camino principal de
@@ -39,10 +40,14 @@ export function imprimirLocal(datosImpresion, { forzar = false } = {}) {
   const cajaBT = datosImpresion.caja?.modo_impresion === 'bluetooth';
   const cocinaBT = datosImpresion.cocina?.modo_impresion === 'bluetooth';
 
-  // Los dos tickets Bluetooth no pueden dispararse en paralelo (ver el
-  // porqué en rawbt.js) — si ambos son Bluetooth, van encadenados con pausa.
+  // Los dos tickets Bluetooth no se disparan juntos (ver por qué en
+  // store/impresionStore.js) — se imprime caja y cocina queda pendiente de
+  // un botón manual ("Imprimir cocina") para que la persona corte el papel
+  // con calma antes de mandar el siguiente.
   if (cajaBT && cocinaBT) {
-    imprimirBluetoothTickets(datosImpresion.caja, datosImpresion.cocina);
+    imprimirBluetoothCaja(datosImpresion.caja).then(() => {
+      useImpresionStore.getState().marcarCocinaPendiente(datosImpresion.cocina);
+    });
   } else {
     if (datosImpresion.caja) {
       if (cajaBT) {
@@ -78,8 +83,12 @@ export function reimprimirConFallback(datosImpresion) {
 
   if (cajaBT && cocinaBT) {
     // No hay agente/local host de por medio en este modo — reimprimir es
-    // simplemente volver a disparar RawBT, sin fallback al navegador.
-    imprimirBluetoothTickets(datosImpresion.caja, datosImpresion.cocina);
+    // simplemente volver a disparar RawBT, sin fallback al navegador. Cocina
+    // vuelve a quedar pendiente del botón manual, igual que en la impresión
+    // automática (ver imprimirLocal arriba).
+    imprimirBluetoothCaja(datosImpresion.caja).then(() => {
+      useImpresionStore.getState().marcarCocinaPendiente(datosImpresion.cocina);
+    });
     return;
   }
 
