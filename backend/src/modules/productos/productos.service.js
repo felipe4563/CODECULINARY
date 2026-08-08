@@ -122,6 +122,20 @@ function _urlAbsoluta(ruta) {
   return `${base}${ruta}`;
 }
 
+// Contraparte de _urlAbsoluta, para antes de guardar. El formulario de
+// edición carga `imagen` con lo que devolvió el GET (ya absolutizado) y lo
+// reenvía tal cual en el PUT aunque el usuario no haya tocado la imagen —
+// si se guardara así, la siguiente lectura le antepondría la base OTRA VEZ
+// y quedaría duplicada/rota (http://host:puertohttp://host:puerto/uploads/...).
+// Da igual qué mande el cliente (relativa o absoluta): acá siempre se le
+// saca el prefijo de base antes de persistir.
+function _urlRelativa(ruta) {
+  if (!ruta) return ruta;
+  const base = (process.env.PUBLIC_API_URL || '').replace(/\/+$/, '');
+  if (base && ruta.startsWith(base)) return ruta.slice(base.length);
+  return ruta;
+}
+
 function _normalizarGruposOpciones(producto) {
   producto.imagen = _urlAbsoluta(producto.imagen);
   if (Array.isArray(producto.grupos_opciones)) {
@@ -213,7 +227,7 @@ async function crearProducto({ categoria_id, nombre, precio, stock, sucursal_id,
   }
 
   const producto = await sequelize.transaction(async (t) => {
-    const p = await Producto.create({ categoria_id, nombre, precio, stock: conStock ? 0 : null, es_vendible, imagen, es_pesable }, { transaction: t });
+    const p = await Producto.create({ categoria_id, nombre, precio, stock: conStock ? 0 : null, es_vendible, imagen: _urlRelativa(imagen), es_pesable }, { transaction: t });
     await _sincronizarGruposOpciones(p.id, grupos_opciones, t);
     return p;
   });
@@ -228,6 +242,7 @@ async function crearProducto({ categoria_id, nombre, precio, stock, sucursal_id,
 
 async function actualizarProducto(id, datos, alcance) {
   const { stock, grupos_opciones, ...resto } = datos; // stock nunca se edita aquí — solo vía ajustarStockSucursal
+  if (resto.imagen !== undefined) resto.imagen = _urlRelativa(resto.imagen);
   const p = await Producto.findByPk(id);
   if (!p) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
   await sequelize.transaction(async (t) => {
