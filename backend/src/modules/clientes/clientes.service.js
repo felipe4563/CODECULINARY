@@ -39,10 +39,13 @@ function _mapPersona(persona) {
   return {
     codigo: persona.codigo,
     nombre,
-    // codigo es la PK interna de la API de Personas y siempre está presente;
-    // numeroDocumento puede venir vacío para ciertos registros. Se usa codigo
-    // como valor de "N° documento" para no dejar el campo en blanco.
-    numero_documento: persona.codigo || persona.numeroDocumento || null,
+    // numeroDocumento es el número de CI real — lo que se puede volver a
+    // buscar más tarde con /personas/documento/{numeroDocumento} (ver
+    // buscarPorDocumento más abajo). codigo es la PK interna de la API de
+    // Personas, siempre presente pero NO es un documento buscable por ese
+    // endpoint — solo se usa como respaldo para los registros donde
+    // numeroDocumento viene vacío, para no dejar el campo en blanco.
+    numero_documento: persona.numeroDocumento || persona.codigo || null,
     fecha_nacimiento: persona.fechaNacimiento || null,
   };
 }
@@ -50,9 +53,19 @@ function _mapPersona(persona) {
 // Consulta la API de Personas (registro civil) por número de CI, para
 // autocompletar el formulario de "Nuevo Cliente" — no persiste nada, solo
 // devuelve los datos ya mapeados a nuestro formato.
+//
+// Algunos registros tienen numeroDocumento vacío en la API de Personas y
+// solo son ubicables por su codigo interno (ver API-V2.md §3) — para quien
+// usa el sistema, el número que tiene a mano es "su documento", sin
+// distinguir si técnicamente es numeroDocumento o codigo. Si la búsqueda por
+// documento no encuentra nada, probamos el mismo valor como codigo antes de
+// darnos por vencidos.
 async function buscarPorDocumento(numeroDocumento) {
   const persona = await personasClient.buscarPorDocumento(numeroDocumento);
-  return persona ? _mapPersona(persona) : null;
+  if (persona) return _mapPersona(persona);
+
+  const porCodigo = await personasClient.buscarPorCodigo(numeroDocumento);
+  return porCodigo ? _mapPersona(porCodigo) : null;
 }
 
 // Búsqueda por nombre completo (para cuando no se tiene el número de
