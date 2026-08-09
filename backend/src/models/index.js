@@ -53,6 +53,11 @@ const Promocion = require('./Promocion');
 const Cupon = require('./Cupon');
 const RuletaPremio = require('./RuletaPremio');
 const RuletaGiro = require('./RuletaGiro');
+const Insumo = require('./Insumo');
+const InsumoStockSucursal = require('./InsumoStockSucursal');
+const InsumoMovimiento = require('./InsumoMovimiento');
+const RecetaInsumo = require('./RecetaInsumo');
+const DetallePedidoOpcion = require('./DetallePedidoOpcion');
 
 // Roles y Permisos
 Rol.belongsToMany(Permiso, { through: RolesPermisos, foreignKey: 'rol_id', otherKey: 'permiso_id', as: 'permisos' });
@@ -140,6 +145,7 @@ Compra.belongsTo(Usuario, { foreignKey: 'usuario_id', as: 'usuario' });
 Compra.hasMany(DetalleCompra, { foreignKey: 'compra_id', as: 'detalles' });
 DetalleCompra.belongsTo(Compra, { foreignKey: 'compra_id' });
 DetalleCompra.belongsTo(Producto, { foreignKey: 'producto_id', as: 'producto' });
+DetalleCompra.belongsTo(Insumo, { foreignKey: 'insumo_id', as: 'insumo' });
 
 // Inventario
 RegistroInventario.belongsTo(Producto, { foreignKey: 'producto_id', as: 'producto' });
@@ -163,6 +169,25 @@ Caja.belongsTo(Sucursal, { foreignKey: 'sucursal_id', as: 'sucursal' });
 Sucursal.hasMany(Caja, { foreignKey: 'sucursal_id', as: 'cajas' });
 Caja.hasMany(SesionCaja, { foreignKey: 'caja_id', as: 'sesiones' });
 SesionCaja.belongsTo(Caja, { foreignKey: 'caja_id', as: 'caja' });
+
+// Insumos (ingredientes, no vendibles) y su stock/movimientos por sucursal
+Insumo.hasMany(InsumoStockSucursal, { foreignKey: 'insumo_id', as: 'stock_sucursales' });
+InsumoStockSucursal.belongsTo(Insumo, { foreignKey: 'insumo_id', as: 'insumo' });
+InsumoStockSucursal.belongsTo(Sucursal, { foreignKey: 'sucursal_id', as: 'sucursal' });
+Insumo.hasMany(InsumoMovimiento, { foreignKey: 'insumo_id', as: 'movimientos' });
+InsumoMovimiento.belongsTo(Insumo, { foreignKey: 'insumo_id', as: 'insumo' });
+InsumoMovimiento.belongsTo(Sucursal, { foreignKey: 'sucursal_id', as: 'sucursal' });
+InsumoMovimiento.belongsTo(Usuario, { foreignKey: 'usuario_id', as: 'usuario' });
+
+// Receta: qué insumo(s) consume un producto al venderse (base o por opción)
+Producto.hasMany(RecetaInsumo, { foreignKey: 'producto_id', as: 'receta' });
+RecetaInsumo.belongsTo(Producto, { foreignKey: 'producto_id', as: 'producto' });
+RecetaInsumo.belongsTo(Opcion, { foreignKey: 'opcion_id', as: 'opcion' });
+RecetaInsumo.belongsTo(Insumo, { foreignKey: 'insumo_id', as: 'insumo' });
+
+// Opciones elegidas por línea de pedido (para poder resolver la receta al vender)
+DetallePedido.belongsToMany(Opcion, { through: DetallePedidoOpcion, foreignKey: 'detalle_pedido_id', otherKey: 'opcion_id', as: 'opciones' });
+Opcion.belongsToMany(DetallePedido, { through: DetallePedidoOpcion, foreignKey: 'opcion_id', otherKey: 'detalle_pedido_id', as: 'detalles_pedido' });
 
 // Pagos QR (CodePay)
 Pedido.hasMany(PagoQr, { foreignKey: 'pedido_id', as: 'pagosQr' });
@@ -188,4 +213,5 @@ module.exports = {
   Combo, ComboProducto, Promocion,
   Cupon,
   RuletaPremio, RuletaGiro,
+  Insumo, InsumoStockSucursal, InsumoMovimiento, RecetaInsumo, DetallePedidoOpcion,
 };

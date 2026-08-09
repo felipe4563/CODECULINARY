@@ -9,6 +9,7 @@ import { useAuthStore } from '../../store/authStore';
 import { getSucursales } from '../../api/sucursales';
 import Modal from '../../components/ui/Modal';
 import { BASE_URL } from '../../api/configuracion';
+import RecetaInsumosEditor from './RecetaInsumosEditor';
 
 const API_BASE = BASE_URL;
 
@@ -752,6 +753,12 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
           />
           <span className="text-sm text-foreground">Se vende por peso (kg) — el precio de arriba es por kg</span>
         </label>
+
+        <RecetaInsumosEditor
+          productoId={prod?.id}
+          gruposAsociados={form.grupos_opciones}
+          gruposOpcionesCompletos={gruposOpciones}
+        />
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 

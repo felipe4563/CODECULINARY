@@ -247,8 +247,9 @@ CREATE TABLE `detalle_arqueo` (
 CREATE TABLE `detalle_compras` (
   `id` int(10) UNSIGNED NOT NULL,
   `compra_id` int(10) UNSIGNED NOT NULL,
-  `producto_id` int(10) UNSIGNED NOT NULL,
-  `cantidad` int(11) NOT NULL,
+  `producto_id` int(10) UNSIGNED DEFAULT NULL,
+  `insumo_id` int(10) UNSIGNED DEFAULT NULL,
+  `cantidad` decimal(10,3) NOT NULL,
   `costo_unitario` decimal(10,2) NOT NULL,
   `subtotal` decimal(10,2) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -271,6 +272,19 @@ CREATE TABLE `detalle_pedidos` (
   `estado` enum('pendiente','preparando','servido') NOT NULL DEFAULT 'pendiente',
   `creado_en` timestamp NOT NULL DEFAULT current_timestamp(),
   `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `detalle_pedido_opciones`
+-- (qué opciones eligió el cliente por línea de pedido — antes solo
+-- quedaba como texto libre en detalle_pedidos.nota; ver migración 037)
+--
+
+CREATE TABLE `detalle_pedido_opciones` (
+  `detalle_pedido_id` int(10) UNSIGNED NOT NULL,
+  `opcion_id` int(10) UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -301,6 +315,53 @@ CREATE TABLE `grupos_opciones` (
   `tipo_seleccion` enum('unica','multiple') NOT NULL DEFAULT 'unica',
   `creado_en` timestamp NULL DEFAULT current_timestamp(),
   `actualizado_en` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `insumos`
+-- (ingredientes de cocina, no vendibles — ver migración 037)
+--
+
+CREATE TABLE `insumos` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `nombre` varchar(100) NOT NULL,
+  `unidad_medida` enum('kilogramo','gramo','litro','mililitro','arroba','libra','unidad') NOT NULL,
+  `activo` tinyint(1) NOT NULL DEFAULT 1,
+  `creado_en` timestamp NOT NULL DEFAULT current_timestamp(),
+  `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `insumo_movimientos`
+--
+
+CREATE TABLE `insumo_movimientos` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `insumo_id` int(10) UNSIGNED NOT NULL,
+  `sucursal_id` int(10) UNSIGNED NOT NULL,
+  `usuario_id` int(10) UNSIGNED DEFAULT NULL,
+  `tipo` enum('compra','ajuste','consumo_venta') NOT NULL,
+  `cantidad` decimal(10,3) NOT NULL,
+  `stock_anterior` decimal(10,3) NOT NULL,
+  `stock_nuevo` decimal(10,3) NOT NULL,
+  `nota` varchar(255) DEFAULT NULL,
+  `creado_en` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `insumo_stock_sucursal`
+--
+
+CREATE TABLE `insumo_stock_sucursal` (
+  `insumo_id` int(10) UNSIGNED NOT NULL,
+  `sucursal_id` int(10) UNSIGNED NOT NULL,
+  `stock` decimal(10,3) NOT NULL DEFAULT 0.000
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -494,7 +555,11 @@ INSERT INTO `permisos` (`id`, `modulo`, `accion`, `descripcion`) VALUES
 (61, 'ruleta', 'girar', 'Girar la ruleta por un cliente'),
 (62, 'ruleta', 'crear', 'Crear premios de la ruleta'),
 (63, 'ruleta', 'editar', 'Editar premios de la ruleta'),
-(64, 'ruleta', 'eliminar', 'Eliminar premios de la ruleta');
+(64, 'ruleta', 'eliminar', 'Eliminar premios de la ruleta'),
+(65, 'insumos', 'ver', 'Ver insumos'),
+(66, 'insumos', 'crear', 'Crear insumos'),
+(67, 'insumos', 'editar', 'Editar insumos (incluye receta y ajustes de stock)'),
+(68, 'insumos', 'eliminar', 'Desactivar insumos');
 
 -- --------------------------------------------------------
 
@@ -588,6 +653,22 @@ CREATE TABLE `proveedores` (
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `creado_en` timestamp NOT NULL DEFAULT current_timestamp(),
   `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `receta_insumos`
+-- (qué insumo(s) consume un producto al venderse — opcion_id NULL es
+-- consumo base, con valor solo se descuenta si esa opción fue elegida)
+--
+
+CREATE TABLE `receta_insumos` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `producto_id` int(10) UNSIGNED NOT NULL,
+  `opcion_id` int(10) UNSIGNED DEFAULT NULL,
+  `insumo_id` int(10) UNSIGNED NOT NULL,
+  `cantidad` decimal(10,3) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -711,6 +792,10 @@ INSERT INTO `roles_permisos` (`rol_id`, `permiso_id`) VALUES
 (1, 62),
 (1, 63),
 (1, 64),
+(1, 65),
+(1, 66),
+(1, 67),
+(1, 68),
 (2, 1),
 (2, 2),
 (2, 3),
@@ -937,7 +1022,8 @@ ALTER TABLE `detalle_arqueo`
 ALTER TABLE `detalle_compras`
   ADD PRIMARY KEY (`id`),
   ADD KEY `compra_id` (`compra_id`),
-  ADD KEY `producto_id` (`producto_id`);
+  ADD KEY `producto_id` (`producto_id`),
+  ADD KEY `insumo_id` (`insumo_id`);
 
 --
 -- Indices de la tabla `detalle_pedidos`
@@ -947,6 +1033,13 @@ ALTER TABLE `detalle_pedidos`
   ADD KEY `pedido_id` (`pedido_id`),
   ADD KEY `producto_id` (`producto_id`),
   ADD KEY `combo_id` (`combo_id`);
+
+--
+-- Indices de la tabla `detalle_pedido_opciones`
+--
+ALTER TABLE `detalle_pedido_opciones`
+  ADD PRIMARY KEY (`detalle_pedido_id`,`opcion_id`),
+  ADD KEY `opcion_id` (`opcion_id`);
 
 --
 -- Indices de la tabla `gastos`
@@ -961,6 +1054,28 @@ ALTER TABLE `gastos`
 --
 ALTER TABLE `grupos_opciones`
   ADD PRIMARY KEY (`id`);
+
+--
+-- Indices de la tabla `insumos`
+--
+ALTER TABLE `insumos`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indices de la tabla `insumo_movimientos`
+--
+ALTER TABLE `insumo_movimientos`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `insumo_id` (`insumo_id`),
+  ADD KEY `sucursal_id` (`sucursal_id`),
+  ADD KEY `usuario_id` (`usuario_id`);
+
+--
+-- Indices de la tabla `insumo_stock_sucursal`
+--
+ALTER TABLE `insumo_stock_sucursal`
+  ADD PRIMARY KEY (`insumo_id`,`sucursal_id`),
+  ADD KEY `sucursal_id` (`sucursal_id`);
 
 --
 -- Indices de la tabla `libro_caja`
@@ -1051,6 +1166,15 @@ ALTER TABLE `producto_stock_sucursal`
 --
 ALTER TABLE `proveedores`
   ADD PRIMARY KEY (`id`);
+
+--
+-- Indices de la tabla `receta_insumos`
+--
+ALTER TABLE `receta_insumos`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `producto_id` (`producto_id`),
+  ADD KEY `opcion_id` (`opcion_id`),
+  ADD KEY `insumo_id` (`insumo_id`);
 
 --
 -- Indices de la tabla `registros_inventario`
@@ -1205,6 +1329,18 @@ ALTER TABLE `grupos_opciones`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT de la tabla `insumos`
+--
+ALTER TABLE `insumos`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT de la tabla `insumo_movimientos`
+--
+ALTER TABLE `insumo_movimientos`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT de la tabla `libro_caja`
 --
 ALTER TABLE `libro_caja`
@@ -1238,7 +1374,7 @@ ALTER TABLE `pedidos`
 -- AUTO_INCREMENT de la tabla `permisos`
 --
 ALTER TABLE `permisos`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=65;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=69;
 
 --
 -- AUTO_INCREMENT de la tabla `promociones`
@@ -1256,6 +1392,12 @@ ALTER TABLE `productos`
 -- AUTO_INCREMENT de la tabla `proveedores`
 --
 ALTER TABLE `proveedores`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT de la tabla `receta_insumos`
+--
+ALTER TABLE `receta_insumos`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
@@ -1356,7 +1498,8 @@ ALTER TABLE `detalle_arqueo`
 --
 ALTER TABLE `detalle_compras`
   ADD CONSTRAINT `detalle_compras_ibfk_1` FOREIGN KEY (`compra_id`) REFERENCES `compras` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `detalle_compras_ibfk_2` FOREIGN KEY (`producto_id`) REFERENCES `productos` (`id`);
+  ADD CONSTRAINT `detalle_compras_ibfk_2` FOREIGN KEY (`producto_id`) REFERENCES `productos` (`id`),
+  ADD CONSTRAINT `detalle_compras_ibfk_3` FOREIGN KEY (`insumo_id`) REFERENCES `insumos` (`id`);
 
 --
 -- Filtros para la tabla `detalle_pedidos`
@@ -1367,11 +1510,32 @@ ALTER TABLE `detalle_pedidos`
   ADD CONSTRAINT `detalle_pedidos_combo_fk` FOREIGN KEY (`combo_id`) REFERENCES `combos` (`id`);
 
 --
+-- Filtros para la tabla `detalle_pedido_opciones`
+--
+ALTER TABLE `detalle_pedido_opciones`
+  ADD CONSTRAINT `detalle_pedido_opciones_ibfk_1` FOREIGN KEY (`detalle_pedido_id`) REFERENCES `detalle_pedidos` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `detalle_pedido_opciones_ibfk_2` FOREIGN KEY (`opcion_id`) REFERENCES `opciones` (`id`) ON DELETE CASCADE;
+
+--
 -- Filtros para la tabla `gastos`
 --
 ALTER TABLE `gastos`
   ADD CONSTRAINT `gastos_ibfk_1` FOREIGN KEY (`sesion_caja_id`) REFERENCES `sesiones_caja` (`id`) ON DELETE SET NULL,
   ADD CONSTRAINT `gastos_ibfk_2` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`id`);
+
+--
+-- Filtros para la tabla `insumo_movimientos`
+--
+ALTER TABLE `insumo_movimientos`
+  ADD CONSTRAINT `insumo_movimientos_ibfk_1` FOREIGN KEY (`insumo_id`) REFERENCES `insumos` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `insumo_movimientos_ibfk_2` FOREIGN KEY (`sucursal_id`) REFERENCES `sucursales` (`id`) ON DELETE CASCADE;
+
+--
+-- Filtros para la tabla `insumo_stock_sucursal`
+--
+ALTER TABLE `insumo_stock_sucursal`
+  ADD CONSTRAINT `insumo_stock_sucursal_ibfk_1` FOREIGN KEY (`insumo_id`) REFERENCES `insumos` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `insumo_stock_sucursal_ibfk_2` FOREIGN KEY (`sucursal_id`) REFERENCES `sucursales` (`id`) ON DELETE CASCADE;
 
 --
 -- Filtros para la tabla `libro_caja`
@@ -1436,6 +1600,14 @@ ALTER TABLE `producto_grupos_opciones`
 ALTER TABLE `producto_stock_sucursal`
   ADD CONSTRAINT `producto_stock_sucursal_ibfk_1` FOREIGN KEY (`producto_id`) REFERENCES `productos` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `producto_stock_sucursal_ibfk_2` FOREIGN KEY (`sucursal_id`) REFERENCES `sucursales` (`id`) ON DELETE CASCADE;
+
+--
+-- Filtros para la tabla `receta_insumos`
+--
+ALTER TABLE `receta_insumos`
+  ADD CONSTRAINT `receta_insumos_ibfk_1` FOREIGN KEY (`producto_id`) REFERENCES `productos` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `receta_insumos_ibfk_2` FOREIGN KEY (`opcion_id`) REFERENCES `opciones` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `receta_insumos_ibfk_3` FOREIGN KEY (`insumo_id`) REFERENCES `insumos` (`id`) ON DELETE CASCADE;
 
 --
 -- Filtros para la tabla `registros_inventario`

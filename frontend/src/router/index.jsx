@@ -23,6 +23,7 @@ import CombosPage from '../pages/combos/CombosPage';
 import PromocionesPage from '../pages/promociones/PromocionesPage';
 import CuponesPage from '../pages/cupones/CuponesPage';
 import RuletaPage from '../pages/ruleta/RuletaPage';
+import InsumosPage from '../pages/insumos/InsumosPage';
 
 export const router = createBrowserRouter(
   [
@@ -51,6 +52,7 @@ export const router = createBrowserRouter(
             { path: '/libro-caja',       element: <LibroCajaPage /> },
             { path: '/inventario',       element: <InventarioPage /> },
             { path: '/compras',          element: <ComprasPage /> },
+            { path: '/insumos',          element: <InsumosPage /> },
             { path: '/clientes',         element: <ClientesPage /> },
             { path: '/reportes',         element: <ReportesPage /> },
             { path: '/cocina',           element: <CocinaPage /> },

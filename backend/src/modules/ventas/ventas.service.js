@@ -1,9 +1,11 @@
 const { Op } = require('sequelize');
 const {
-  Pedido, DetallePedido, Mesa, Producto, Cliente, SesionCaja, Caja, LibroCaja, Configuracion, PagoQr, Opcion, Combo, Promocion, Cupon, sequelize,
+  Pedido, DetallePedido, Mesa, Producto, Cliente, SesionCaja, Caja, LibroCaja, Configuracion, PagoQr, Opcion, Combo, Promocion, Cupon,
+  RecetaInsumo, DetallePedidoOpcion, sequelize,
 } = require('../../models');
 const { emitir } = require('../../socket');
 const { ajustarStockSucursal } = require('../inventario/stock.service');
+const { ajustarStockInsumoSucursal } = require('../insumos/insumos.service');
 const codepayClient = require('../../integrations/codepay/codepay.client');
 const { calcularPrecioPesable, redondearAMedio } = require('../../utils/precio');
 const { estaActivoHoy } = require('../../utils/disponibilidad');
@@ -33,6 +35,25 @@ async function _extraPorOpciones(opcion_ids = []) {
 // Si el producto tiene una promoción vigente hoy, devuelve el precio ya
 // descontado; si no, su precio normal. Se recalcula siempre desde la BD, no
 // desde lo que muestre el catálogo que ya tenga el cliente en pantalla.
+// Descuenta el stock de insumos según la receta del producto (líneas con
+// opcion_id NULL, siempre) más la receta de las opciones que el cliente eligió
+// (opcion_id IN opcion_ids). Un producto sin receta no mueve ningún insumo.
+// No bloquea ni lanza error si el stock del insumo queda negativo — es una
+// señal visual de alerta, no un freno a la venta (ver spec del 2026-08-08).
+async function _descontarInsumosPorVenta({ producto_id, opcion_ids = [], cantidadVendida, sucursal_id, usuario_id, notaBase, transaction }) {
+  const condiciones = [{ opcion_id: null }];
+  if (opcion_ids.length) condiciones.push({ opcion_id: opcion_ids });
+  const lineas = await RecetaInsumo.findAll({ where: { producto_id, [Op.or]: condiciones }, transaction });
+
+  for (const linea of lineas) {
+    await ajustarStockInsumoSucursal({
+      insumo_id: linea.insumo_id, sucursal_id, tipo: 'consumo_venta',
+      cantidad: parseFloat(linea.cantidad) * cantidadVendida,
+      usuario_id, nota: notaBase, transaction,
+    });
+  }
+}
+
 async function _precioConPromocion(producto) {
   const base = parseFloat(producto.precio);
   // Si hay más de una promoción activa para el mismo producto, gana la más
@@ -339,10 +360,18 @@ async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, 
       });
       if (!combo) continue;
       for (const p of combo.productos) {
-        if (p.stock === null) continue;
-        await ajustarStockSucursal({
-          producto_id: p.id, sucursal_id: pedido.sucursal_id, tipo: 'venta', cantidad: detalle.cantidad * p.ComboProducto.cantidad,
-          usuario_id, nota: `Venta #${pedido.id} (combo ${combo.nombre})`, transaction,
+        const cantidadComponente = detalle.cantidad * p.ComboProducto.cantidad;
+        if (p.stock !== null) {
+          await ajustarStockSucursal({
+            producto_id: p.id, sucursal_id: pedido.sucursal_id, tipo: 'venta', cantidad: cantidadComponente,
+            usuario_id, nota: `Venta #${pedido.id} (combo ${combo.nombre})`, transaction,
+          });
+        }
+        // Los combos no tienen opciones propias — solo aplica la receta base
+        // de cada producto componente (ver spec del 2026-08-08, fuera de alcance).
+        await _descontarInsumosPorVenta({
+          producto_id: p.id, cantidadVendida: cantidadComponente, sucursal_id: pedido.sucursal_id,
+          usuario_id, notaBase: `Venta #${pedido.id} (combo ${combo.nombre})`, transaction,
         });
       }
       continue;
@@ -352,6 +381,15 @@ async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, 
       await ajustarStockSucursal({
         producto_id: detalle.producto_id, sucursal_id: pedido.sucursal_id, tipo: 'venta', cantidad: detalle.cantidad,
         usuario_id, nota: `Venta #${pedido.id}`, transaction,
+      });
+    }
+    if (producto) {
+      const opcionesElegidas = detalle.id
+        ? (await DetallePedidoOpcion.findAll({ where: { detalle_pedido_id: detalle.id }, transaction })).map(o => o.opcion_id)
+        : [];
+      await _descontarInsumosPorVenta({
+        producto_id: detalle.producto_id, opcion_ids: opcionesElegidas, cantidadVendida: detalle.cantidad,
+        sucursal_id: pedido.sucursal_id, usuario_id, notaBase: `Venta #${pedido.id}`, transaction,
       });
     }
   }
@@ -552,7 +590,7 @@ async function _confirmarPagoQr(pagoQrInicial) {
     if (!pagoQr || pagoQr.estado !== 'pendiente') return null; // ya resuelto por otra llamada concurrente
 
     const pedido = await Pedido.findByPk(pagoQr.pedido_id, { include: INCLUDE_PEDIDO_COMPLETO, transaction: t });
-    const detalles = pedido.detalles.map((d) => ({ producto_id: d.producto_id, combo_id: d.combo_id, cantidad: d.cantidad }));
+    const detalles = pedido.detalles.map((d) => ({ id: d.id, producto_id: d.producto_id, combo_id: d.combo_id, cantidad: d.cantidad }));
 
     await _finalizarVenta({
       pedido, detalles, metodo_pago: 'qr', monto_recibido: pagoQr.monto_neto,
@@ -702,13 +740,19 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
 
     const detalles = [];
     for (const { item, combo, linea } of productos) {
-      await DetallePedido.create({
+      const detallePedido = await DetallePedido.create({
         pedido_id: pedido.id,
         producto_id: combo ? null : item.producto_id,
         combo_id: combo ? item.combo_id : null,
         cantidad: linea.cantidad, precio: linea.precio, peso: linea.peso, nota: item.nota,
       }, { transaction: t });
-      detalles.push({ producto_id: combo ? null : item.producto_id, combo_id: combo ? item.combo_id : null, cantidad: linea.cantidad, precio: linea.precio });
+      if (!combo && item.opcion_ids?.length) {
+        await DetallePedidoOpcion.bulkCreate(
+          item.opcion_ids.map(opcion_id => ({ detalle_pedido_id: detallePedido.id, opcion_id })),
+          { transaction: t },
+        );
+      }
+      detalles.push({ id: detallePedido.id, producto_id: combo ? null : item.producto_id, combo_id: combo ? item.combo_id : null, cantidad: linea.cantidad, precio: linea.precio });
     }
 
     if (metodo_pago !== 'qr') {
@@ -767,6 +811,10 @@ async function agregarItem(pedido_id, { producto_id, combo_id, cantidad = 1, not
     peso: linea.peso,
     nota,
   });
+
+  if (opcion_ids?.length) {
+    await DetallePedidoOpcion.bulkCreate(opcion_ids.map(opcion_id => ({ detalle_pedido_id: item.id, opcion_id })));
+  }
 
   await _recalcularTotal(pedido_id);
   emitir('restaurante:actualizar', { tipo: 'pedido_items' });
@@ -839,7 +887,7 @@ async function cobrar(pedido_id, usuario_id, { metodo_pago, monto_recibido, desc
     return { pedido: await obtener(pedido_id), pago_qr };
   }
 
-  const detalles = pedido.detalles.map((d) => ({ producto_id: d.producto_id, combo_id: d.combo_id, cantidad: d.cantidad, precio: parseFloat(d.precio) }));
+  const detalles = pedido.detalles.map((d) => ({ id: d.id, producto_id: d.producto_id, combo_id: d.combo_id, cantidad: d.cantidad, precio: parseFloat(d.precio) }));
   await sequelize.transaction((t) => _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, descuento, propina, usuario_id, puntos_canjear, cupon_codigo }, t));
 
   const cobrado = await obtener(pedido_id);

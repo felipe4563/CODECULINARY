@@ -1,3 +1,13 @@
+// Ver misma función en ticketVenta.js: achica el font-size del nombre si no
+// entra en una sola línea a su tamaño normal, con el ancho real de columna
+// de cada tabla de este ticket (productos: col-prod 56%; gastos: col-gasto-desc 70%).
+function _fsNombre(nombre, anchoColPx, fsMax) {
+  const fsMin = 8;
+  if (!nombre) return fsMax;
+  const fsNecesario = Math.floor((anchoColPx - 4) / (nombre.length * 0.6));
+  return Math.max(fsMin, Math.min(fsMax, fsNecesario));
+}
+
 export function imprimirTicketCierreCaja(reporte, config = {}) {
   const nombre  = config.nombre_negocio ?? 'Restaurante';
   const simbolo = config.simbolo_moneda ?? 'Bs.';
@@ -19,7 +29,7 @@ export function imprimirTicketCierreCaja(reporte, config = {}) {
 
   const filas = productos_vendidos.map(p => `
     <tr class="fila-prod">
-      <td class="col-prod"><span class="prod-nombre">${p.nombre}</span></td>
+      <td class="col-prod"><span class="prod-nombre" style="font-size:${_fsNombre(p.nombre, 139, 11)}px">${p.nombre}</span></td>
       <td class="col-cant">${p.total_cantidad}</td>
       <td class="col-sub">${parseFloat(p.total).toFixed(2)}</td>
     </tr>`).join('');
@@ -27,7 +37,7 @@ export function imprimirTicketCierreCaja(reporte, config = {}) {
   const gastos = sesion.gastos ?? [];
   const filasGastos = gastos.map(g => `
     <tr class="fila-prod">
-      <td class="col-gasto-desc"><span class="prod-nombre">${g.descripcion}</span></td>
+      <td class="col-gasto-desc"><span class="prod-nombre" style="font-size:${_fsNombre(g.descripcion, 174, 11)}px">${g.descripcion}</span></td>
       <td class="col-gasto-monto">${parseFloat(g.monto).toFixed(2)}</td>
     </tr>`).join('');
 
@@ -92,6 +102,9 @@ export function imprimirTicketCierreCaja(reporte, config = {}) {
       padding: 2px 0; border-bottom: 1px solid #000;
     }
 
+    .fila-prod {
+      page-break-inside: avoid;
+    }
     .fila-prod td {
       padding: 2px 0; vertical-align: top;
       border-bottom: 1px dashed #bbb;
@@ -104,7 +117,12 @@ export function imprimirTicketCierreCaja(reporte, config = {}) {
     .col-gasto-desc  { width: 70%; }
     .col-gasto-monto { width: 30%; text-align: right; font-weight: 700; font-size: 10px; }
 
-    .prod-nombre { font-weight: 700; font-size: 11px; line-height: 1.3; }
+    .prod-nombre {
+      display: block;
+      max-width: 100%;
+      font-weight: 700; font-size: 11px; line-height: 1.3;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
 
     .resumen-bloque { margin-top: 4px; }
     .resumen-row {

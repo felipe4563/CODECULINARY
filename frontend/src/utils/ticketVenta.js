@@ -1,3 +1,15 @@
+// Ancho real de la columna de producto en el ticket de venta: col-prod es
+// 46% de los 248px del body. Si el nombre no entra a fsMax en una sola
+// línea, se achica hasta fsMin — el CSS de .prod-nombre (nowrap/ellipsis)
+// es la red de seguridad si ni así alcanza.
+function _fsNombre(nombre, anchoColPx, fsMax) {
+  const fsMin = 8;
+  if (!nombre) return fsMax;
+  // Ancho aproximado de un carácter en una fuente monoespaciada: ~0.6 del font-size.
+  const fsNecesario = Math.floor((anchoColPx - 4) / (nombre.length * 0.6));
+  return Math.max(fsMin, Math.min(fsMax, fsNecesario));
+}
+
 export function imprimirTicketVenta(pedido, pago, config = {}, numeroOrdenDiario = null) {
   const nombre  = config.nombre_negocio  ?? 'Restaurante';
   const dir     = config.direccion       ?? '';
@@ -51,9 +63,10 @@ export function imprimirTicketVenta(pedido, pago, config = {}, numeroOrdenDiario
     const contenidoCombo = esCombo && d.combo.productos?.length
       ? `<br><span class="prod-combo-detalle">${d.combo.productos.map(p => `${p.ComboProducto?.cantidad ?? 1}x ${p.nombre}`).join(', ')}</span>`
       : '';
+    const fsNombre = _fsNombre(nombre, 114, 14);
     return `
     <tr class="fila-prod">
-      <td class="col-prod"><span class="prod-nombre">${nombre}</span>${contenidoCombo}</td>
+      <td class="col-prod"><span class="prod-nombre" style="font-size:${fsNombre}px">${nombre}</span>${contenidoCombo}</td>
       <td class="col-cant">${cantEtiqueta}</td>
       <td class="col-precio">${precioEtiqueta}</td>
       <td class="col-sub">${subtotal}</td>
@@ -141,6 +154,9 @@ export function imprimirTicketVenta(pedido, pago, config = {}, numeroOrdenDiario
       padding: 2px 0; border-bottom: 1px solid #000;
     }
 
+    .fila-prod {
+      page-break-inside: avoid;
+    }
     .fila-prod td {
       padding: 3px 0; vertical-align: top;
       border-bottom: 1px dashed #bbb;
@@ -151,7 +167,12 @@ export function imprimirTicketVenta(pedido, pago, config = {}, numeroOrdenDiario
     .col-precio{ width: 20%; text-align: right; font-size: 9.5px; color: #444; }
     .col-sub   { width: 24%; text-align: right; font-weight: 700; }
 
-    .prod-nombre { font-weight: 700; font-size: 14px; line-height: 1.3; }
+    .prod-nombre {
+      display: block;
+      max-width: 100%;
+      font-weight: 700; font-size: 14px; line-height: 1.3;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
     .prod-combo-detalle { font-size: 8.5px; font-style: italic; color: #555; }
 
     .total-bloque { margin-top: 3px; }

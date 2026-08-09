@@ -1,3 +1,13 @@
+// Ver misma función en ticketVenta.js: achica el font-size del nombre de
+// producto si no entra en una sola línea a su tamaño normal, con el ancho
+// real de columna de este ticket (col-prod: 44% de 248px).
+function _fsNombre(nombre, anchoColPx, fsMax) {
+  const fsMin = 8;
+  if (!nombre) return fsMax;
+  const fsNecesario = Math.floor((anchoColPx - 4) / (nombre.length * 0.6));
+  return Math.max(fsMin, Math.min(fsMax, fsNecesario));
+}
+
 export function imprimirTicketCocina(pedido, config = {}, numeroOrdenDiario = null) {
   const nombre  = config.nombre_negocio ?? 'Restaurante';
   const dir     = config.direccion      ?? '';
@@ -28,10 +38,11 @@ export function imprimirTicketCocina(pedido, config = {}, numeroOrdenDiario = nu
     const contenidoCombo = esCombo && d.combo.productos?.length
       ? `<br><span class="prod-combo-detalle">${d.combo.productos.map(p => `${p.ComboProducto?.cantidad ?? 1}x ${p.nombre}`).join(', ')}</span>`
       : '';
+    const fsNombre = _fsNombre(nombre, 109, 13);
     return `
     <tr class="fila-prod">
       <td class="col-prod">
-        <span class="prod-nombre">${nombre}</span>${contenidoCombo}
+        <span class="prod-nombre" style="font-size:${fsNombre}px">${nombre}</span>${contenidoCombo}
         ${d.nota ? `<br><span class="prod-nota">» ${d.nota}</span>` : ''}
       </td>
       <td class="col-cant">${cantEtiqueta}</td>
@@ -138,6 +149,9 @@ export function imprimirTicketCocina(pedido, config = {}, numeroOrdenDiario = nu
       border-bottom: 1px solid #000;
     }
 
+    .fila-prod {
+      page-break-inside: avoid;
+    }
     .fila-prod td {
       padding: 3px 0;
       vertical-align: top;
@@ -149,7 +163,12 @@ export function imprimirTicketCocina(pedido, config = {}, numeroOrdenDiario = nu
     .col-precio{ width: 22%; text-align: right; font-size: 9.5px; color: #444; }
     .col-sub   { width: 24%; text-align: right; font-weight: 700; }
 
-    .prod-nombre { font-weight: 700; font-size: 13px; line-height: 1.3; }
+    .prod-nombre {
+      display: block;
+      max-width: 100%;
+      font-weight: 700; font-size: 13px; line-height: 1.3;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
     .prod-nota   { font-size: 8.5px; font-style: italic; color: #444; }
     .prod-combo-detalle { font-size: 8.5px; font-style: italic; color: #555; }
 

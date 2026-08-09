@@ -1,12 +1,16 @@
-const { Proveedor, Compra, DetalleCompra, Producto, LibroCaja, sequelize } = require('../../models');
+const { Proveedor, Compra, DetalleCompra, Producto, Insumo, LibroCaja, sequelize } = require('../../models');
 const { ajustarStockSucursal } = require('../inventario/stock.service');
+const { ajustarStockInsumoSucursal } = require('../insumos/insumos.service');
 const { emitir } = require('../../socket');
 
 const INCLUDE_COMPRA = [
   { model: Proveedor, as: 'proveedor', attributes: ['id', 'nombre'] },
   {
     model: DetalleCompra, as: 'detalles',
-    include: [{ model: Producto, as: 'producto', attributes: ['id', 'nombre', 'stock'] }],
+    include: [
+      { model: Producto, as: 'producto', attributes: ['id', 'nombre', 'stock'] },
+      { model: Insumo, as: 'insumo', attributes: ['id', 'nombre', 'unidad_medida'] },
+    ],
   },
 ];
 
@@ -53,17 +57,25 @@ async function crearCompra(usuario_id, sucursal_id, { proveedor_id, notas, items
   const proveedor = await Proveedor.findByPk(proveedor_id);
   if (!proveedor) throw Object.assign(new Error('Proveedor no encontrado'), { status: 404 });
 
-  const total = items.reduce((sum, i) => sum + (parseFloat(i.costo_unitario) * parseInt(i.cantidad)), 0);
+  // Cada línea es de producto O de insumo, nunca ambos ni ninguno.
+  for (const i of items) {
+    if (!!i.producto_id === !!i.insumo_id) {
+      throw Object.assign(new Error('Cada ítem debe tener producto_id o insumo_id (uno solo)'), { status: 400 });
+    }
+  }
+
+  const total = items.reduce((sum, i) => sum + (parseFloat(i.costo_unitario) * parseFloat(i.cantidad)), 0);
 
   const compra = await Compra.create({ proveedor_id, usuario_id, sucursal_id, total, notas });
 
   await DetalleCompra.bulkCreate(
     items.map(i => ({
       compra_id: compra.id,
-      producto_id: i.producto_id,
+      producto_id: i.producto_id || null,
+      insumo_id: i.insumo_id || null,
       cantidad: i.cantidad,
       costo_unitario: i.costo_unitario,
-      subtotal: parseFloat(i.costo_unitario) * parseInt(i.cantidad),
+      subtotal: parseFloat(i.costo_unitario) * parseFloat(i.cantidad),
     }))
   );
 
@@ -83,10 +95,17 @@ async function recibirCompra(id, usuario_id, alcance) {
 
   await sequelize.transaction(async (t) => {
     for (const detalle of compra.detalles) {
-      await ajustarStockSucursal({
-        producto_id: detalle.producto_id, sucursal_id: compra.sucursal_id, tipo: 'compra', cantidad: detalle.cantidad,
-        usuario_id, nota: `Compra #${compra.id}`, transaction: t,
-      });
+      if (detalle.insumo_id) {
+        await ajustarStockInsumoSucursal({
+          insumo_id: detalle.insumo_id, sucursal_id: compra.sucursal_id, tipo: 'compra', cantidad: detalle.cantidad,
+          usuario_id, nota: `Compra #${compra.id}`, transaction: t,
+        });
+      } else {
+        await ajustarStockSucursal({
+          producto_id: detalle.producto_id, sucursal_id: compra.sucursal_id, tipo: 'compra', cantidad: detalle.cantidad,
+          usuario_id, nota: `Compra #${compra.id}`, transaction: t,
+        });
+      }
     }
     await compra.update({ estado: 'recibido' }, { transaction: t });
 

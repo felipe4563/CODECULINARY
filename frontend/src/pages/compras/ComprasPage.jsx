@@ -6,6 +6,7 @@ import {
   getCompras, crearCompra, recibirCompra,
 } from '../../api/compras';
 import { getProductos } from '../../api/productos';
+import { getInsumos } from '../../api/insumos';
 import {
   Truck, Plus, Search, X, ChevronDown, ChevronUp, CheckCircle2,
   Clock, PackageCheck, Trash2, Edit2, Users, ShoppingCart, AlertTriangle,
@@ -84,9 +85,9 @@ function ModalProveedor({ proveedor, onClose, onGuardar }) {
 }
 
 /* ─── modal nueva compra ─── */
-const ITEM_VACIO = { producto_id: '', cantidad: 1, costo_unitario: '' };
+const ITEM_VACIO = { tipo: 'producto', producto_id: '', insumo_id: '', cantidad: 1, costo_unitario: '' };
 
-function ModalCompra({ proveedores, productos, onClose, onGuardar }) {
+function ModalCompra({ proveedores, productos, insumos, onClose, onGuardar }) {
   const [proveedorId, setProveedorId] = useState('');
   const [notas, setNotas] = useState('');
   const [items, setItems] = useState([{ ...ITEM_VACIO }]);
@@ -97,21 +98,24 @@ function ModalCompra({ proveedores, productos, onClose, onGuardar }) {
   const removeItem = (i) => setItems(prev => prev.filter((_, idx) => idx !== i));
 
   const total = useMemo(() =>
-    items.reduce((s, it) => s + (parseFloat(it.costo_unitario || 0) * parseInt(it.cantidad || 0)), 0),
+    items.reduce((s, it) => s + (parseFloat(it.costo_unitario || 0) * parseFloat(it.cantidad || 0)), 0),
     [items]
   );
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!proveedorId) { setError('Selecciona un proveedor'); return; }
-    const validos = items.filter(it => it.producto_id && it.cantidad > 0 && parseFloat(it.costo_unitario) > 0);
+    const validos = items.filter(it =>
+      (it.tipo === 'producto' ? it.producto_id : it.insumo_id) && it.cantidad > 0 && parseFloat(it.costo_unitario) > 0
+    );
     if (!validos.length) { setError('Agrega al menos un ítem válido'); return; }
     setError('');
     onGuardar({
       proveedor_id: Number(proveedorId),
       notas,
       items: validos.map(it => ({
-        producto_id: Number(it.producto_id),
+        producto_id: it.tipo === 'producto' ? Number(it.producto_id) : undefined,
+        insumo_id: it.tipo === 'insumo' ? Number(it.insumo_id) : undefined,
         cantidad: Number(it.cantidad),
         costo_unitario: parseFloat(it.costo_unitario),
       })),
@@ -161,40 +165,67 @@ function ModalCompra({ proveedores, productos, onClose, onGuardar }) {
             </div>
             <div className="space-y-2">
               {items.map((it, i) => (
-                <div key={i} className="space-y-2 sm:space-y-0 sm:grid sm:grid-cols-12 sm:gap-2 sm:items-center pb-2 sm:pb-0 border-b border-border sm:border-0 last:border-0">
-                  <div className="sm:col-span-5">
-                    <select
-                      value={it.producto_id}
-                      onChange={e => setItem(i, 'producto_id', e.target.value)}
-                      className="w-full rounded-xl border border-input bg-background text-foreground px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="">Producto...</option>
-                      {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                    </select>
+                <div key={i} className="space-y-2 pb-2 border-b border-border last:border-0">
+                  <div className="flex gap-1 bg-muted p-1 rounded-lg w-fit">
+                    {[{ v: 'producto', label: 'Producto' }, { v: 'insumo', label: 'Insumo' }].map(({ v, label }) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => setItem(i, 'tipo', v)}
+                        className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                          it.tipo === v ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
                   </div>
-                  <div className="flex gap-2 sm:contents">
-                    <div className="flex-1 sm:col-span-3">
-                      <input
-                        type="number" min="1" placeholder="Ctd."
-                        value={it.cantidad}
-                        onChange={e => setItem(i, 'cantidad', e.target.value)}
-                        className="w-full rounded-xl border border-input bg-background text-foreground px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                      />
-                    </div>
-                    <div className="flex-1 sm:col-span-3">
-                      <input
-                        type="number" min="0" step="0.01" placeholder="Costo Bs"
-                        value={it.costo_unitario}
-                        onChange={e => setItem(i, 'costo_unitario', e.target.value)}
-                        className="w-full rounded-xl border border-input bg-background text-foreground px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                      />
-                    </div>
-                    <div className="flex items-center sm:col-span-1 sm:justify-center">
-                      {items.length > 1 && (
-                        <button type="button" onClick={() => removeItem(i)} className="text-muted-foreground hover:text-destructive transition-colors">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                  <div className="sm:grid sm:grid-cols-12 sm:gap-2 sm:items-center space-y-2 sm:space-y-0">
+                    <div className="sm:col-span-5">
+                      {it.tipo === 'producto' ? (
+                        <select
+                          value={it.producto_id}
+                          onChange={e => setItem(i, 'producto_id', e.target.value)}
+                          className="w-full rounded-xl border border-input bg-background text-foreground px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        >
+                          <option value="">Producto...</option>
+                          {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                        </select>
+                      ) : (
+                        <select
+                          value={it.insumo_id}
+                          onChange={e => setItem(i, 'insumo_id', e.target.value)}
+                          className="w-full rounded-xl border border-input bg-background text-foreground px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        >
+                          <option value="">Insumo...</option>
+                          {insumos.map(ins => <option key={ins.id} value={ins.id}>{ins.nombre} ({ins.unidad_medida})</option>)}
+                        </select>
                       )}
+                    </div>
+                    <div className="flex gap-2 sm:contents">
+                      <div className="flex-1 sm:col-span-3">
+                        <input
+                          type="number" min="0" step={it.tipo === 'insumo' ? '0.001' : '1'} placeholder="Ctd."
+                          value={it.cantidad}
+                          onChange={e => setItem(i, 'cantidad', e.target.value)}
+                          className="w-full rounded-xl border border-input bg-background text-foreground px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        />
+                      </div>
+                      <div className="flex-1 sm:col-span-3">
+                        <input
+                          type="number" min="0" step="0.01" placeholder="Costo Bs"
+                          value={it.costo_unitario}
+                          onChange={e => setItem(i, 'costo_unitario', e.target.value)}
+                          className="w-full rounded-xl border border-input bg-background text-foreground px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        />
+                      </div>
+                      <div className="flex items-center sm:col-span-1 sm:justify-center">
+                        {items.length > 1 && (
+                          <button type="button" onClick={() => removeItem(i)} className="text-muted-foreground hover:text-destructive transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -269,7 +300,10 @@ function CompraRow({ compra, idx, puedoRecibir, onRecibir }) {
               <tbody className="divide-y divide-border">
                 {compra.detalles.map(d => (
                   <tr key={d.id}>
-                    <td className="py-1.5 text-foreground">{d.producto?.nombre ?? '—'}</td>
+                    <td className="py-1.5 text-foreground">
+                      {d.producto?.nombre ?? d.insumo?.nombre ?? '—'}
+                      {d.insumo && <span className="text-muted-foreground"> ({d.insumo.unidad_medida})</span>}
+                    </td>
                     <td className="py-1.5 text-right text-muted-foreground">{d.cantidad}</td>
                     <td className="py-1.5 text-right text-muted-foreground">{fmtBs(d.costo_unitario)}</td>
                     <td className="py-1.5 text-right font-semibold text-foreground">{fmtBs(d.subtotal)}</td>
@@ -315,7 +349,7 @@ function CompraCard({ compra, idx, puedoRecibir, onRecibir }) {
         <div className="border-t border-border px-4 py-3 space-y-2">
           {compra.detalles?.map(d => (
             <div key={d.id} className="flex justify-between text-xs">
-              <span className="text-foreground">{d.producto?.nombre ?? '—'} × {d.cantidad}</span>
+              <span className="text-foreground">{d.producto?.nombre ?? d.insumo?.nombre ?? '—'} × {d.cantidad}</span>
               <span className="font-semibold text-foreground">{fmtBs(d.subtotal)}</span>
             </div>
           ))}
@@ -486,6 +520,12 @@ export default function ComprasPage() {
     enabled: puedoCrear,
   });
 
+  const { data: insumos = [] } = useQuery({
+    queryKey: ['insumos'],
+    queryFn: getInsumos,
+    enabled: puedoCrear,
+  });
+
   const productosActivos = useMemo(() => productos.filter(p => p.activo), [productos]);
 
   const mutCrearCompra = useMutation({
@@ -496,7 +536,7 @@ export default function ComprasPage() {
 
   const mutRecibir = useMutation({
     mutationFn: recibirCompra,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['compras'] }); qc.invalidateQueries({ queryKey: ['inventario'] }); qc.invalidateQueries({ queryKey: ['productos'] }); mostrarToast('Compra recibida — stock actualizado'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['compras'] }); qc.invalidateQueries({ queryKey: ['inventario'] }); qc.invalidateQueries({ queryKey: ['productos'] }); qc.invalidateQueries({ queryKey: ['insumos'] }); qc.invalidateQueries({ queryKey: ['insumos-reporte-compras'] }); mostrarToast('Compra recibida — stock actualizado'); },
     onError: (e) => mostrarToast(e?.response?.data?.mensaje ?? 'Error al recibir compra', false),
   });
 
@@ -571,6 +611,7 @@ export default function ComprasPage() {
         <ModalCompra
           proveedores={proveedores}
           productos={productosActivos}
+          insumos={insumos}
           onClose={() => setModalCompra(false)}
           onGuardar={(d) => mutCrearCompra.mutate(d)}
         />
