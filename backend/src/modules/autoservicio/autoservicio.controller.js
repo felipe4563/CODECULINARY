@@ -35,10 +35,10 @@ async function obtenerMenu(req, res, next) {
 
 async function crearPedido(req, res, next) {
   try {
-    const { items } = req.body;
+    const { items, cupon_codigo } = req.body;
     const error = _validarItems(items);
     if (error) return res.status(400).json({ ok: false, mensaje: error });
-    res.status(201).json({ ok: true, datos: await svc.crearPedido(req.params.codigo_qr, { items }) });
+    res.status(201).json({ ok: true, datos: await svc.crearPedido(req.params.codigo_qr, { items, cupon_codigo }) });
   } catch (err) { next(err); }
 }
 

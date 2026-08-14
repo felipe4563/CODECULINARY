@@ -1,7 +1,8 @@
 const request = require('supertest');
 const bcrypt = require('bcryptjs');
 const app = require('../src/app');
-const { Sucursal, Area, Mesa, MesaSesion, Rol, Usuario, Pedido } = require('../src/models');
+const { Op } = require('sequelize');
+const { Sucursal, Area, Mesa, MesaSesion, Rol, Usuario, Pedido, DetallePedido, PagoQr, Categoria, Producto, ProductoStockSucursal, Caja, SesionCaja } = require('../src/models');
 
 describe('Autoservicio API', () => {
   it('GET .../mesa/:codigo_qr con código inexistente → 404', async () => {
@@ -193,6 +194,75 @@ describe('Autoservicio API', () => {
       // intentado finalizarlo/revertirlo contra CodePay.
       const sinTocar = await Pedido.findByPk(pedidoAjeno.id);
       expect(sinTocar.estado).toBe('pendiente_pago');
+    });
+  });
+
+  describe('cupón en el pedido de autoservicio', () => {
+    // El código viaja tal cual a ventasService.crearCompleta, que ya sabe
+    // validar/aplicar cupones (misma lógica que usa el cajero) — acá solo se
+    // prueba que autoservicio lo deja pasar y que un código inválido corta
+    // ANTES de llegar a CodePay (mismo límite de las pruebas de arriba: no
+    // hay mock de CodePay en esta suite, así que el camino feliz de
+    // "cupón válido + pago QR real" queda fuera de esta prueba).
+    let sucursal, area, mesa, usuario, caja;
+
+    beforeAll(async () => {
+      const timestamp = Date.now();
+      sucursal = await Sucursal.create({ nombre: `Sucursal Autoservicio Cupon Test ${timestamp}` });
+      area = await Area.create({ nombre: `Area Autoservicio Cupon Test ${timestamp}`, sucursal_id: sucursal.id });
+      mesa = await Mesa.create({ area_id: area.id, nombre: 'Mesa Cupon Test', codigo_qr: `test-qr-cupon-${timestamp}` });
+      await MesaSesion.create({ mesa_id: mesa.id, sucursal_id: sucursal.id, abierta_por: 'staff' });
+
+      const categoria = await Categoria.create({ nombre: `Categoria Autoservicio Cupon Test ${timestamp}` });
+      const producto = await Producto.create({ categoria_id: categoria.id, nombre: `Producto Autoservicio Cupon Test ${timestamp}`, precio: 25, stock: 0 });
+      await ProductoStockSucursal.create({ producto_id: producto.id, sucursal_id: sucursal.id, stock: 10 });
+
+      const rol = await Rol.findOne({ where: { nombre: 'Cajero' } });
+      const hash = await bcrypt.hash('clave123', 10);
+      usuario = await Usuario.create({ rol_id: rol.id, nombre: `Autoservicio Cupon Test ${timestamp}`, email: `autoservicio-cupon-test-${timestamp}@restaurante.com`, contrasena: hash });
+
+      caja = await Caja.create({ sucursal_id: sucursal.id, nombre: 'Caja Autoservicio Cupon Test' });
+      await SesionCaja.create({ usuario_id: usuario.id, sucursal_id: sucursal.id, caja_id: caja.id, monto_apertura: 0 });
+
+      mesa.productoId = producto.id;
+    });
+
+    afterAll(async () => {
+      // El pedido "sin cupon_codigo" sigue de largo hasta crearCompleta y
+      // deja Pedido/DetallePedido/PagoQr reales — hay que limpiarlos antes
+      // de borrar Usuario/Caja/Sucursal o la FK lo impide.
+      const pedidosDeLaMesa = await Pedido.findAll({ where: { mesa_id: mesa.id }, attributes: ['id'] });
+      const pedidoIds = pedidosDeLaMesa.map((p) => p.id);
+      await PagoQr.destroy({ where: { pedido_id: { [Op.in]: pedidoIds } } });
+      await DetallePedido.destroy({ where: { pedido_id: { [Op.in]: pedidoIds } } });
+      await Pedido.destroy({ where: { mesa_id: mesa.id } });
+      await SesionCaja.destroy({ where: { caja_id: caja.id } });
+      await Caja.destroy({ where: { id: caja.id } });
+      await Usuario.destroy({ where: { id: usuario.id } });
+      await MesaSesion.destroy({ where: { mesa_id: mesa.id } });
+      await Mesa.destroy({ where: { id: mesa.id } });
+      await Area.destroy({ where: { id: area.id } });
+      await Sucursal.destroy({ where: { id: sucursal.id } });
+    });
+
+    it('cupón inexistente → 400 con el mensaje de cupones.service, sin llegar a CodePay', async () => {
+      const res = await request(app)
+        .post(`/api/v1/autoservicio/mesa/${mesa.codigo_qr}/pedido`)
+        .send({ items: [{ producto_id: mesa.productoId, cantidad: 1 }], cupon_codigo: 'NOEXISTE123' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.mensaje).toMatch(/cupón/i);
+    });
+
+    it('sin cupon_codigo, el pedido sigue su curso normal (no lo exige)', async () => {
+      const res = await request(app)
+        .post(`/api/v1/autoservicio/mesa/${mesa.codigo_qr}/pedido`)
+        .send({ items: [{ producto_id: mesa.productoId, cantidad: 1 }] });
+
+      // Sin caja abierta específica de ESTA sucursal ya se cubre en otra
+      // prueba — acá lo que importa es que la ausencia de cupon_codigo no
+      // sea, por sí sola, motivo de rechazo (no debe dar 400 de validación).
+      expect(res.status).not.toBe(400);
     });
   });
 });

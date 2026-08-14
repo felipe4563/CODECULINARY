@@ -30,7 +30,7 @@ async function obtenerMenu(codigo_qr) {
 // MAX_PAGOS_PENDIENTES pagos sin resolver en la misma sesión.
 const MAX_PAGOS_PENDIENTES = 3;
 
-async function crearPedido(codigo_qr, { items }) {
+async function crearPedido(codigo_qr, { items, cupon_codigo }) {
   const { mesa, sesion } = await _mesaConSesionActiva(codigo_qr);
 
   const pendientes = await Pedido.count({ where: { mesa_sesion_id: sesion.id, estado: 'pendiente_pago' } });
@@ -56,6 +56,12 @@ async function crearPedido(codigo_qr, { items }) {
     cliente_id: null,
     mesa_sesion_id: sesion.id,
     origen: 'autoservicio',
+    // crearCompleta ya sabe validar y aplicar el cupón (misma lógica que usa
+    // el cajero) — acá solo se deja pasar el código, sin reglas nuevas. Un
+    // cupón "exclusivo de un cliente" o con límite por cliente va a fallar
+    // acá porque cliente_id es null: en autoservicio todavía no hay forma de
+    // identificar al cliente (eso queda para el diseño de fidelidad).
+    cupon_codigo,
   });
 }
 

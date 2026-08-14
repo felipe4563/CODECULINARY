@@ -13,6 +13,7 @@ export default function AutoservicioPage() {
   const [carrito, setCarrito] = useState([]); // [{ producto, opcion_ids, cantidad }]
   const [mostrarCarrito, setMostrarCarrito] = useState(false);
   const [pedido, setPedido] = useState(null); // { pedido, pago_qr } luego de confirmar
+  const [cuponCodigo, setCuponCodigo] = useState('');
   const { modo, toggleModo } = useTemaAutoservicio();
 
   const { data: config } = useQuery({ queryKey: ['configuracion-publica'], queryFn: getConfiguracionPublica });
@@ -62,7 +63,7 @@ export default function AutoservicioPage() {
   const crear = useMutation({
     mutationFn: () => crearPedidoAutoservicio(codigo, carrito.map(l => ({
       producto_id: l.producto.id, cantidad: l.cantidad, opcion_ids: l.opcion_ids,
-    }))),
+    })), cuponCodigo.trim()),
     onSuccess: (datos) => setPedido(datos),
   });
 
@@ -203,6 +204,15 @@ export default function AutoservicioPage() {
             ))}
             <div className="flex items-center justify-between font-bold text-foreground pt-2 border-t border-border">
               <span>Total</span><span>{bs(totalCarrito)}</span>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">¿Tenés un cupón?</label>
+              <input
+                value={cuponCodigo}
+                onChange={(e) => setCuponCodigo(e.target.value)}
+                placeholder="Código (opcional)"
+                className="w-full bg-background border border-input rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
             </div>
             {crear.isError && (
               <p className="text-sm text-destructive">{crear.error?.response?.data?.mensaje ?? 'No se pudo crear el pedido.'}</p>
