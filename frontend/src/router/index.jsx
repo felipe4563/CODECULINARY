@@ -24,10 +24,12 @@ import PromocionesPage from '../pages/promociones/PromocionesPage';
 import CuponesPage from '../pages/cupones/CuponesPage';
 import RuletaPage from '../pages/ruleta/RuletaPage';
 import InsumosPage from '../pages/insumos/InsumosPage';
+import AutoservicioPage from '../pages/autoservicio/AutoservicioPage';
 
 export const router = createBrowserRouter(
   [
     { path: '/login', element: <LoginPage /> },
+    { path: '/m/:codigo', element: <AutoservicioPage /> },
     {
       element: <RutaProtegida />,
       children: [
