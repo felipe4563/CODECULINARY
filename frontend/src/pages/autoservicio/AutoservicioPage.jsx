@@ -145,7 +145,13 @@ function EsperaPago({ codigo, pedido, onNuevoPedido }) {
   // refetchInterval evalúa `undefined?.estado === 'pendiente'` como false y
   // nunca se vuelve a armar: la pantalla se queda con el spinner "Esperando
   // confirmación..." aunque el pago ya se haya confirmado del lado del server.
-  if (isError) {
+  //
+  // `!estado` evita que esta rama gane después de un `completado` ya
+  // confirmado: una vez pagada la sesión de mesa se cierra, así que un
+  // refetch posterior (ej. el cliente vuelve a la app tras >30s) devuelve
+  // 409 aunque el pago ya se haya acreditado — sin este guard, el cliente
+  // vería "no pudimos confirmar" justo después de ver "¡Pago confirmado!".
+  if (isError && !estado) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3 p-6 text-center">
         <AlertCircle className="w-14 h-14 text-muted-foreground" />
