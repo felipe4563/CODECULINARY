@@ -629,6 +629,13 @@ async function _confirmarPagoQr(pagoQrInicial) {
 
   const completado = await obtener(pedidoId);
   emitir('restaurante:actualizar', { tipo: 'pedido_cobrado' }, completado.sucursal_id);
+  if (completado.origen === 'autoservicio') {
+    emitir('restaurante:autoservicio_confirmado', {
+      pedido_id: completado.id,
+      mesa: completado.mesa?.nombre ?? null,
+      monto: parseFloat(completado.total),
+    }, completado.sucursal_id);
+  }
   await _emitirImpresion(completado, 'qr', 0, completado.sucursal_id);
   return completado;
 }
