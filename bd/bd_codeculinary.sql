@@ -393,10 +393,29 @@ CREATE TABLE `mesas` (
   `id` int(10) UNSIGNED NOT NULL,
   `area_id` int(10) UNSIGNED NOT NULL,
   `nombre` varchar(100) NOT NULL,
+  `codigo_qr` varchar(32) DEFAULT NULL,
   `asientos` int(11) NOT NULL DEFAULT 4,
   `estado` enum('disponible','ocupada','reservada') NOT NULL DEFAULT 'disponible',
   `creado_en` timestamp NOT NULL DEFAULT current_timestamp(),
-  `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  UNIQUE KEY `codigo_qr` (`codigo_qr`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `mesa_sesiones`
+--
+
+CREATE TABLE `mesa_sesiones` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `mesa_id` int(10) UNSIGNED NOT NULL,
+  `sucursal_id` int(10) UNSIGNED NOT NULL,
+  `abierta_en` datetime NOT NULL DEFAULT current_timestamp(),
+  `cerrada_en` datetime DEFAULT NULL,
+  `abierta_por` enum('staff','autoservicio') NOT NULL DEFAULT 'staff',
+  PRIMARY KEY (`id`),
+  KEY `mesa_activa` (`mesa_id`, `cerrada_en`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -450,11 +469,13 @@ CREATE TABLE `pedidos` (
   `id` int(10) UNSIGNED NOT NULL,
   `sucursal_id` int(10) UNSIGNED NOT NULL,
   `mesa_id` int(10) UNSIGNED DEFAULT NULL,
+  `mesa_sesion_id` int(10) UNSIGNED DEFAULT NULL,
   `usuario_id` int(10) UNSIGNED NOT NULL,
   `cliente_id` int(10) UNSIGNED DEFAULT NULL,
   `sesion_caja_id` int(10) UNSIGNED DEFAULT NULL,
   `estado` enum('pendiente','listo','pendiente_pago','completado','cancelado') NOT NULL DEFAULT 'pendiente',
   `tipo` enum('mesa','llevar') NOT NULL DEFAULT 'mesa',
+  `origen` enum('staff','autoservicio') NOT NULL DEFAULT 'staff',
   `numero_llevar` int(10) UNSIGNED DEFAULT NULL,
   `tipo_documento` varchar(50) NOT NULL DEFAULT 'Ticket',
   `nombre_cliente` varchar(255) NOT NULL DEFAULT 'Público General',
@@ -1352,6 +1373,12 @@ ALTER TABLE `mesas`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT de la tabla `mesa_sesiones`
+--
+ALTER TABLE `mesa_sesiones`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT de la tabla `opciones`
 --
 ALTER TABLE `opciones`
@@ -1550,6 +1577,13 @@ ALTER TABLE `mesas`
   ADD CONSTRAINT `mesas_ibfk_1` FOREIGN KEY (`area_id`) REFERENCES `areas` (`id`) ON DELETE CASCADE;
 
 --
+-- Filtros para la tabla `mesa_sesiones`
+--
+ALTER TABLE `mesa_sesiones`
+  ADD CONSTRAINT `mesa_sesiones_ibfk_1` FOREIGN KEY (`mesa_id`) REFERENCES `mesas` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `mesa_sesiones_ibfk_2` FOREIGN KEY (`sucursal_id`) REFERENCES `sucursales` (`id`) ON DELETE CASCADE;
+
+--
 -- Filtros para la tabla `opciones`
 --
 ALTER TABLE `opciones`
@@ -1571,6 +1605,7 @@ ALTER TABLE `pedidos`
   ADD CONSTRAINT `pedidos_ibfk_3` FOREIGN KEY (`cliente_id`) REFERENCES `clientes` (`id`) ON DELETE SET NULL,
   ADD CONSTRAINT `pedidos_ibfk_4` FOREIGN KEY (`sesion_caja_id`) REFERENCES `sesiones_caja` (`id`) ON DELETE SET NULL,
   ADD CONSTRAINT `pedidos_ibfk_5` FOREIGN KEY (`sucursal_id`) REFERENCES `sucursales` (`id`),
+  ADD CONSTRAINT `pedidos_ibfk_6` FOREIGN KEY (`mesa_sesion_id`) REFERENCES `mesa_sesiones` (`id`),
   ADD CONSTRAINT `pedidos_cupon_fk` FOREIGN KEY (`cupon_id`) REFERENCES `cupones` (`id`);
 
 --
