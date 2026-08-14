@@ -2,7 +2,7 @@ const request = require('supertest');
 const bcrypt = require('bcryptjs');
 const app = require('../src/app');
 const { Op } = require('sequelize');
-const { Sucursal, Area, Mesa, MesaSesion, Rol, Usuario, Pedido, DetallePedido, PagoQr, Categoria, Producto, ProductoStockSucursal, Caja, SesionCaja, Cupon } = require('../src/models');
+const { Sucursal, Area, Mesa, MesaSesion, Rol, Usuario, Pedido, DetallePedido, PagoQr, Categoria, Producto, ProductoStockSucursal, Caja, SesionCaja, Cupon, Cliente } = require('../src/models');
 
 describe('Autoservicio API', () => {
   it('GET .../mesa/:codigo_qr con código inexistente → 404', async () => {
@@ -331,6 +331,83 @@ describe('Autoservicio API', () => {
 
       expect(res.status).toBe(409);
       await Mesa.destroy({ where: { id: mesaSinSesion.id } });
+    });
+  });
+
+  describe('numero_documento en el pedido — identificación opcional para sumar puntos', () => {
+    // No se mockea personas.client: en este entorno de test PERSONAS_API_URL
+    // no apunta a nada real, así que buscarPorDocumento falla (fetch la
+    // rechaza) para cualquier CI que no exista ya como Cliente — eso es
+    // justo lo que se quiere probar: la falla se traga en silencio y el
+    // pedido sigue su curso sin cliente_id, nunca bloquea al cliente.
+    let sucursal, area, mesa, usuario, caja, clienteExistente;
+
+    beforeAll(async () => {
+      const timestamp = Date.now();
+      sucursal = await Sucursal.create({ nombre: `Sucursal Autoservicio Doc Test ${timestamp}` });
+      area = await Area.create({ nombre: `Area Autoservicio Doc Test ${timestamp}`, sucursal_id: sucursal.id });
+      mesa = await Mesa.create({ area_id: area.id, nombre: 'Mesa Doc Test', codigo_qr: `doc-${timestamp}` });
+      await MesaSesion.create({ mesa_id: mesa.id, sucursal_id: sucursal.id, abierta_por: 'staff' });
+
+      const categoria = await Categoria.create({ nombre: `Categoria Autoservicio Doc Test ${timestamp}` });
+      const producto = await Producto.create({ categoria_id: categoria.id, nombre: `Producto Autoservicio Doc Test ${timestamp}`, precio: 15, stock: 0 });
+      await ProductoStockSucursal.create({ producto_id: producto.id, sucursal_id: sucursal.id, stock: 10 });
+      mesa.productoId = producto.id;
+
+      const rol = await Rol.findOne({ where: { nombre: 'Cajero' } });
+      const hash = await bcrypt.hash('clave123', 10);
+      usuario = await Usuario.create({ rol_id: rol.id, nombre: `Autoservicio Doc Test ${timestamp}`, email: `autoservicio-doc-test-${timestamp}@restaurante.com`, contrasena: hash });
+
+      caja = await Caja.create({ sucursal_id: sucursal.id, nombre: 'Caja Autoservicio Doc Test' });
+      await SesionCaja.create({ usuario_id: usuario.id, sucursal_id: sucursal.id, caja_id: caja.id, monto_apertura: 0 });
+
+      clienteExistente = await Cliente.create({ nombre: 'Cliente Autoservicio Doc Test', numero_documento: `DOC${timestamp}` });
+    });
+
+    afterAll(async () => {
+      const pedidosDeLaMesa = await Pedido.findAll({ where: { mesa_id: mesa.id }, attributes: ['id'] });
+      const pedidoIds = pedidosDeLaMesa.map((p) => p.id);
+      await PagoQr.destroy({ where: { pedido_id: { [Op.in]: pedidoIds } } });
+      await DetallePedido.destroy({ where: { pedido_id: { [Op.in]: pedidoIds } } });
+      await Pedido.destroy({ where: { mesa_id: mesa.id } });
+      await SesionCaja.destroy({ where: { caja_id: caja.id } });
+      await Caja.destroy({ where: { id: caja.id } });
+      await Usuario.destroy({ where: { id: usuario.id } });
+      await Cliente.destroy({ where: { id: clienteExistente.id } });
+      await MesaSesion.destroy({ where: { mesa_id: mesa.id } });
+      await Mesa.destroy({ where: { id: mesa.id } });
+      await Area.destroy({ where: { id: area.id } });
+      await Sucursal.destroy({ where: { id: sucursal.id } });
+    });
+
+    it('CI de un cliente ya registrado → el pedido queda ligado a ese cliente_id', async () => {
+      const res = await request(app)
+        .post(`/api/v1/autoservicio/mesa/${mesa.codigo_qr}/pedido`)
+        .send({ items: [{ producto_id: mesa.productoId, cantidad: 1 }], numero_documento: clienteExistente.numero_documento });
+
+      expect(res.status).not.toBe(400);
+      const pedido = await Pedido.findByPk(res.body.datos.pedido.id);
+      expect(pedido.cliente_id).toBe(clienteExistente.id);
+    });
+
+    it('CI que no matchea ningún cliente ni la API de personas → el pedido sigue sin bloquear, sin cliente_id', async () => {
+      const res = await request(app)
+        .post(`/api/v1/autoservicio/mesa/${mesa.codigo_qr}/pedido`)
+        .send({ items: [{ producto_id: mesa.productoId, cantidad: 1 }], numero_documento: '00000000-NOEXISTE' });
+
+      expect(res.status).not.toBe(400);
+      const pedido = await Pedido.findByPk(res.body.datos.pedido.id);
+      expect(pedido.cliente_id).toBeNull();
+    });
+
+    it('sin numero_documento, el pedido sigue su curso normal (no lo exige)', async () => {
+      const res = await request(app)
+        .post(`/api/v1/autoservicio/mesa/${mesa.codigo_qr}/pedido`)
+        .send({ items: [{ producto_id: mesa.productoId, cantidad: 1 }] });
+
+      expect(res.status).not.toBe(400);
+      const pedido = await Pedido.findByPk(res.body.datos.pedido.id);
+      expect(pedido.cliente_id).toBeNull();
     });
   });
 });

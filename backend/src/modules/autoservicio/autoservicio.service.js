@@ -1,7 +1,8 @@
-const { SesionCaja, Pedido, Producto } = require('../../models');
+const { SesionCaja, Pedido, Producto, Cliente } = require('../../models');
 const mesasService = require('../mesas/mesas.service');
 const ventasService = require('../ventas/ventas.service');
 const cuponesService = require('../cupones/cupones.service');
+const clientesService = require('../clientes/clientes.service');
 const { listarProductos } = require('../productos/productos.service');
 
 async function _mesaConSesionActiva(codigo_qr) {
@@ -46,6 +47,34 @@ async function validarCupon(codigo_qr, { codigo, items }) {
   return cuponesService.validar(codigo, subtotal, null, itemsConPrecio);
 }
 
+// Identificación opcional y silenciosa del cliente por CI, para que el
+// pedido sume puntos de fidelidad como cualquier venta con cliente_id (esa
+// parte ya funciona sola en ventasService — acá solo se resuelve el id).
+// Nunca bloquea el pedido: si el documento está vacío, no matchea con nadie
+// en la API de Personas, o esa API falla (red, 502), se sigue de largo sin
+// cliente_id — el cliente nunca ve un error por esto, es opcional.
+async function _resolverClientePorDocumento(numero_documento) {
+  const doc = (numero_documento || '').trim();
+  if (!doc) return null;
+
+  try {
+    const existente = await Cliente.findOne({ where: { numero_documento: doc } });
+    if (existente) return existente.id;
+
+    const persona = await clientesService.buscarPorDocumento(doc);
+    if (!persona) return null;
+
+    const creado = await Cliente.create({
+      nombre: persona.nombre || 'Cliente',
+      numero_documento: persona.numero_documento || doc,
+      fecha_nacimiento: persona.fecha_nacimiento || null,
+    });
+    return creado.id;
+  } catch {
+    return null;
+  }
+}
+
 // Tope de pedidos con pago QR en curso por sesión de mesa. Cada POST dispara
 // una llamada real (y facturable) a CodePay para generar el QR, y el endpoint
 // es anónimo: quien haya fotografiado el QR de una mesa podría scriptearlo.
@@ -54,8 +83,9 @@ async function validarCupon(codigo_qr, { codigo, items }) {
 // MAX_PAGOS_PENDIENTES pagos sin resolver en la misma sesión.
 const MAX_PAGOS_PENDIENTES = 3;
 
-async function crearPedido(codigo_qr, { items, cupon_codigo }) {
+async function crearPedido(codigo_qr, { items, cupon_codigo, numero_documento }) {
   const { mesa, sesion } = await _mesaConSesionActiva(codigo_qr);
+  const cliente_id = await _resolverClientePorDocumento(numero_documento);
 
   const pendientes = await Pedido.count({ where: { mesa_sesion_id: sesion.id, estado: 'pendiente_pago' } });
   if (pendientes >= MAX_PAGOS_PENDIENTES) {
@@ -77,14 +107,14 @@ async function crearPedido(codigo_qr, { items, cupon_codigo }) {
     metodo_pago: 'qr',
     sesion_caja_id: sesionCaja.id,
     usuario_id: sesionCaja.usuario_id,
-    cliente_id: null,
+    cliente_id,
     mesa_sesion_id: sesion.id,
     origen: 'autoservicio',
     // crearCompleta ya sabe validar y aplicar el cupón (misma lógica que usa
     // el cajero) — acá solo se deja pasar el código, sin reglas nuevas. Un
-    // cupón "exclusivo de un cliente" o con límite por cliente va a fallar
-    // acá porque cliente_id es null: en autoservicio todavía no hay forma de
-    // identificar al cliente (eso queda para el diseño de fidelidad).
+    // cupón "exclusivo de un cliente" o con límite por cliente sigue
+    // fallando si no se identificó con CI (cliente_id null) — eso es
+    // esperable, no un bug.
     cupon_codigo,
   });
 }

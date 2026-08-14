@@ -15,6 +15,7 @@ export default function AutoservicioPage() {
   const [pedido, setPedido] = useState(null); // { pedido, pago_qr } luego de confirmar
   const [cuponCodigo, setCuponCodigo] = useState('');
   const [cuponAplicado, setCuponAplicado] = useState(null); // { codigo, descuento } tras validar OK
+  const [ciCliente, setCiCliente] = useState('');
   const { modo, toggleModo } = useTemaAutoservicio();
 
   const { data: config } = useQuery({ queryKey: ['configuracion-publica'], queryFn: getConfiguracionPublica });
@@ -66,7 +67,7 @@ export default function AutoservicioPage() {
   }));
 
   const crear = useMutation({
-    mutationFn: () => crearPedidoAutoservicio(codigo, itemsParaBackend(), cuponCodigo.trim()),
+    mutationFn: () => crearPedidoAutoservicio(codigo, itemsParaBackend(), cuponCodigo.trim(), ciCliente.trim()),
     onSuccess: (datos) => setPedido(datos),
   });
 
@@ -101,7 +102,7 @@ export default function AutoservicioPage() {
   }
 
   if (pedido) {
-    return <EsperaPago codigo={codigo} pedido={pedido} onNuevoPedido={() => { setPedido(null); setCarrito([]); setCuponCodigo(''); setCuponAplicado(null); }} />;
+    return <EsperaPago codigo={codigo} pedido={pedido} onNuevoPedido={() => { setPedido(null); setCarrito([]); setCuponCodigo(''); setCuponAplicado(null); setCiCliente(''); }} />;
   }
 
   const totalItems = carrito.reduce((s, l) => s + l.cantidad, 0);
@@ -248,6 +249,15 @@ export default function AutoservicioPage() {
               {validarCupon.isError && (
                 <p className="text-sm text-destructive mt-1">{validarCupon.error?.response?.data?.mensaje ?? 'Cupón inválido.'}</p>
               )}
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">¿Tenés CI registrado? (opcional, para sumar puntos)</label>
+              <input
+                value={ciCliente}
+                onChange={(e) => setCiCliente(e.target.value)}
+                placeholder="Número de CI"
+                className="w-full bg-background border border-input rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
             </div>
             {crear.isError && (
               <p className="text-sm text-destructive">{crear.error?.response?.data?.mensaje ?? 'No se pudo crear el pedido.'}</p>
