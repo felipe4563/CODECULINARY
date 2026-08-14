@@ -293,6 +293,31 @@ async function crear({ mesa_id, tipo = 'mesa', usuario_id, cliente_id, sesion_ca
   return resultado;
 }
 
+// Decide en qué sesión de caja se asienta el ingreso de una venta. El caso
+// normal (venta en efectivo, o QR que confirma dentro del turno) devuelve
+// pedido.sesion_caja_id sin cambios. Sólo cuando esa sesión ya se cerró —un
+// pago QR que confirma tarde, hasta 30 min después de generarse— se busca la
+// sesión abierta actual de la sucursal para no ensuciar un arqueo ya cerrado.
+// Si no hay ninguna abierta, se cae de vuelta a la original (mejor que perder
+// la venta de los libros) y se deja un aviso en el log.
+async function _sesionCajaParaAsiento(pedido, transaction) {
+  const original = await SesionCaja.findByPk(pedido.sesion_caja_id, { transaction });
+  if (!original || original.estado === 'abierta') return pedido.sesion_caja_id;
+
+  const abierta = await SesionCaja.findOne({
+    where: { sucursal_id: pedido.sucursal_id, estado: 'abierta' },
+    transaction,
+  });
+  if (abierta) return abierta.id;
+
+  console.warn(
+    `[ventas] Pago QR del pedido #${pedido.id} confirmó después de cerrarse su sesión de caja ` +
+    `#${pedido.sesion_caja_id} y no hay ninguna caja abierta en la sucursal ${pedido.sucursal_id}: ` +
+    'el asiento se registra igual en la sesión cerrada.'
+  );
+  return pedido.sesion_caja_id;
+}
+
 /**
  * Completa una venta ya decidida (efectivo, o confirmación de un pago QR):
  * marca el pedido completado, descuenta stock, registra el ingreso en el
@@ -357,11 +382,19 @@ async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, 
     }
   }
 
+  // Un pago QR tiene hasta 30 minutos para confirmarse. Si el cajero cierra
+  // y arquea su turno dentro de esa ventana, escribir en pedido.sesion_caja_id
+  // (la sesión abierta cuando se CREÓ el pedido) corrompe a posteriori un
+  // turno ya conciliado. Se redirige el asiento a la sesión que esté abierta
+  // ahora en la misma sucursal. No se toca pedido.sesion_caja_id: otras
+  // lecturas (reportes, historial) siguen viendo el turno original.
+  const sesionDestinoId = await _sesionCajaParaAsiento(pedido, transaction);
+
   await LibroCaja.create({
-    sesion_caja_id: pedido.sesion_caja_id, usuario_id, tipo: 'ingreso', concepto: `Venta #${pedido.id}`, monto: monto_neto, metodo_pago, referencia_id: pedido.id,
+    sesion_caja_id: sesionDestinoId, usuario_id, tipo: 'ingreso', concepto: `Venta #${pedido.id}`, monto: monto_neto, metodo_pago, referencia_id: pedido.id,
   }, { transaction });
 
-  await SesionCaja.increment('total_ventas', { by: monto_neto, where: { id: pedido.sesion_caja_id }, transaction });
+  await SesionCaja.increment('total_ventas', { by: monto_neto, where: { id: sesionDestinoId }, transaction });
 
   for (const detalle of detalles) {
     if (detalle.combo_id) {
