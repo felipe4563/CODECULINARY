@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import ForzarCambioContrasena from './ForzarCambioContrasena';
 import BotonCocinaPendiente from './BotonCocinaPendiente';
+import AvisoAutoservicio from './AvisoAutoservicio';
 import { useAuthStore } from '../../store/authStore';
 
 export default function Layout() {
@@ -14,6 +15,7 @@ export default function Layout() {
     <div className="flex h-screen bg-background overflow-hidden transition-colors">
       {debeCambiarContrasena && <ForzarCambioContrasena />}
       <BotonCocinaPendiente />
+      <AvisoAutoservicio />
       <Sidebar
         visible={sidebarVisible}
         onCerrar={() => setSidebarVisible(false)}
