@@ -321,7 +321,7 @@ export default function InsumosPage() {
         </div>
 
         <div className="bg-card rounded-2xl border border-border shadow-sm p-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-violet-100 dark:bg-violet-500/15 flex items-center justify-center shrink-0">
                 <Wallet className="w-5 h-5 text-violet-600 dark:text-violet-400" />
@@ -332,41 +332,41 @@ export default function InsumosPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex gap-1 bg-muted p-1 rounded-lg">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
+              <div className="flex gap-1 bg-muted p-1 rounded-lg w-full sm:w-auto">
                 <button
                   onClick={() => setRango(rangoEsteMes())}
-                  className="px-2.5 py-1 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  className="flex-1 sm:flex-none px-2.5 py-1 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Este mes
                 </button>
                 <button
                   onClick={() => setRango(rangoMesPasado())}
-                  className="px-2.5 py-1 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  className="flex-1 sm:flex-none px-2.5 py-1 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Mes pasado
                 </button>
               </div>
-              <div className="flex items-center gap-1.5 text-xs">
-                <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                 <input
                   type="date"
                   value={rango.desde}
                   onChange={e => setRango(r => ({ ...r, desde: e.target.value }))}
-                  className="rounded-lg border border-input bg-background text-foreground px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="flex-1 min-w-0 rounded-lg border border-input bg-background text-foreground px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
                 />
-                <span className="text-muted-foreground">a</span>
+                <span className="text-muted-foreground shrink-0">a</span>
                 <input
                   type="date"
                   value={rango.hasta}
                   onChange={e => setRango(r => ({ ...r, hasta: e.target.value }))}
-                  className="rounded-lg border border-input bg-background text-foreground px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="flex-1 min-w-0 rounded-lg border border-input bg-background text-foreground px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
               <button
                 onClick={exportarReportePDF}
                 disabled={!reporteCompras.length}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors disabled:opacity-40"
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors disabled:opacity-40 w-full sm:w-auto"
               >
                 <Download className="w-3.5 h-3.5" /> Exportar PDF
               </button>
@@ -426,53 +426,93 @@ export default function InsumosPage() {
             )}
           </div>
         ) : (
-          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted">
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Nombre</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Unidad</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Stock</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {insumosFiltrados.map((i) => (
-                    <tr key={i.id} className="hover:bg-muted/50 transition-colors">
-                      <td className="px-4 py-3 font-medium text-foreground">{i.nombre}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{unidadLabel(i.unidad_medida)}</td>
-                      <td className={`px-4 py-3 text-right font-semibold ${Number(i.stock) < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground'}`}>
-                        {fmt(i.stock)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2 justify-end">
-                          {puedoEditar && (
-                            <button onClick={() => setModalAjuste(i)} title="Ajustar stock" className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-500/15 transition-colors">
-                              <SlidersHorizontal className="w-4 h-4" />
-                            </button>
-                          )}
-                          {puedoEditar && (
-                            <button onClick={() => setModalInsumo(i)} title="Editar" className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-500/15 transition-colors">
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                          )}
-                          {puedoEliminar && (
-                            <button onClick={() => mutDesactivar.mutate(i.id)} title="Desactivar" className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-500/15 transition-colors">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
+          <>
+            {/* Mobile: tarjetas */}
+            <div className="sm:hidden space-y-2">
+              {insumosFiltrados.map((i) => (
+                <div key={i.id} className="bg-card border border-border rounded-xl p-3.5 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-foreground truncate">{i.nombre}</p>
+                    <p className="text-xs text-muted-foreground">{unidadLabel(i.unidad_medida)}</p>
+                    <p className={`text-sm font-semibold mt-0.5 ${Number(i.stock) < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground'}`}>
+                      Stock: {fmt(i.stock)}
+                    </p>
+                  </div>
+                  {(puedoEditar || puedoEliminar) && (
+                    <div className="flex flex-col gap-1 shrink-0">
+                      {puedoEditar && (
+                        <button onClick={() => setModalAjuste(i)} title="Ajustar stock" className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-500/15 transition-colors">
+                          <SlidersHorizontal className="w-4 h-4" />
+                        </button>
+                      )}
+                      {puedoEditar && (
+                        <button onClick={() => setModalInsumo(i)} title="Editar" className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-500/15 transition-colors">
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                      )}
+                      {puedoEliminar && (
+                        <button onClick={() => mutDesactivar.mutate(i.id)} title="Desactivar" className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-500/15 transition-colors">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+              <p className="text-xs text-muted-foreground text-center pt-1">
+                {insumosFiltrados.length} insumo{insumosFiltrados.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+
+            {/* Desktop: tabla */}
+            <div className="hidden sm:block bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Nombre</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Unidad</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Stock</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Acciones</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {insumosFiltrados.map((i) => (
+                      <tr key={i.id} className="hover:bg-muted/50 transition-colors">
+                        <td className="px-4 py-3 font-medium text-foreground">{i.nombre}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{unidadLabel(i.unidad_medida)}</td>
+                        <td className={`px-4 py-3 text-right font-semibold ${Number(i.stock) < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground'}`}>
+                          {fmt(i.stock)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 justify-end">
+                            {puedoEditar && (
+                              <button onClick={() => setModalAjuste(i)} title="Ajustar stock" className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-500/15 transition-colors">
+                                <SlidersHorizontal className="w-4 h-4" />
+                              </button>
+                            )}
+                            {puedoEditar && (
+                              <button onClick={() => setModalInsumo(i)} title="Editar" className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-500/15 transition-colors">
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                            )}
+                            {puedoEliminar && (
+                              <button onClick={() => mutDesactivar.mutate(i.id)} title="Desactivar" className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-500/15 transition-colors">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-4 py-2 border-t border-border text-xs text-muted-foreground">
+                {insumosFiltrados.length} insumo{insumosFiltrados.length !== 1 ? 's' : ''}
+              </div>
             </div>
-            <div className="px-4 py-2 border-t border-border text-xs text-muted-foreground">
-              {insumosFiltrados.length} insumo{insumosFiltrados.length !== 1 ? 's' : ''}
-            </div>
-          </div>
+          </>
         )}
       </div>
     </>
