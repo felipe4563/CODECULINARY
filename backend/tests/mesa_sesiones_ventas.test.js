@@ -91,6 +91,58 @@ describe('ventas.service — sesión de mesa integrada', () => {
   });
 });
 
+describe('ventas.service — dos crear() concurrentes sobre la misma mesa', () => {
+  // Regresión: el chequeo de colisión y abrirSesion eran check-then-act sin
+  // transacción ni lock, así que dos terminales simultáneas podían pasar
+  // ambas el chequeo y dejar la mesa con dos sesiones activas.
+  let sucursalId, areaId, mesaId, usuarioId, cajaId, sesionCajaId;
+
+  beforeAll(async () => {
+    const sucursal = await Sucursal.create({ nombre: 'Sucursal Concurrencia Test' });
+    sucursalId = sucursal.id;
+    const area = await Area.create({ nombre: 'Area Concurrencia Test', sucursal_id: sucursalId });
+    areaId = area.id;
+    const mesa = await Mesa.create({ area_id: areaId, nombre: 'Mesa Concurrencia Test' });
+    mesaId = mesa.id;
+    const rol = await Rol.findOne({ where: { nombre: 'Cajero' } });
+    const hash = await bcrypt.hash('clave123', 10);
+    const usuario = await Usuario.create({ rol_id: rol.id, nombre: 'Concurrencia Test', email: 'concurrencia-test@restaurante.com', contrasena: hash });
+    usuarioId = usuario.id;
+    const caja = await Caja.create({ sucursal_id: sucursalId, nombre: 'Caja Concurrencia Test' });
+    cajaId = caja.id;
+    const sesionCaja = await SesionCaja.create({ usuario_id: usuarioId, sucursal_id: sucursalId, caja_id: cajaId, monto_apertura: 0 });
+    sesionCajaId = sesionCaja.id;
+  });
+
+  afterAll(async () => {
+    await Pedido.destroy({ where: { mesa_id: mesaId } });
+    await SesionCaja.destroy({ where: { id: sesionCajaId } });
+    await Caja.destroy({ where: { id: cajaId } });
+    await Usuario.destroy({ where: { id: usuarioId } });
+    await MesaSesion.destroy({ where: { mesa_id: mesaId } });
+    await Mesa.destroy({ where: { id: mesaId } });
+    await Area.destroy({ where: { id: areaId } });
+    await Sucursal.destroy({ where: { id: sucursalId } });
+  });
+
+  it('sólo una gana: la otra recibe 409 y queda una única sesión activa', async () => {
+    const args = { mesa_id: mesaId, tipo: 'mesa', usuario_id: usuarioId, sesion_caja_id: sesionCajaId };
+    const resultados = await Promise.allSettled([
+      ventasService.crear({ ...args }),
+      ventasService.crear({ ...args }),
+    ]);
+
+    const ok = resultados.filter((r) => r.status === 'fulfilled');
+    const fallidos = resultados.filter((r) => r.status === 'rejected');
+    expect(ok).toHaveLength(1);
+    expect(fallidos).toHaveLength(1);
+    expect(fallidos[0].reason.status).toBe(409);
+
+    const sesiones = await MesaSesion.findAll({ where: { mesa_id: mesaId, cerrada_en: null } });
+    expect(sesiones).toHaveLength(1);
+  });
+});
+
 describe('ventas.service — pago QR de autoservicio vencido', () => {
   // Regresión: _revertirPagoQr devolvía el pedido a estado_previo, que para
   // autoservicio es 'pendiente' — una cola de cocina REAL (listarCocina lee

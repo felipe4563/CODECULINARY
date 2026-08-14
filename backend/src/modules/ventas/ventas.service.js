@@ -256,26 +256,44 @@ async function crear({ mesa_id, tipo = 'mesa', usuario_id, cliente_id, sesion_ca
   const sucursal_id = sesionActiva.sucursal_id;
 
   if (tipo === 'mesa') {
-    const mesa = await Mesa.findByPk(mesa_id);
-    if (!mesa) throw Object.assign(new Error('Mesa no encontrada'), { status: 404 });
+    // El chequeo de colisión y la apertura de la sesión tienen que ser
+    // atómicos: sin esto, dos terminales que tocan "nueva orden — Mesa 8" con
+    // milisegundos de diferencia pasaban ambas el chequeo antes de que
+    // cualquiera escribiera, y la mesa terminaba con dos sesiones activas
+    // simultáneas — justo lo que el mecanismo de sesiones existe para evitar.
+    // El lock de fila sobre la mesa se toma ANTES de leer la sesión activa y
+    // se sostiene hasta el commit, así la segunda request se bloquea hasta
+    // que la primera termine y entonces sí ve la sesión nueva y devuelve 409.
+    const t = await sequelize.transaction();
+    let pedidoId;
+    try {
+      const mesa = await Mesa.findByPk(mesa_id, { transaction: t, lock: t.LOCK.UPDATE });
+      if (!mesa) throw Object.assign(new Error('Mesa no encontrada'), { status: 404 });
 
-    const sesionExistente = await mesasService.obtenerSesionActiva(mesa_id);
-    if (sesionExistente) {
-      throw Object.assign(
-        new Error(`Mesa ya tiene una sesión activa desde las ${sesionExistente.abierta_en.toLocaleTimeString('es-BO')}`),
-        { status: 409, sesion_activa: sesionExistente }
-      );
+      const sesionExistente = await mesasService.obtenerSesionActiva(mesa_id);
+      if (sesionExistente) {
+        throw Object.assign(
+          new Error(`Mesa ya tiene una sesión activa desde las ${sesionExistente.abierta_en.toLocaleTimeString('es-BO')}`),
+          { status: 409, sesion_activa: sesionExistente }
+        );
+      }
+
+      const pedido = await Pedido.create({
+        mesa_id, tipo: 'mesa', usuario_id, cliente_id, sesion_caja_id, sucursal_id, notas,
+        nombre_cliente: nombre_cliente || 'Público General',
+        documento_cliente,
+        tipo_documento: tipo_documento || 'Ticket',
+      }, { transaction: t });
+      await mesa.update({ estado: 'ocupada' }, { transaction: t });
+      await mesasService.abrirSesion(mesa_id, sucursal_id, 'staff', t);
+      await t.commit();
+      pedidoId = pedido.id;
+    } catch (err) {
+      if (!t.finished) await t.rollback();
+      throw err;
     }
 
-    const pedido = await Pedido.create({
-      mesa_id, tipo: 'mesa', usuario_id, cliente_id, sesion_caja_id, sucursal_id, notas,
-      nombre_cliente: nombre_cliente || 'Público General',
-      documento_cliente,
-      tipo_documento: tipo_documento || 'Ticket',
-    });
-    await mesa.update({ estado: 'ocupada' });
-    await mesasService.abrirSesion(mesa_id, sucursal_id, 'staff');
-    const resultado = await obtener(pedido.id);
+    const resultado = await obtener(pedidoId);
     emitir('restaurante:actualizar', { tipo: 'pedido_nuevo' }, sucursal_id);
     return resultado;
   }
