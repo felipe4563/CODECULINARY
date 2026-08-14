@@ -1,4 +1,9 @@
-const { Area, Mesa } = require('../../models');
+const crypto = require('crypto');
+const { Area, Mesa, MesaSesion } = require('../../models');
+
+function _generarCodigoQr() {
+  return crypto.randomBytes(8).toString('hex');
+}
 
 // --- Áreas ---
 
@@ -71,7 +76,7 @@ async function crearMesa({ area_id, nombre, asientos = 4 }, sucursal_id) {
   if (area.sucursal_id !== sucursal_id) {
     throw Object.assign(new Error('El área no pertenece a tu sucursal'), { status: 404 });
   }
-  return Mesa.create({ area_id, nombre, asientos });
+  return Mesa.create({ area_id, nombre, asientos, codigo_qr: _generarCodigoQr() });
 }
 
 async function actualizarMesa(id, datos, alcance) {
@@ -86,4 +91,36 @@ async function eliminarMesa(id, alcance) {
   await mesa.destroy();
 }
 
-module.exports = { listarAreas, crearArea, actualizarArea, eliminarArea, listarMesas, obtenerMesa, crearMesa, actualizarMesa, eliminarMesa };
+// --- Sesión de mesa (autoservicio) ---
+
+async function obtenerSesionActiva(mesa_id) {
+  return MesaSesion.findOne({ where: { mesa_id, cerrada_en: null } });
+}
+
+async function abrirSesion(mesa_id, sucursal_id, abierta_por = 'staff', transaction) {
+  const existente = await obtenerSesionActiva(mesa_id);
+  if (existente) return existente;
+  return MesaSesion.create({ mesa_id, sucursal_id, abierta_por, cerrada_en: null }, { transaction });
+}
+
+async function cerrarSesion(mesa_id, transaction) {
+  await MesaSesion.update(
+    { cerrada_en: new Date() },
+    { where: { mesa_id, cerrada_en: null }, transaction }
+  );
+}
+
+async function obtenerMesaPorCodigoQr(codigo_qr) {
+  const mesa = await Mesa.findOne({
+    where: { codigo_qr },
+    include: [{ model: Area, as: 'area', attributes: ['id', 'nombre', 'sucursal_id'] }],
+  });
+  if (!mesa) throw Object.assign(new Error('Mesa no encontrada'), { status: 404 });
+  return mesa;
+}
+
+module.exports = {
+  listarAreas, crearArea, actualizarArea, eliminarArea,
+  listarMesas, obtenerMesa, crearMesa, actualizarMesa, eliminarMesa,
+  obtenerSesionActiva, abrirSesion, cerrarSesion, obtenerMesaPorCodigoQr,
+};
