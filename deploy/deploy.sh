@@ -1,9 +1,14 @@
 #!/bin/bash
-# Script de actualización — ejecutar en el VPS desde /home/ubuntu/SISTEMAS/SOLOCARNESTROPICAL
-# Uso: bash deploy/deploy.sh
+# Script de actualización (PM2 + nginx nativo, sin Docker) — mismo código se
+# clona en varias carpetas del VPS, cada una con su propio proceso PM2 — por
+# eso se ubica solo en vez de tener una ruta fija, así no hay que editarlo
+# por instancia ni se pisa entre copias al hacer `git pull`.
+# El nombre del proceso PM2 (más abajo) SÍ sigue siendo específico de cada
+# instancia y hay que ajustarlo a mano en cada copia.
+# Uso: bash deploy/deploy.sh (desde cualquier ubicación, el script resuelve su propia carpeta)
 
 set -e
-cd /home/ubuntu/SISTEMAS/SOLOCARNESTROPICALES
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 echo "==> Obteniendo cambios..."
 # Proteger archivos de entorno locales para que el pull no falle
