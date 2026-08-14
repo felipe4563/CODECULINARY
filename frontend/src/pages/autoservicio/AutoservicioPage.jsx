@@ -4,7 +4,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Plus, Minus, ShoppingCart, X, Loader2, CheckCircle2, AlertCircle, Package, Sun, Moon } from 'lucide-react';
 import { getMenuAutoservicio, crearPedidoAutoservicio, getEstadoPedidoAutoservicio } from '../../api/autoservicio';
 import { getConfiguracionPublica, logoSrc } from '../../api/configuracion';
-import { useTheme } from '../../hooks/useTheme';
+import { useTemaAutoservicio } from '../../hooks/useTemaAutoservicio';
 
 const bs = (n) => `Bs ${parseFloat(n || 0).toFixed(2)}`;
 
@@ -13,7 +13,7 @@ export default function AutoservicioPage() {
   const [carrito, setCarrito] = useState([]); // [{ producto, opcion_ids, cantidad }]
   const [mostrarCarrito, setMostrarCarrito] = useState(false);
   const [pedido, setPedido] = useState(null); // { pedido, pago_qr } luego de confirmar
-  const { modo, toggleModo } = useTheme();
+  const { modo, toggleModo } = useTemaAutoservicio();
 
   const { data: config } = useQuery({ queryKey: ['configuracion-publica'], queryFn: getConfiguracionPublica });
   const { data: menu, isLoading, isError, error } = useQuery({
@@ -222,7 +222,7 @@ export default function AutoservicioPage() {
 }
 
 function ToggleTema() {
-  const { modo, toggleModo } = useTheme();
+  const { modo, toggleModo } = useTemaAutoservicio();
   return (
     <button
       onClick={toggleModo}
