@@ -1067,8 +1067,7 @@ ALTER TABLE `insumos`
 ALTER TABLE `insumo_movimientos`
   ADD PRIMARY KEY (`id`),
   ADD KEY `insumo_id` (`insumo_id`),
-  ADD KEY `sucursal_id` (`sucursal_id`),
-  ADD KEY `usuario_id` (`usuario_id`);
+  ADD KEY `sucursal_id` (`sucursal_id`);
 
 --
 -- Indices de la tabla `insumo_stock_sucursal`
