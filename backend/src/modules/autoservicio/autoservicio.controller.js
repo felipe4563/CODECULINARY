@@ -33,6 +33,16 @@ async function obtenerMenu(req, res, next) {
   catch (err) { next(err); }
 }
 
+async function validarCupon(req, res, next) {
+  try {
+    const { codigo, items } = req.body;
+    if (!codigo || typeof codigo !== 'string') {
+      return res.status(400).json({ ok: false, mensaje: 'codigo es requerido' });
+    }
+    res.json({ ok: true, datos: await svc.validarCupon(req.params.codigo_qr, { codigo, items }) });
+  } catch (err) { next(err); }
+}
+
 async function crearPedido(req, res, next) {
   try {
     const { items, cupon_codigo } = req.body;
@@ -47,4 +57,4 @@ async function estadoPedido(req, res, next) {
   catch (err) { next(err); }
 }
 
-module.exports = { obtenerMenu, crearPedido, estadoPedido };
+module.exports = { obtenerMenu, validarCupon, crearPedido, estadoPedido };

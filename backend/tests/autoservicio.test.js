@@ -2,7 +2,7 @@ const request = require('supertest');
 const bcrypt = require('bcryptjs');
 const app = require('../src/app');
 const { Op } = require('sequelize');
-const { Sucursal, Area, Mesa, MesaSesion, Rol, Usuario, Pedido, DetallePedido, PagoQr, Categoria, Producto, ProductoStockSucursal, Caja, SesionCaja } = require('../src/models');
+const { Sucursal, Area, Mesa, MesaSesion, Rol, Usuario, Pedido, DetallePedido, PagoQr, Categoria, Producto, ProductoStockSucursal, Caja, SesionCaja, Cupon } = require('../src/models');
 
 describe('Autoservicio API', () => {
   it('GET .../mesa/:codigo_qr con código inexistente → 404', async () => {
@@ -225,9 +225,11 @@ describe('Autoservicio API', () => {
       await SesionCaja.create({ usuario_id: usuario.id, sucursal_id: sucursal.id, caja_id: caja.id, monto_apertura: 0 });
 
       mesa.productoId = producto.id;
+      mesa.cupon = await Cupon.create({ codigo: `CUPONTEST${timestamp}`, tipo: 'fijo', valor: 5, usos_maximos: 10 });
     });
 
     afterAll(async () => {
+      await Cupon.destroy({ where: { id: mesa.cupon.id } });
       // El pedido "sin cupon_codigo" sigue de largo hasta crearCompleta y
       // deja Pedido/DetallePedido/PagoQr reales — hay que limpiarlos antes
       // de borrar Usuario/Caja/Sucursal o la FK lo impide.
@@ -263,6 +265,72 @@ describe('Autoservicio API', () => {
       // prueba — acá lo que importa es que la ausencia de cupon_codigo no
       // sea, por sí sola, motivo de rechazo (no debe dar 400 de validación).
       expect(res.status).not.toBe(400);
+    });
+  });
+
+  describe('POST .../cupon/validar — previsualización de cupón antes de pagar', () => {
+    let sucursal, area, mesa, cupon;
+
+    beforeAll(async () => {
+      const timestamp = Date.now();
+      sucursal = await Sucursal.create({ nombre: `Sucursal Autoservicio ValidarCupon Test ${timestamp}` });
+      area = await Area.create({ nombre: `Area Autoservicio ValidarCupon Test ${timestamp}`, sucursal_id: sucursal.id });
+      mesa = await Mesa.create({ area_id: area.id, nombre: 'Mesa ValidarCupon Test', codigo_qr: `vc-${timestamp}` });
+      await MesaSesion.create({ mesa_id: mesa.id, sucursal_id: sucursal.id, abierta_por: 'staff' });
+
+      const categoria = await Categoria.create({ nombre: `Categoria Autoservicio ValidarCupon Test ${timestamp}` });
+      const producto = await Producto.create({ categoria_id: categoria.id, nombre: `Producto Autoservicio ValidarCupon Test ${timestamp}`, precio: 40, stock: 0 });
+      mesa.productoId = producto.id;
+
+      cupon = await Cupon.create({ codigo: `VALCUPON${timestamp}`, tipo: 'fijo', valor: 5, usos_maximos: 10 });
+    });
+
+    afterAll(async () => {
+      await Cupon.destroy({ where: { id: cupon.id } });
+      await MesaSesion.destroy({ where: { mesa_id: mesa.id } });
+      await Mesa.destroy({ where: { id: mesa.id } });
+      await Area.destroy({ where: { id: area.id } });
+      await Sucursal.destroy({ where: { id: sucursal.id } });
+    });
+
+    it('cupón válido → 200 con el descuento calculado con precios del servidor (ignora el precio que mande el cliente)', async () => {
+      const res = await request(app)
+        .post(`/api/v1/autoservicio/mesa/${mesa.codigo_qr}/cupon/validar`)
+        .send({ codigo: cupon.codigo, items: [{ producto_id: mesa.productoId, cantidad: 1, precio: 999 }] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.datos.codigo).toBe(cupon.codigo);
+      expect(res.body.datos.descuento).toBe(5);
+    });
+
+    it('cupón inválido → 400 con el mensaje de cupones.service', async () => {
+      const res = await request(app)
+        .post(`/api/v1/autoservicio/mesa/${mesa.codigo_qr}/cupon/validar`)
+        .send({ codigo: 'NOEXISTE123', items: [{ producto_id: mesa.productoId, cantidad: 1 }] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.mensaje).toMatch(/cupón/i);
+    });
+
+    it('sin codigo en el body → 400 de validación, sin tocar el service', async () => {
+      const res = await request(app)
+        .post(`/api/v1/autoservicio/mesa/${mesa.codigo_qr}/cupon/validar`)
+        .send({ items: [{ producto_id: mesa.productoId, cantidad: 1 }] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.mensaje).toMatch(/codigo/i);
+    });
+
+    it('mesa sin sesión activa → 409, sin llegar a validar el cupón', async () => {
+      const timestamp = Date.now();
+      const mesaSinSesion = await Mesa.create({ area_id: area.id, nombre: 'Mesa Sin Sesion', codigo_qr: `ss-${timestamp}` });
+
+      const res = await request(app)
+        .post(`/api/v1/autoservicio/mesa/${mesaSinSesion.codigo_qr}/cupon/validar`)
+        .send({ codigo: cupon.codigo, items: [] });
+
+      expect(res.status).toBe(409);
+      await Mesa.destroy({ where: { id: mesaSinSesion.id } });
     });
   });
 });

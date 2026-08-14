@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Plus, Minus, ShoppingCart, X, Loader2, CheckCircle2, AlertCircle, Package, Sun, Moon } from 'lucide-react';
-import { getMenuAutoservicio, crearPedidoAutoservicio, getEstadoPedidoAutoservicio } from '../../api/autoservicio';
+import { getMenuAutoservicio, crearPedidoAutoservicio, validarCuponAutoservicio, getEstadoPedidoAutoservicio } from '../../api/autoservicio';
 import { getConfiguracionPublica, logoSrc } from '../../api/configuracion';
 import { useTemaAutoservicio } from '../../hooks/useTemaAutoservicio';
 
@@ -14,6 +14,7 @@ export default function AutoservicioPage() {
   const [mostrarCarrito, setMostrarCarrito] = useState(false);
   const [pedido, setPedido] = useState(null); // { pedido, pago_qr } luego de confirmar
   const [cuponCodigo, setCuponCodigo] = useState('');
+  const [cuponAplicado, setCuponAplicado] = useState(null); // { codigo, descuento } tras validar OK
   const { modo, toggleModo } = useTemaAutoservicio();
 
   const { data: config } = useQuery({ queryKey: ['configuracion-publica'], queryFn: getConfiguracionPublica });
@@ -60,12 +61,27 @@ export default function AutoservicioPage() {
     });
   };
 
+  const itemsParaBackend = () => carrito.map(l => ({
+    producto_id: l.producto.id, cantidad: l.cantidad, opcion_ids: l.opcion_ids,
+  }));
+
   const crear = useMutation({
-    mutationFn: () => crearPedidoAutoservicio(codigo, carrito.map(l => ({
-      producto_id: l.producto.id, cantidad: l.cantidad, opcion_ids: l.opcion_ids,
-    })), cuponCodigo.trim()),
+    mutationFn: () => crearPedidoAutoservicio(codigo, itemsParaBackend(), cuponCodigo.trim()),
     onSuccess: (datos) => setPedido(datos),
   });
+
+  const validarCupon = useMutation({
+    mutationFn: () => validarCuponAutoservicio(codigo, cuponCodigo.trim(), itemsParaBackend()),
+    onSuccess: (datos) => setCuponAplicado(datos),
+  });
+
+  const onCambiarCuponCodigo = (valor) => {
+    setCuponCodigo(valor);
+    if (cuponAplicado) setCuponAplicado(null);
+    if (validarCupon.isError) validarCupon.reset();
+  };
+
+  const totalConDescuento = Math.max(0, totalCarrito - (cuponAplicado?.descuento ?? 0));
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
@@ -85,7 +101,7 @@ export default function AutoservicioPage() {
   }
 
   if (pedido) {
-    return <EsperaPago codigo={codigo} pedido={pedido} onNuevoPedido={() => { setPedido(null); setCarrito([]); }} />;
+    return <EsperaPago codigo={codigo} pedido={pedido} onNuevoPedido={() => { setPedido(null); setCarrito([]); setCuponCodigo(''); setCuponAplicado(null); }} />;
   }
 
   const totalItems = carrito.reduce((s, l) => s + l.cantidad, 0);
@@ -202,17 +218,36 @@ export default function AutoservicioPage() {
                 <span className="text-foreground font-medium w-16 text-right">{bs(l.producto.precio * l.cantidad)}</span>
               </div>
             ))}
-            <div className="flex items-center justify-between font-bold text-foreground pt-2 border-t border-border">
-              <span>Total</span><span>{bs(totalCarrito)}</span>
+            <div className="pt-2 border-t border-border space-y-1">
+              {cuponAplicado && (
+                <div className="flex items-center justify-between text-sm text-emerald-600 dark:text-emerald-400">
+                  <span>Cupón {cuponAplicado.codigo}</span><span>-{bs(cuponAplicado.descuento)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between font-bold text-foreground">
+                <span>Total</span><span>{bs(totalConDescuento)}</span>
+              </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">¿Tenés un cupón?</label>
-              <input
-                value={cuponCodigo}
-                onChange={(e) => setCuponCodigo(e.target.value)}
-                placeholder="Código (opcional)"
-                className="w-full bg-background border border-input rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
+              <div className="flex gap-2">
+                <input
+                  value={cuponCodigo}
+                  onChange={(e) => onCambiarCuponCodigo(e.target.value)}
+                  placeholder="Código (opcional)"
+                  className="flex-1 min-w-0 bg-background border border-input rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                <button
+                  onClick={() => validarCupon.mutate()}
+                  disabled={!cuponCodigo.trim() || validarCupon.isPending || !!cuponAplicado}
+                  className="px-4 rounded-lg bg-secondary text-secondary-foreground text-sm font-semibold disabled:opacity-60 shrink-0"
+                >
+                  {validarCupon.isPending ? '...' : cuponAplicado ? 'Aplicado' : 'Aplicar'}
+                </button>
+              </div>
+              {validarCupon.isError && (
+                <p className="text-sm text-destructive mt-1">{validarCupon.error?.response?.data?.mensaje ?? 'Cupón inválido.'}</p>
+              )}
             </div>
             {crear.isError && (
               <p className="text-sm text-destructive">{crear.error?.response?.data?.mensaje ?? 'No se pudo crear el pedido.'}</p>

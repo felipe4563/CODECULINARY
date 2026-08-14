@@ -1,6 +1,7 @@
-const { SesionCaja, Pedido } = require('../../models');
+const { SesionCaja, Pedido, Producto } = require('../../models');
 const mesasService = require('../mesas/mesas.service');
 const ventasService = require('../ventas/ventas.service');
+const cuponesService = require('../cupones/cupones.service');
 const { listarProductos } = require('../productos/productos.service');
 
 async function _mesaConSesionActiva(codigo_qr) {
@@ -20,6 +21,29 @@ async function obtenerMenu(codigo_qr) {
   const alcance = { sucursal_id: mesa.area.sucursal_id, acceso_todas: false };
   const productos = await listarProductos({ solo_vendibles: true, solo_disponibles: true }, alcance);
   return { mesa: { id: mesa.id, nombre: mesa.nombre }, productos };
+}
+
+// Previsualización de cupón para el checkout público: no confía en los
+// precios que mande el navegador (podrían venir manipulados), así que
+// recalcula el subtotal con los precios reales de la base de datos antes de
+// llamar a cuponesService.validar — la misma función que usa el checkout
+// del staff. Esto es solo una vista previa; el pedido real vuelve a validar
+// el cupón (y su límite de usos) dentro de la transacción de crearCompleta.
+async function validarCupon(codigo_qr, { codigo, items }) {
+  await _mesaConSesionActiva(codigo_qr);
+
+  const ids = [...new Set((items || []).filter((i) => i.producto_id).map((i) => Number(i.producto_id)))];
+  const productos = ids.length > 0 ? await Producto.findAll({ where: { id: ids }, attributes: ['id', 'precio'] }) : [];
+  const precios = new Map(productos.map((p) => [p.id, parseFloat(p.precio)]));
+
+  const itemsConPrecio = (items || []).map((i) => ({
+    producto_id: i.producto_id,
+    cantidad: i.cantidad,
+    precio: precios.get(Number(i.producto_id)) ?? 0,
+  }));
+  const subtotal = itemsConPrecio.reduce((s, i) => s + i.precio * i.cantidad, 0);
+
+  return cuponesService.validar(codigo, subtotal, null, itemsConPrecio);
 }
 
 // Tope de pedidos con pago QR en curso por sesión de mesa. Cada POST dispara
@@ -86,4 +110,4 @@ async function consultarEstadoPedido(codigo_qr, pedido_id) {
   return ventasService.consultarEstadoPagoQr(pedido_id, null);
 }
 
-module.exports = { obtenerMenu, crearPedido, consultarEstadoPedido };
+module.exports = { obtenerMenu, validarCupon, crearPedido, consultarEstadoPedido };
