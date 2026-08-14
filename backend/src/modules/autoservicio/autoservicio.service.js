@@ -1,4 +1,4 @@
-const { SesionCaja } = require('../../models');
+const { SesionCaja, Pedido } = require('../../models');
 const mesasService = require('../mesas/mesas.service');
 const ventasService = require('../ventas/ventas.service');
 const { listarProductos } = require('../productos/productos.service');
@@ -45,14 +45,23 @@ async function crearPedido(codigo_qr, { items }) {
 
 async function consultarEstadoPedido(codigo_qr, pedido_id) {
   const { sesion } = await _mesaConSesionActiva(codigo_qr);
-  const resultado = await ventasService.consultarEstadoPagoQr(pedido_id, null);
-  if (resultado.pedido.mesa_sesion_id !== sesion.id) {
-    // Evita que alguien consulte el estado de un pedido ajeno probando ids
-    // al azar — solo se puede consultar un pedido de la sesión activa
-    // resuelta por ESTE código QR.
+
+  // Chequeo de pertenencia ANTES de llamar a consultarEstadoPagoQr: esa
+  // función no solo lee, puede finalizar el pago (confirmar stock/libro
+  // caja/sockets) o revertirlo contra CodePay para el pedido_id que se le
+  // pase. Si se llamara primero y se filtrara por sesión después, cualquiera
+  // con un QR válido de su propia mesa podría probar pedido_id al azar y
+  // disparar esos efectos secundarios sobre pedidos de otras mesas/sucursales
+  // antes de que el 404 llegara a devolverse. Por eso la pertenencia se
+  // resuelve acá con un findByPk liviano, de solo lectura, y se corta con
+  // 404 (no 403, para no confirmarle a un caller anónimo que el id existe)
+  // sin tocar consultarEstadoPagoQr en absoluto si no matchea.
+  const pedido = await Pedido.findByPk(pedido_id, { attributes: ['id', 'mesa_sesion_id'] });
+  if (!pedido || pedido.mesa_sesion_id !== sesion.id) {
     throw Object.assign(new Error('Pedido no encontrado'), { status: 404 });
   }
-  return resultado;
+
+  return ventasService.consultarEstadoPagoQr(pedido_id, null);
 }
 
 module.exports = { obtenerMenu, crearPedido, consultarEstadoPedido };
