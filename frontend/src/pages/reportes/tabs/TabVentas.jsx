@@ -47,6 +47,7 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
   const [filtroCajero, setFiltroCajero] = useState('todos');
   const [filtroMetodoPago, setFiltroMetodoPago] = useState('todos');
   const [filtroTipo, setFiltroTipo] = useState('todos');
+  const [filtroOrigen, setFiltroOrigen] = useState('todos');
   const [params, setParams] = useState({ desde: inicioMes(), hasta: hoy() });
 
   const { data = [], isLoading } = useQuery({
@@ -79,8 +80,11 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
     if (filtroTipo !== 'todos') {
       base = base.filter(v => (v.tipo || 'mesa') === filtroTipo);
     }
+    if (filtroOrigen !== 'todos') {
+      base = base.filter(v => (v.origen || 'staff') === filtroOrigen);
+    }
     return base;
-  }, [data, filtroCajero, filtroSucursal, filtroMetodoPago, filtroTipo, accesoTodas]);
+  }, [data, filtroCajero, filtroSucursal, filtroMetodoPago, filtroTipo, filtroOrigen, accesoTodas]);
 
   const stats = useMemo(() => {
     const total    = filtrado.reduce((s, v) => s + parseFloat(v.total || 0), 0);
@@ -115,12 +119,14 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
 
   const tipoVentaLabel = filtroTipo === 'todos' ? 'Mesa y para llevar' : tipoLabel(filtroTipo);
 
+  const origenLabel = filtroOrigen === 'todos' ? 'Staff y autoservicio' : (filtroOrigen === 'autoservicio' ? 'Autoservicio' : 'Tomado por staff');
+
   const exportar = () => exportarPDF({
     titulo:        'Reporte de Ventas',
-    subtitulo:     `${fecha(params.desde)} — ${fecha(params.hasta)} · ${cajeroLabel} · ${metodoPagoLabel} · ${tipoVentaLabel}`,
+    subtitulo:     `${fecha(params.desde)} — ${fecha(params.hasta)} · ${cajeroLabel} · ${metodoPagoLabel} · ${tipoVentaLabel} · ${origenLabel}`,
     empresa, logo, direccion, telefono,
     generadoPor:   usuario?.nombre,
-    columnas:      ['Fecha', 'Tipo', 'Mesa', 'Cliente', 'Cajero', 'Método de pago', 'Total'],
+    columnas:      ['Fecha', 'Tipo', 'Mesa', 'Cliente', 'Cajero', 'Método de pago', 'Origen', 'Total'],
     filas:         filtrado.map(v => [
       fechaHora(v.creado_en),
       tipoLabel(v.tipo || 'mesa'),
@@ -128,6 +134,7 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
       v.nombre_cliente || v.cliente?.nombre || 'Público General',
       v.usuario?.nombre || '-',
       v.metodo_pago || '-',
+      v.origen === 'autoservicio' ? 'Autoservicio' : 'Staff',
       bs(v.total),
     ]),
     totales: [
@@ -171,6 +178,15 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
               <option value="todos">Todos</option>
               <option value="mesa">En mesa</option>
               <option value="llevar">Para llevar</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-foreground">Origen</label>
+            <select value={filtroOrigen} onChange={e => setFiltroOrigen(e.target.value)}
+              className="px-3 py-2 text-sm rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
+              <option value="todos">Todos</option>
+              <option value="staff">Tomado por staff</option>
+              <option value="autoservicio">Autoservicio</option>
             </select>
           </div>
           {accesoTodas && (
