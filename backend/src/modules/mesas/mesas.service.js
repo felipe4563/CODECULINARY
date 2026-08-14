@@ -82,6 +82,18 @@ async function crearMesa({ area_id, nombre, asientos = 4 }, sucursal_id) {
 async function actualizarMesa(id, datos, alcance) {
   const mesa = await obtenerMesa(id, alcance);
   await mesa.update(datos);
+
+  // La edición manual de mesas (Configuración → Mesas) no tocaba
+  // mesa_sesiones: si el staff ponía la mesa en 'disponible' para "limpiar" el
+  // mapa mientras seguía abierta una sesión de autoservicio, el QR fijo seguía
+  // sirviendo el menú y aceptando pedidos pagados de una mesa que nadie está
+  // mirando — exactamente el caso del QR fotografiado/usado desde afuera que
+  // el gate de sesión existe para evitar. Cualquier estado distinto de
+  // 'ocupada' cierra la sesión activa.
+  if (datos && datos.estado !== undefined && datos.estado !== 'ocupada') {
+    await cerrarSesion(id);
+  }
+
   return obtenerMesa(id, alcance);
 }
 
