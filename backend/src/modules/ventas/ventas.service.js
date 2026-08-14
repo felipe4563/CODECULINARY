@@ -10,6 +10,7 @@ const codepayClient = require('../../integrations/codepay/codepay.client');
 const { calcularPrecioPesable, redondearAMedio } = require('../../utils/precio');
 const { estaActivoHoy } = require('../../utils/disponibilidad');
 const { resolver: _resolverCupon } = require('../cupones/cupones.service');
+const mesasService = require('../mesas/mesas.service');
 
 // Rango del día calendario en hora de Bolivia (-04:00), sin depender de la
 // zona horaria del proceso de Node/VPS. Por defecto usa el momento actual;
@@ -258,6 +259,14 @@ async function crear({ mesa_id, tipo = 'mesa', usuario_id, cliente_id, sesion_ca
     const mesa = await Mesa.findByPk(mesa_id);
     if (!mesa) throw Object.assign(new Error('Mesa no encontrada'), { status: 404 });
 
+    const sesionExistente = await mesasService.obtenerSesionActiva(mesa_id);
+    if (sesionExistente) {
+      throw Object.assign(
+        new Error(`Mesa ya tiene una sesión activa desde las ${sesionExistente.abierta_en.toLocaleTimeString('es-BO')}`),
+        { status: 409, sesion_activa: sesionExistente }
+      );
+    }
+
     const pedido = await Pedido.create({
       mesa_id, tipo: 'mesa', usuario_id, cliente_id, sesion_caja_id, sucursal_id, notas,
       nombre_cliente: nombre_cliente || 'Público General',
@@ -265,6 +274,7 @@ async function crear({ mesa_id, tipo = 'mesa', usuario_id, cliente_id, sesion_ca
       tipo_documento: tipo_documento || 'Ticket',
     });
     await mesa.update({ estado: 'ocupada' });
+    await mesasService.abrirSesion(mesa_id, sucursal_id, 'staff');
     const resultado = await obtener(pedido.id);
     emitir('restaurante:actualizar', { tipo: 'pedido_nuevo' }, sucursal_id);
     return resultado;
@@ -336,13 +346,14 @@ async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, 
   }
 
   if (pedido.tipo !== 'llevar' && pedido.mesa_id) {
-    // 'listo' también cuenta como pedido activo sin cobrar todavía — si acá
-    // solo se mira 'pendiente', un pedido que ya pasó a 'listo' en cocina
-    // pero no se cobró queda huérfano: la mesa se libera igual y el pedido
-    // sigue apareciendo en pantalla como si nada.
-    const activos = await Pedido.count({ where: { mesa_id: pedido.mesa_id, estado: ['pendiente', 'listo'] }, transaction });
+    // 'listo' también cuenta como pedido activo sin cobrar todavía, y
+    // 'pendiente_pago' cubre un cobro QR en curso en otro pedido de la
+    // misma mesa (autoservicio u otro) — si se ignora, la mesa se libera
+    // de más mientras ese pago todavía puede confirmarse.
+    const activos = await Pedido.count({ where: { mesa_id: pedido.mesa_id, estado: ['pendiente', 'listo', 'pendiente_pago'] }, transaction });
     if (activos === 0) {
       await Mesa.update({ estado: 'disponible' }, { where: { id: pedido.mesa_id }, transaction });
+      await mesasService.cerrarSesion(pedido.mesa_id, transaction);
     }
   }
 
@@ -584,6 +595,19 @@ async function _revertirPagoQr(pagoQrInicial, nuevoEstado) {
   });
 }
 
+// Barre pagos QR vencidos sin depender de que alguien esté consultando su
+// estado activamente (ver backend/src/jobs/expirarPagosQr.job.js) — mismo
+// camino que usa consultarEstadoPagoQr cuando detecta un vencido al pollear.
+async function revertirPagosQrVencidos() {
+  const vencidos = await PagoQr.findAll({ where: { estado: 'pendiente', expires_at: { [Op.lt]: new Date() } } });
+  let revertidos = 0;
+  for (const pagoQr of vencidos) {
+    await _revertirPagoQr(pagoQr, 'expirado');
+    revertidos++;
+  }
+  return { revertidos };
+}
+
 async function _confirmarPagoQr(pagoQrInicial) {
   const pedidoId = await sequelize.transaction(async (t) => {
     const pagoQr = await PagoQr.findByPk(pagoQrInicial.id, { transaction: t, lock: t.LOCK.UPDATE });
@@ -668,7 +692,7 @@ async function procesarWebhookPagoQr({ event, order_id }) {
   }
 }
 
-async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente, tipo_documento, notas, items, metodo_pago, monto_recibido, descuento = 0, propina = 0, sesion_caja_id, usuario_id, cliente_id, puntos_canjear = 0, cupon_codigo }) {
+async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente, tipo_documento, notas, items, metodo_pago, monto_recibido, descuento = 0, propina = 0, sesion_caja_id, usuario_id, cliente_id, puntos_canjear = 0, cupon_codigo, mesa_sesion_id = null, origen = 'staff' }) {
   if (!sesion_caja_id) {
     throw Object.assign(new Error('No hay caja abierta. Abre la caja antes de crear una orden.'), { status: 409 });
   }
@@ -708,7 +732,9 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
     if (!mesa_id) throw Object.assign(new Error('mesa_id es requerido'), { status: 400 });
     mesa = await Mesa.findByPk(mesa_id);
     if (!mesa) throw Object.assign(new Error('Mesa no encontrada'), { status: 404 });
-    if (mesa.estado !== 'disponible') throw Object.assign(new Error('Mesa ya ocupada'), { status: 409 });
+    if (!mesa_sesion_id && mesa.estado !== 'disponible') {
+      throw Object.assign(new Error('Mesa ya ocupada'), { status: 409 });
+    }
   } else if (tipo !== 'llevar') {
     throw Object.assign(new Error("tipo debe ser 'mesa' o 'llevar'"), { status: 400 });
   }
@@ -731,7 +757,8 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
   const pedidoId = await sequelize.transaction(async (t) => {
     const pedido = await Pedido.create({
       mesa_id: tipo === 'mesa' ? mesa_id : null,
-      tipo, numero_llevar, usuario_id, cliente_id: cliente_id || null, sesion_caja_id, sucursal_id, notas,
+      mesa_sesion_id: tipo === 'mesa' ? mesa_sesion_id : null,
+      tipo, origen, numero_llevar, usuario_id, cliente_id: cliente_id || null, sesion_caja_id, sucursal_id, notas,
       estado: estadoInicial, total, descuento, propina, metodo_pago: 'efectivo',
       nombre_cliente: nombre_cliente || (tipo === 'llevar' ? 'Cliente' : 'Público General'),
       documento_cliente,
@@ -905,9 +932,10 @@ async function cancelar(pedido_id, usuario_id, alcance) {
   await pedido.update({ estado: 'cancelado' });
 
   if (pedido.tipo !== 'llevar' && pedido.mesa_id) {
-    const activos = await Pedido.count({ where: { mesa_id: pedido.mesa_id, estado: ['pendiente', 'listo'] } });
+    const activos = await Pedido.count({ where: { mesa_id: pedido.mesa_id, estado: ['pendiente', 'listo', 'pendiente_pago'] } });
     if (activos === 0) {
       await Mesa.update({ estado: 'disponible' }, { where: { id: pedido.mesa_id } });
+      await mesasService.cerrarSesion(pedido.mesa_id);
     }
   }
 
@@ -938,5 +966,5 @@ async function marcarListo(pedido_id, alcance) {
 module.exports = {
   listar, listarCocina, obtener, reimprimir, crear, crearCompleta, agregarItem, actualizarItem, eliminarItem,
   cobrar, cancelar, marcarListo,
-  consultarEstadoPagoQr, cancelarPagoQr, procesarWebhookPagoQr,
+  consultarEstadoPagoQr, cancelarPagoQr, procesarWebhookPagoQr, revertirPagosQrVencidos,
 };
