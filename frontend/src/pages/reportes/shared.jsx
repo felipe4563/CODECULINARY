@@ -24,6 +24,8 @@ export function BadgeTipo({ tipo }) {
     completado: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
     efectivo:   'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
     qr:         'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
+    mesa:       'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    llevar:     'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
   };
   return (
     <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full capitalize ${mapa[tipo] || 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>

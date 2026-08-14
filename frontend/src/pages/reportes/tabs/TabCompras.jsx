@@ -7,6 +7,32 @@ import { useAuthStore } from '../../../store/authStore';
 import { exportarPDF } from '../utils/exportarPDF';
 import { FiltroFechas, StatCard, BadgeTipo, Skeleton, bs, fecha, fechaHora, hoy, inicioMes } from '../shared';
 
+function CompraCard({ compra, mostrarSucursal }) {
+  return (
+    <div className="bg-card border border-border rounded-xl p-3.5 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-xs text-muted-foreground whitespace-nowrap">{fechaHora(compra.creado_en)}</p>
+          <p className="font-medium text-foreground truncate">{compra.proveedor?.nombre || '-'}</p>
+        </div>
+        <p className="font-bold text-blue-600 dark:text-blue-400 shrink-0 whitespace-nowrap">{bs(compra.total)}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <BadgeTipo tipo={compra.estado} />
+        {mostrarSucursal && compra.sucursal?.nombre && (
+          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+            {compra.sucursal.nombre}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border">
+        <span className="truncate">{compra.notas || 'Sin notas'}</span>
+        <span className="shrink-0 ml-2">{compra.usuario?.nombre || '-'}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function TabCompras({ empresa, logo, direccion, telefono }) {
   const { usuario } = useAuth();
   const accesoTodas = useAuthStore((s) => s.usuario?.sucursal_activa?.id == null);
@@ -143,36 +169,48 @@ export default function TabCompras({ empresa, logo, direccion, telefono }) {
         </div>
       )}
 
-      {isLoading ? <Skeleton /> : (
-        <div className="overflow-x-auto rounded-2xl border border-border">
-          <table className="w-full text-xs sm:text-sm">
-            <thead>
-              <tr className="bg-muted border-b border-border">
-                {[...(accesoTodas ? ['Sucursal'] : []), 'Fecha', 'Proveedor', 'Estado', 'Registrado por', 'Total', 'Notas'].map(h => (
-                  <th key={h} className="text-left px-3 py-2.5 sm:px-4 sm:py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filtrado.length === 0 ? (
-                <tr><td colSpan={accesoTodas ? 7 : 6} className="text-center py-10 text-muted-foreground">Sin resultados</td></tr>
-              ) : filtrado.map((c, i) => (
-                <tr key={c.id}
-                  className="bg-card hover:bg-primary/5 transition-colors animate-[rpFadeUp_0.3s_ease_forwards] opacity-0"
-                  style={{ animationDelay: `${i * 20}ms` }}>
-                  {accesoTodas && (
-                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{c.sucursal?.nombre || '-'}</td>
-                  )}
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground whitespace-nowrap">{fechaHora(c.creado_en)}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-foreground">{c.proveedor?.nombre || '-'}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3"><BadgeTipo tipo={c.estado} /></td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{c.usuario?.nombre || '-'}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-semibold text-blue-600 dark:text-blue-400">{bs(c.total)}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground text-xs">{c.notas || '-'}</td>
+      {isLoading ? <Skeleton /> : filtrado.length === 0 ? (
+        <div className="text-center py-10 text-muted-foreground text-sm rounded-2xl border border-border">Sin resultados</div>
+      ) : (
+        <>
+          {/* Móvil y tablet: tarjetas */}
+          <div className="lg:hidden space-y-2">
+            {filtrado.map((c) => (
+              <CompraCard key={c.id} compra={c} mostrarSucursal={accesoTodas} />
+            ))}
+            <div className="flex items-center justify-between px-1 pt-1 text-xs font-semibold text-muted-foreground">
+              <span>TOTAL ({filtrado.length})</span>
+              <span className="text-blue-600 dark:text-blue-400">{bs(filtrado.reduce((s, c) => s + parseFloat(c.total || 0), 0))}</span>
+            </div>
+          </div>
+
+          {/* Escritorio: tabla */}
+          <div className="hidden lg:block overflow-x-auto rounded-2xl border border-border">
+            <table className="w-full text-xs sm:text-sm">
+              <thead>
+                <tr className="bg-muted border-b border-border">
+                  {[...(accesoTodas ? ['Sucursal'] : []), 'Fecha', 'Proveedor', 'Estado', 'Registrado por', 'Total', 'Notas'].map(h => (
+                    <th key={h} className="text-left px-3 py-2.5 sm:px-4 sm:py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-            {filtrado.length > 0 && (
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filtrado.map((c, i) => (
+                  <tr key={c.id}
+                    className="bg-card hover:bg-primary/5 transition-colors animate-[rpFadeUp_0.3s_ease_forwards] opacity-0"
+                    style={{ animationDelay: `${i * 20}ms` }}>
+                    {accesoTodas && (
+                      <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{c.sucursal?.nombre || '-'}</td>
+                    )}
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground whitespace-nowrap">{fechaHora(c.creado_en)}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-foreground">{c.proveedor?.nombre || '-'}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3"><BadgeTipo tipo={c.estado} /></td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{c.usuario?.nombre || '-'}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-semibold text-blue-600 dark:text-blue-400">{bs(c.total)}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground text-xs">{c.notas || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
               <tfoot>
                 <tr className="bg-muted border-t-2 border-primary/30">
                   <td colSpan={accesoTodas ? 5 : 4} className="px-3 py-2.5 sm:px-4 sm:py-3 text-right font-semibold text-muted-foreground text-sm">TOTAL</td>
@@ -182,9 +220,9 @@ export default function TabCompras({ empresa, logo, direccion, telefono }) {
                   <td />
                 </tr>
               </tfoot>
-            )}
-          </table>
-        </div>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

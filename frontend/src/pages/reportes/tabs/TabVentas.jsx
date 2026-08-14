@@ -7,6 +7,37 @@ import { useAuthStore } from '../../../store/authStore';
 import { exportarPDF } from '../utils/exportarPDF';
 import { FiltroFechas, StatCard, BadgeTipo, Skeleton, bs, fecha, fechaHora, hoy, inicioMes } from '../shared';
 
+const tipoLabel = (tipo) => tipo === 'llevar' ? 'Para llevar' : 'En mesa';
+
+function VentaCard({ venta, mostrarSucursal }) {
+  return (
+    <div className="bg-card border border-border rounded-xl p-3.5 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-xs text-muted-foreground whitespace-nowrap">{fechaHora(venta.creado_en)}</p>
+          <p className="font-medium text-foreground truncate">
+            {venta.nombre_cliente || venta.cliente?.nombre || 'Público General'}
+          </p>
+        </div>
+        <p className="font-bold text-emerald-600 dark:text-emerald-400 shrink-0 whitespace-nowrap">{bs(venta.total)}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <BadgeTipo tipo={venta.tipo || 'mesa'} />
+        <BadgeTipo tipo={venta.metodo_pago || 'efectivo'} />
+        {mostrarSucursal && venta.sucursal?.nombre && (
+          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+            {venta.sucursal.nombre}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border">
+        <span>{venta.tipo === 'llevar' ? `Para llevar${venta.numero_llevar ? ` #${venta.numero_llevar}` : ''}` : (venta.mesa?.nombre || 'Sin mesa')}</span>
+        <span>{venta.usuario?.nombre || '-'}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function TabVentas({ empresa, logo, direccion, telefono }) {
   const { usuario } = useAuth();
   const accesoTodas = useAuthStore((s) => s.usuario?.sucursal_activa?.id == null);
@@ -15,6 +46,7 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
   const [hasta, setHasta] = useState(hoy());
   const [filtroCajero, setFiltroCajero] = useState('todos');
   const [filtroMetodoPago, setFiltroMetodoPago] = useState('todos');
+  const [filtroTipo, setFiltroTipo] = useState('todos');
   const [params, setParams] = useState({ desde: inicioMes(), hasta: hoy() });
 
   const { data = [], isLoading } = useQuery({
@@ -44,8 +76,11 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
     if (filtroMetodoPago !== 'todos') {
       base = base.filter(v => (v.metodo_pago || 'efectivo') === filtroMetodoPago);
     }
+    if (filtroTipo !== 'todos') {
+      base = base.filter(v => (v.tipo || 'mesa') === filtroTipo);
+    }
     return base;
-  }, [data, filtroCajero, filtroSucursal, filtroMetodoPago, accesoTodas]);
+  }, [data, filtroCajero, filtroSucursal, filtroMetodoPago, filtroTipo, accesoTodas]);
 
   const stats = useMemo(() => {
     const total    = filtrado.reduce((s, v) => s + parseFloat(v.total || 0), 0);
@@ -78,15 +113,18 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
     ? 'Todos los métodos'
     : filtroMetodoPago === 'efectivo' ? 'Efectivo' : 'QR / Transferencia';
 
+  const tipoVentaLabel = filtroTipo === 'todos' ? 'Mesa y para llevar' : tipoLabel(filtroTipo);
+
   const exportar = () => exportarPDF({
     titulo:        'Reporte de Ventas',
-    subtitulo:     `${fecha(params.desde)} — ${fecha(params.hasta)} · ${cajeroLabel} · ${metodoPagoLabel}`,
+    subtitulo:     `${fecha(params.desde)} — ${fecha(params.hasta)} · ${cajeroLabel} · ${metodoPagoLabel} · ${tipoVentaLabel}`,
     empresa, logo, direccion, telefono,
     generadoPor:   usuario?.nombre,
-    columnas:      ['Fecha', 'Mesa', 'Cliente', 'Cajero', 'Método de pago', 'Total'],
+    columnas:      ['Fecha', 'Tipo', 'Mesa', 'Cliente', 'Cajero', 'Método de pago', 'Total'],
     filas:         filtrado.map(v => [
       fechaHora(v.creado_en),
-      v.mesa?.nombre || '-',
+      tipoLabel(v.tipo || 'mesa'),
+      v.tipo === 'llevar' ? (v.numero_llevar ? `#${v.numero_llevar}` : '-') : (v.mesa?.nombre || '-'),
       v.nombre_cliente || v.cliente?.nombre || 'Público General',
       v.usuario?.nombre || '-',
       v.metodo_pago || '-',
@@ -98,7 +136,7 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
       { label: 'Efectivo',           valor: bs(stats.efectivo) },
       { label: 'QR / Transferencia', valor: bs(stats.qr) },
     ],
-    nombreArchivo: `reporte-ventas-${params.desde}-${params.hasta}${filtroCajero !== 'todos' ? `-${cajeroLabel}` : ''}${filtroMetodoPago !== 'todos' ? `-${filtroMetodoPago}` : ''}.pdf`,
+    nombreArchivo: `reporte-ventas-${params.desde}-${params.hasta}${filtroCajero !== 'todos' ? `-${cajeroLabel}` : ''}${filtroMetodoPago !== 'todos' ? `-${filtroMetodoPago}` : ''}${filtroTipo !== 'todos' ? `-${filtroTipo}` : ''}.pdf`,
   });
 
   return (
@@ -124,6 +162,15 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
               <option value="todos">Todos</option>
               <option value="efectivo">Efectivo</option>
               <option value="qr">QR / Transferencia</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-foreground">Tipo de venta</label>
+            <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}
+              className="px-3 py-2 text-sm rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
+              <option value="todos">Todos</option>
+              <option value="mesa">En mesa</option>
+              <option value="llevar">Para llevar</option>
             </select>
           </div>
           {accesoTodas && (
@@ -177,45 +224,62 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
         </div>
       )}
 
-      {isLoading ? <Skeleton /> : (
-        <div className="overflow-x-auto rounded-2xl border border-border">
-          <table className="w-full text-xs sm:text-sm">
-            <thead>
-              <tr className="bg-muted border-b border-border">
-                {[...(accesoTodas ? ['Sucursal'] : []), 'Fecha', 'Mesa', 'Cliente', 'Cajero', 'Método', 'Total'].map(h => (
-                  <th key={h} className="text-left px-3 py-2.5 sm:px-4 sm:py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filtrado.length === 0 ? (
-                <tr><td colSpan={accesoTodas ? 7 : 6} className="text-center py-10 text-muted-foreground">Sin resultados para el período</td></tr>
-              ) : filtrado.map((v, i) => (
-                <tr key={v.id}
-                  className="bg-card hover:bg-primary/5 transition-colors animate-[rpFadeUp_0.3s_ease_forwards] opacity-0"
-                  style={{ animationDelay: `${i * 20}ms` }}>
-                  {accesoTodas && (
-                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{v.sucursal?.nombre || '-'}</td>
-                  )}
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground whitespace-nowrap">{fechaHora(v.creado_en)}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-foreground">{v.mesa?.nombre || '-'}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{v.nombre_cliente || v.cliente?.nombre || 'Público General'}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{v.usuario?.nombre || '-'}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3"><BadgeTipo tipo={v.metodo_pago || 'efectivo'} /></td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-semibold text-emerald-600 dark:text-emerald-400">{bs(v.total)}</td>
+      {isLoading ? <Skeleton /> : filtrado.length === 0 ? (
+        <div className="text-center py-10 text-muted-foreground text-sm rounded-2xl border border-border">
+          Sin resultados para el período
+        </div>
+      ) : (
+        <>
+          {/* Móvil y tablet: tarjetas */}
+          <div className="lg:hidden space-y-2">
+            {filtrado.map((v) => (
+              <VentaCard key={v.id} venta={v} mostrarSucursal={accesoTodas} />
+            ))}
+            <div className="flex items-center justify-between px-1 pt-1 text-xs font-semibold text-muted-foreground">
+              <span>TOTAL ({filtrado.length})</span>
+              <span className="text-emerald-600 dark:text-emerald-400">{bs(stats.total)}</span>
+            </div>
+          </div>
+
+          {/* Escritorio: tabla */}
+          <div className="hidden lg:block overflow-x-auto rounded-2xl border border-border">
+            <table className="w-full text-xs sm:text-sm">
+              <thead>
+                <tr className="bg-muted border-b border-border">
+                  {[...(accesoTodas ? ['Sucursal'] : []), 'Fecha', 'Tipo', 'Mesa', 'Cliente', 'Cajero', 'Método', 'Total'].map(h => (
+                    <th key={h} className="text-left px-3 py-2.5 sm:px-4 sm:py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-            {filtrado.length > 0 && (
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filtrado.map((v, i) => (
+                  <tr key={v.id}
+                    className="bg-card hover:bg-primary/5 transition-colors animate-[rpFadeUp_0.3s_ease_forwards] opacity-0"
+                    style={{ animationDelay: `${i * 20}ms` }}>
+                    {accesoTodas && (
+                      <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{v.sucursal?.nombre || '-'}</td>
+                    )}
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground whitespace-nowrap">{fechaHora(v.creado_en)}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3"><BadgeTipo tipo={v.tipo || 'mesa'} /></td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-foreground">
+                      {v.tipo === 'llevar' ? (v.numero_llevar ? `#${v.numero_llevar}` : '-') : (v.mesa?.nombre || '-')}
+                    </td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{v.nombre_cliente || v.cliente?.nombre || 'Público General'}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{v.usuario?.nombre || '-'}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3"><BadgeTipo tipo={v.metodo_pago || 'efectivo'} /></td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-semibold text-emerald-600 dark:text-emerald-400">{bs(v.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
               <tfoot>
                 <tr className="bg-muted border-t-2 border-primary/30">
-                  <td colSpan={accesoTodas ? 6 : 5} className="px-3 py-2.5 sm:px-4 sm:py-3 text-right font-semibold text-muted-foreground text-sm">TOTAL</td>
+                  <td colSpan={accesoTodas ? 7 : 6} className="px-3 py-2.5 sm:px-4 sm:py-3 text-right font-semibold text-muted-foreground text-sm">TOTAL</td>
                   <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-bold text-emerald-600 dark:text-emerald-400">{bs(stats.total)}</td>
                 </tr>
               </tfoot>
-            )}
-          </table>
-        </div>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

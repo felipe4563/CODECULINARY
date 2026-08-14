@@ -7,33 +7,59 @@ import { useAuthStore } from '../../../store/authStore';
 import { exportarPDF } from '../utils/exportarPDF';
 import { FiltroFechas, StatCard, Skeleton, bs, fecha, hoy, inicioMes } from '../shared';
 
+// Clave de la variante: producto + combinación exacta de opciones elegidas
+// (ordenadas por id para que "Papaya, Grande" y "Grande, Papaya" caigan en la
+// misma fila). Un producto sin opciones elegidas queda como su propia fila.
+// Los combos no tienen opciones — quedan como su propia fila por combo_id
+// (si no se cuentan, la suma de este reporte queda por debajo del total real
+// del pedido, ver reporte de Ventas).
+function esLineaCombo(detalle) {
+  return detalle.producto?.id == null && detalle.combo?.id != null;
+}
+
+function claveVariante(detalle) {
+  if (esLineaCombo(detalle)) return `combo-${detalle.combo.id}`;
+  const opciones = [...(detalle.opciones || [])].sort((a, b) => a.id - b.id);
+  return `${detalle.producto?.id}::${opciones.map(o => o.id).join(',')}`;
+}
+
+function nombreVariante(detalle) {
+  if (esLineaCombo(detalle)) return `${detalle.combo?.nombre || 'Combo eliminado'} (Combo)`;
+  const opciones = [...(detalle.opciones || [])].sort((a, b) => a.id - b.id);
+  const base = detalle.producto?.nombre || 'Producto eliminado';
+  return opciones.length ? `${base} — ${opciones.map(o => o.nombre).join(', ')}` : base;
+}
+
 const puestoClase = (i) =>
   i === 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400'
   : i === 1 ? 'bg-muted text-foreground'
   : i === 2 ? 'bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400'
   : 'bg-muted text-muted-foreground';
 
-function ProductoCard({ producto, i, maxCantidad, pct }) {
+function VarianteCard({ variante, i, maxCantidad, pct }) {
   return (
     <div className="bg-card border border-border rounded-xl p-3.5 flex items-center gap-3">
       <span className={`shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${puestoClase(i)}`}>{i + 1}</span>
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-foreground truncate">{producto.nombre}</p>
+        <p className="font-medium text-foreground truncate">
+          {variante.nombre}
+          {!variante.conOpciones && <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">(sin opciones)</span>}
+        </p>
         <div className="flex items-center gap-2 mt-0.5">
           <span className="text-xs text-muted-foreground whitespace-nowrap">
-            {producto.cantidad.toLocaleString('es-BO', { maximumFractionDigits: 2 })} {producto.unidad} · {pct.toFixed(1)}%
+            {variante.cantidad.toLocaleString('es-BO', { maximumFractionDigits: 2 })} {variante.unidad} · {pct.toFixed(1)}%
           </span>
           <div className="flex-1 min-w-[2.5rem] h-1.5 rounded-full bg-muted overflow-hidden">
-            <div className="h-full bg-primary rounded-full" style={{ width: `${Math.max((producto.cantidad / maxCantidad) * 100, 4)}%` }} />
+            <div className="h-full bg-primary rounded-full" style={{ width: `${Math.max((variante.cantidad / maxCantidad) * 100, 4)}%` }} />
           </div>
         </div>
       </div>
-      <p className="font-bold text-emerald-600 dark:text-emerald-400 shrink-0 whitespace-nowrap">{bs(producto.monto)}</p>
+      <p className="font-bold text-emerald-600 dark:text-emerald-400 shrink-0 whitespace-nowrap">{bs(variante.monto)}</p>
     </div>
   );
 }
 
-export default function TabProductos({ empresa, logo, direccion, telefono }) {
+export default function TabVariantes({ empresa, logo, direccion, telefono }) {
   const { usuario } = useAuth();
   const accesoTodas = useAuthStore((s) => s.usuario?.sucursal_activa?.id == null);
   const [filtroSucursal, setFiltroSucursal] = useState('todas');
@@ -42,7 +68,7 @@ export default function TabProductos({ empresa, logo, direccion, telefono }) {
   const [params, setParams] = useState({ desde: inicioMes(), hasta: hoy() });
 
   const { data = [], isLoading } = useQuery({
-    queryKey: ['reporte-ventas-productos', params],
+    queryKey: ['reporte-ventas-variantes', params],
     queryFn: () => getReporteVentas(params),
   });
 
@@ -57,65 +83,63 @@ export default function TabProductos({ empresa, logo, direccion, telefono }) {
     return data.filter(v => String(v.sucursal?.id) === filtroSucursal);
   }, [data, filtroSucursal, accesoTodas]);
 
-  const productos = useMemo(() => {
+  const variantes = useMemo(() => {
     const mapa = new Map();
     filtrado.forEach(v => {
       (v.detalles || []).forEach(d => {
-        // Una línea es de producto (d.producto) o de combo (d.combo) — nunca
-        // ambas. Si se ignoran las de combo, la suma de este reporte queda
-        // por debajo del total real del pedido (ver reporte de Ventas).
-        const esCombo = d.producto?.id == null && d.combo?.id != null;
-        const id = esCombo ? `combo-${d.combo.id}` : d.producto?.id;
-        if (id == null) return;
+        if (d.producto?.id == null && d.combo?.id == null) return;
+        const clave = claveVariante(d);
         const esPesable = d.peso != null;
         const cantidad = esPesable ? parseFloat(d.peso || 0) : (d.cantidad || 0);
         const monto = (d.cantidad || 0) * parseFloat(d.precio || 0);
-        if (!mapa.has(id)) {
-          const nombre = esCombo ? `${d.combo?.nombre || 'Combo eliminado'} (Combo)` : (d.producto?.nombre || 'Producto eliminado');
-          mapa.set(id, { id, nombre, unidad: esPesable ? 'kg' : 'un', cantidad: 0, monto: 0, ventas: 0 });
+        if (!mapa.has(clave)) {
+          mapa.set(clave, {
+            clave, nombre: nombreVariante(d), unidad: esPesable ? 'kg' : 'un',
+            conOpciones: (d.opciones || []).length > 0, cantidad: 0, monto: 0, ventas: 0,
+          });
         }
-        const p = mapa.get(id);
-        p.cantidad += cantidad;
-        p.monto += monto;
-        p.ventas += 1;
+        const variante = mapa.get(clave);
+        variante.cantidad += cantidad;
+        variante.monto += monto;
+        variante.ventas += 1;
       });
     });
     return Array.from(mapa.values()).sort((a, b) => b.cantidad - a.cantidad);
   }, [filtrado]);
 
   const stats = useMemo(() => {
-    const ingresoTotal = productos.reduce((s, p) => s + p.monto, 0);
+    const ingresoTotal = variantes.reduce((s, v) => s + v.monto, 0);
     return {
-      distintos: productos.length,
+      distintas: variantes.length,
       ventas: filtrado.length,
       ingresoTotal,
-      top: productos[0] || null,
+      top: variantes[0] || null,
     };
-  }, [productos, filtrado]);
+  }, [variantes, filtrado]);
 
-  const maxCantidad = productos[0]?.cantidad || 1;
+  const maxCantidad = variantes[0]?.cantidad || 1;
 
   const exportar = () => exportarPDF({
-    titulo:        'Productos Más Vendidos',
+    titulo:        'Variantes Más Vendidas',
     subtitulo:     `${fecha(params.desde)} — ${fecha(params.hasta)}`,
     empresa, logo, direccion, telefono,
     generadoPor:   usuario?.nombre,
-    columnas:      ['#', 'Producto', 'Cantidad', 'Unidad', 'Monto generado', '% del ingreso'],
-    filas:         productos.map((p, i) => [
+    columnas:      ['#', 'Producto / Opción', 'Cantidad', 'Unidad', 'Monto generado', '% del ingreso'],
+    filas:         variantes.map((v, i) => [
       i + 1,
-      p.nombre,
-      p.cantidad.toLocaleString('es-BO', { maximumFractionDigits: 2 }),
-      p.unidad,
-      bs(p.monto),
-      stats.ingresoTotal > 0 ? `${((p.monto / stats.ingresoTotal) * 100).toFixed(1)}%` : '0%',
+      v.nombre,
+      v.cantidad.toLocaleString('es-BO', { maximumFractionDigits: 2 }),
+      v.unidad,
+      bs(v.monto),
+      stats.ingresoTotal > 0 ? `${((v.monto / stats.ingresoTotal) * 100).toFixed(1)}%` : '0%',
     ]),
     totales: [
-      { label: 'Productos distintos', valor: stats.distintos },
+      { label: 'Variantes distintas', valor: stats.distintas },
       { label: 'N° Ventas',           valor: stats.ventas },
       { label: 'Ingreso generado',    valor: bs(stats.ingresoTotal) },
-      { label: 'Más vendido',         valor: stats.top?.nombre || '-' },
+      { label: 'Más vendida',         valor: stats.top?.nombre || '-' },
     ],
-    nombreArchivo: `productos-mas-vendidos-${params.desde}-${params.hasta}.pdf`,
+    nombreArchivo: `variantes-mas-vendidas-${params.desde}-${params.hasta}.pdf`,
   });
 
   return (
@@ -137,28 +161,28 @@ export default function TabProductos({ empresa, logo, direccion, telefono }) {
             </div>
           )}
         </div>
-        <button onClick={exportar} disabled={!productos.length}
+        <button onClick={exportar} disabled={!variantes.length}
           className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-40 w-full sm:w-auto">
           <Download className="w-4 h-4" /> Exportar PDF
         </button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard label="Productos distintos" valor={stats.distintos}             color="primary" Icono={Layers}       idx={0} />
-        <StatCard label="N° Ventas"           valor={stats.ventas}                color="blue"    Icono={ShoppingCart} idx={1} />
-        <StatCard label="Ingreso generado"    valor={bs(stats.ingresoTotal)}      color="emerald" Icono={DollarSign}   idx={2} />
-        <StatCard label="Más vendido"         valor={stats.top?.nombre || '-'}    color="amber"   Icono={Trophy}       idx={3} />
+        <StatCard label="Variantes distintas" valor={stats.distintas}          color="primary" Icono={Layers}       idx={0} />
+        <StatCard label="N° Ventas"           valor={stats.ventas}             color="blue"    Icono={ShoppingCart} idx={1} />
+        <StatCard label="Ingreso generado"    valor={bs(stats.ingresoTotal)}   color="emerald" Icono={DollarSign}   idx={2} />
+        <StatCard label="Más vendida"         valor={stats.top?.nombre || '-'} color="amber"   Icono={Trophy}       idx={3} />
       </div>
 
-      {isLoading ? <Skeleton /> : productos.length === 0 ? (
+      {isLoading ? <Skeleton /> : variantes.length === 0 ? (
         <div className="text-center py-10 text-muted-foreground text-sm rounded-2xl border border-border">Sin ventas para el período</div>
       ) : (
         <>
           {/* Móvil y tablet: tarjetas */}
           <div className="lg:hidden space-y-2">
-            {productos.map((p, i) => (
-              <ProductoCard key={p.id} producto={p} i={i} maxCantidad={maxCantidad}
-                pct={stats.ingresoTotal > 0 ? (p.monto / stats.ingresoTotal) * 100 : 0} />
+            {variantes.map((v, i) => (
+              <VarianteCard key={v.clave} variante={v} i={i} maxCantidad={maxCantidad}
+                pct={stats.ingresoTotal > 0 ? (v.monto / stats.ingresoTotal) * 100 : 0} />
             ))}
             <div className="flex items-center justify-between px-1 pt-1 text-xs font-semibold text-muted-foreground">
               <span>TOTAL</span>
@@ -171,33 +195,38 @@ export default function TabProductos({ empresa, logo, direccion, telefono }) {
             <table className="w-full text-xs sm:text-sm">
               <thead>
                 <tr className="bg-muted border-b border-border">
-                  {['#', 'Producto', 'Cantidad vendida', 'Monto generado', '% del ingreso'].map(h => (
+                  {['#', 'Producto / Opción', 'Cantidad vendida', 'Monto generado', '% del ingreso'].map(h => (
                     <th key={h} className="text-left px-3 py-2.5 sm:px-4 sm:py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {productos.map((p, i) => {
-                  const pct = stats.ingresoTotal > 0 ? (p.monto / stats.ingresoTotal) * 100 : 0;
+                {variantes.map((v, i) => {
+                  const pct = stats.ingresoTotal > 0 ? (v.monto / stats.ingresoTotal) * 100 : 0;
                   return (
-                    <tr key={p.id}
+                    <tr key={v.clave}
                       className="bg-card hover:bg-primary/5 transition-colors animate-[rpFadeUp_0.3s_ease_forwards] opacity-0"
                       style={{ animationDelay: `${i * 20}ms` }}>
                       <td className="px-3 py-2.5 sm:px-4 sm:py-3">
                         <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${puestoClase(i)}`}>{i + 1}</span>
                       </td>
-                      <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-foreground">{p.nombre}</td>
+                      <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-foreground">
+                        {v.nombre}
+                        {!v.conOpciones && (
+                          <span className="ml-2 text-[10px] font-normal text-muted-foreground">(sin opciones)</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5 sm:px-4 sm:py-3">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-foreground whitespace-nowrap">
-                            {p.cantidad.toLocaleString('es-BO', { maximumFractionDigits: 2 })} {p.unidad}
+                            {v.cantidad.toLocaleString('es-BO', { maximumFractionDigits: 2 })} {v.unidad}
                           </span>
                           <div className="hidden sm:block flex-1 min-w-[3rem] max-w-[6rem] h-1.5 rounded-full bg-muted overflow-hidden">
-                            <div className="h-full bg-primary rounded-full" style={{ width: `${Math.max((p.cantidad / maxCantidad) * 100, 4)}%` }} />
+                            <div className="h-full bg-primary rounded-full" style={{ width: `${Math.max((v.cantidad / maxCantidad) * 100, 4)}%` }} />
                           </div>
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-semibold text-emerald-600 dark:text-emerald-400">{bs(p.monto)}</td>
+                      <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-semibold text-emerald-600 dark:text-emerald-400">{bs(v.monto)}</td>
                       <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{pct.toFixed(1)}%</td>
                     </tr>
                   );

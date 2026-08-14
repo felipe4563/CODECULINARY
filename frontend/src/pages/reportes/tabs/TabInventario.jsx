@@ -9,6 +9,35 @@ import { FiltroFechas, StatCard, BadgeTipo, Skeleton, fecha, fechaHora, hoy, ini
 
 const TIPOS = ['todos', 'entrada', 'salida', 'venta', 'compra', 'ajuste'];
 
+function MovimientoCard({ mov, mostrarSucursal }) {
+  return (
+    <div className="bg-card border border-border rounded-xl p-3.5 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-xs text-muted-foreground whitespace-nowrap">{fechaHora(mov.creado_en)}</p>
+          <p className="font-medium text-foreground truncate">{mov.producto?.nombre || '-'}</p>
+        </div>
+        <p className="font-bold text-foreground shrink-0 whitespace-nowrap">{mov.cantidad}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <BadgeTipo tipo={mov.tipo} />
+        {mostrarSucursal && mov.sucursal?.nombre && (
+          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+            {mov.sucursal.nombre}
+          </span>
+        )}
+        <span className="text-[11px] text-muted-foreground">
+          {mov.stock_anterior ?? '-'} → <span className="font-medium text-primary">{mov.stock_nuevo ?? '-'}</span>
+        </span>
+      </div>
+      <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border">
+        <span className="truncate">{mov.nota || 'Sin nota'}</span>
+        <span className="shrink-0 ml-2">{mov.usuario?.nombre || '-'}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function TabInventario({ empresa, logo, direccion, telefono }) {
   const { usuario } = useAuth();
   const accesoTodas = useAuthStore((s) => s.usuario?.sucursal_activa?.id == null);
@@ -149,39 +178,49 @@ export default function TabInventario({ empresa, logo, direccion, telefono }) {
         </div>
       )}
 
-      {isLoading ? <Skeleton /> : (
-        <div className="overflow-x-auto rounded-2xl border border-border">
-          <table className="w-full text-xs sm:text-sm">
-            <thead>
-              <tr className="bg-muted border-b border-border">
-                {[...(accesoTodas ? ['Sucursal'] : []), 'Fecha', 'Producto', 'Tipo', 'Cantidad', 'Stock Ant.', 'Stock Nuevo', 'Usuario', 'Nota'].map(h => (
-                  <th key={h} className="text-left px-3 py-2.5 sm:px-4 sm:py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filtrado.length === 0 ? (
-                <tr><td colSpan={accesoTodas ? 9 : 8} className="text-center py-10 text-muted-foreground">Sin resultados</td></tr>
-              ) : filtrado.map((r, i) => (
-                <tr key={r.id}
-                  className="bg-card hover:bg-primary/5 transition-colors animate-[rpFadeUp_0.3s_ease_forwards] opacity-0"
-                  style={{ animationDelay: `${i * 20}ms` }}>
-                  {accesoTodas && (
-                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{r.sucursal?.nombre || '-'}</td>
-                  )}
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground whitespace-nowrap">{fechaHora(r.creado_en)}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-foreground">{r.producto?.nombre || '-'}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3"><BadgeTipo tipo={r.tipo} /></td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-semibold text-foreground">{r.cantidad}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{r.stock_anterior ?? '-'}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-primary">{r.stock_nuevo ?? '-'}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{r.usuario?.nombre || '-'}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground text-xs">{r.nota || '-'}</td>
+      {isLoading ? <Skeleton /> : filtrado.length === 0 ? (
+        <div className="text-center py-10 text-muted-foreground text-sm rounded-2xl border border-border">Sin resultados</div>
+      ) : (
+        <>
+          {/* Móvil y tablet: tarjetas */}
+          <div className="lg:hidden space-y-2">
+            {filtrado.map((r) => (
+              <MovimientoCard key={r.id} mov={r} mostrarSucursal={accesoTodas} />
+            ))}
+          </div>
+
+          {/* Escritorio: tabla */}
+          <div className="hidden lg:block overflow-x-auto rounded-2xl border border-border">
+            <table className="w-full text-xs sm:text-sm">
+              <thead>
+                <tr className="bg-muted border-b border-border">
+                  {[...(accesoTodas ? ['Sucursal'] : []), 'Fecha', 'Producto', 'Tipo', 'Cantidad', 'Stock Ant.', 'Stock Nuevo', 'Usuario', 'Nota'].map(h => (
+                    <th key={h} className="text-left px-3 py-2.5 sm:px-4 sm:py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filtrado.map((r, i) => (
+                  <tr key={r.id}
+                    className="bg-card hover:bg-primary/5 transition-colors animate-[rpFadeUp_0.3s_ease_forwards] opacity-0"
+                    style={{ animationDelay: `${i * 20}ms` }}>
+                    {accesoTodas && (
+                      <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{r.sucursal?.nombre || '-'}</td>
+                    )}
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground whitespace-nowrap">{fechaHora(r.creado_en)}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-foreground">{r.producto?.nombre || '-'}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3"><BadgeTipo tipo={r.tipo} /></td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-semibold text-foreground">{r.cantidad}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{r.stock_anterior ?? '-'}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-primary">{r.stock_nuevo ?? '-'}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{r.usuario?.nombre || '-'}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground text-xs">{r.nota || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

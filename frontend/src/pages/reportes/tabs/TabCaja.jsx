@@ -7,6 +7,36 @@ import { useAuthStore } from '../../../store/authStore';
 import { exportarPDF } from '../utils/exportarPDF';
 import { FiltroFechas, StatCard, BadgeTipo, Skeleton, bs, fecha, fechaHora, hoy, inicioMes } from '../shared';
 
+function MovimientoCajaCard({ mov, mostrarSucursal }) {
+  return (
+    <div className="bg-card border border-border rounded-xl p-3.5 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-xs text-muted-foreground whitespace-nowrap">{fechaHora(mov.creado_en)}</p>
+          <p className="font-medium text-foreground truncate">{mov.concepto || '-'}</p>
+        </div>
+        <p className={`font-bold shrink-0 whitespace-nowrap ${mov.tipo === 'ingreso' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+          {mov.tipo === 'egreso' ? '-' : ''}{bs(mov.monto)}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <BadgeTipo tipo={mov.tipo} />
+        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground capitalize">
+          {mov.metodo_pago || '-'}
+        </span>
+        {mostrarSucursal && mov.sucursal?.nombre && (
+          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+            {mov.sucursal.nombre}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center justify-end text-xs text-muted-foreground pt-1 border-t border-border">
+        <span>{mov.usuario?.nombre || '-'}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function TabCaja({ empresa, logo, direccion, telefono }) {
   const { usuario } = useAuth();
   const accesoTodas = useAuthStore((s) => s.usuario?.sucursal_activa?.id == null);
@@ -145,38 +175,50 @@ export default function TabCaja({ empresa, logo, direccion, telefono }) {
         </div>
       )}
 
-      {isLoading ? <Skeleton /> : (
-        <div className="overflow-x-auto rounded-2xl border border-border">
-          <table className="w-full text-xs sm:text-sm">
-            <thead>
-              <tr className="bg-muted border-b border-border">
-                {[...(accesoTodas ? ['Sucursal'] : []), 'Fecha', 'Tipo', 'Concepto', 'Método', 'Usuario', 'Monto'].map(h => (
-                  <th key={h} className="text-left px-3 py-2.5 sm:px-4 sm:py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filtrado.length === 0 ? (
-                <tr><td colSpan={accesoTodas ? 7 : 6} className="text-center py-10 text-muted-foreground">Sin resultados</td></tr>
-              ) : filtrado.map((r, i) => (
-                <tr key={r.id}
-                  className="bg-card hover:bg-primary/5 transition-colors animate-[rpFadeUp_0.3s_ease_forwards] opacity-0"
-                  style={{ animationDelay: `${i * 20}ms` }}>
-                  {accesoTodas && (
-                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{r.sucursal?.nombre || '-'}</td>
-                  )}
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground whitespace-nowrap">{fechaHora(r.creado_en)}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3"><BadgeTipo tipo={r.tipo} /></td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-foreground">{r.concepto || '-'}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground capitalize">{r.metodo_pago || '-'}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{r.usuario?.nombre || '-'}</td>
-                  <td className={`px-3 py-2.5 sm:px-4 sm:py-3 font-semibold ${r.tipo === 'ingreso' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                    {r.tipo === 'egreso' ? '-' : ''}{bs(r.monto)}
-                  </td>
+      {isLoading ? <Skeleton /> : filtrado.length === 0 ? (
+        <div className="text-center py-10 text-muted-foreground text-sm rounded-2xl border border-border">Sin resultados</div>
+      ) : (
+        <>
+          {/* Móvil y tablet: tarjetas */}
+          <div className="lg:hidden space-y-2">
+            {filtrado.map((r) => (
+              <MovimientoCajaCard key={r.id} mov={r} mostrarSucursal={accesoTodas} />
+            ))}
+            <div className="flex items-center justify-between px-1 pt-1 text-xs font-semibold text-muted-foreground">
+              <span>BALANCE</span>
+              <span className={stats.balance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>{bs(stats.balance)}</span>
+            </div>
+          </div>
+
+          {/* Escritorio: tabla */}
+          <div className="hidden lg:block overflow-x-auto rounded-2xl border border-border">
+            <table className="w-full text-xs sm:text-sm">
+              <thead>
+                <tr className="bg-muted border-b border-border">
+                  {[...(accesoTodas ? ['Sucursal'] : []), 'Fecha', 'Tipo', 'Concepto', 'Método', 'Usuario', 'Monto'].map(h => (
+                    <th key={h} className="text-left px-3 py-2.5 sm:px-4 sm:py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-            {filtrado.length > 0 && (
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filtrado.map((r, i) => (
+                  <tr key={r.id}
+                    className="bg-card hover:bg-primary/5 transition-colors animate-[rpFadeUp_0.3s_ease_forwards] opacity-0"
+                    style={{ animationDelay: `${i * 20}ms` }}>
+                    {accesoTodas && (
+                      <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{r.sucursal?.nombre || '-'}</td>
+                    )}
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground whitespace-nowrap">{fechaHora(r.creado_en)}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3"><BadgeTipo tipo={r.tipo} /></td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-foreground">{r.concepto || '-'}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground capitalize">{r.metodo_pago || '-'}</td>
+                    <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-muted-foreground">{r.usuario?.nombre || '-'}</td>
+                    <td className={`px-3 py-2.5 sm:px-4 sm:py-3 font-semibold ${r.tipo === 'ingreso' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                      {r.tipo === 'egreso' ? '-' : ''}{bs(r.monto)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
               <tfoot>
                 <tr className="bg-muted border-t-2 border-primary/30">
                   <td colSpan={accesoTodas ? 6 : 5} className="px-3 py-2.5 sm:px-4 sm:py-3 text-right font-semibold text-muted-foreground text-sm">BALANCE</td>
@@ -185,9 +227,9 @@ export default function TabCaja({ empresa, logo, direccion, telefono }) {
                   </td>
                 </tr>
               </tfoot>
-            )}
-          </table>
-        </div>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

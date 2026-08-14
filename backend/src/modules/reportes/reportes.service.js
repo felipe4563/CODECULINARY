@@ -1,7 +1,8 @@
 const { Op } = require('sequelize');
 const {
-  Pedido, DetallePedido, Mesa, Cliente, Producto, Usuario,
+  Pedido, DetallePedido, Mesa, Cliente, Producto, Combo, Usuario,
   RegistroInventario, Compra, Proveedor, LibroCaja, SesionCaja, Sucursal,
+  Opcion, GrupoOpciones,
 } = require('../../models');
 
 // Offset fijo de Bolivia: un datetime sin offset se parsea en la hora local
@@ -28,7 +29,14 @@ async function ventas({ desde, hasta, sucursal_id, acceso_todas } = {}) {
       INCLUDE_SUCURSAL,
       {
         model: DetallePedido, as: 'detalles',
-        include: [{ model: Producto, as: 'producto', attributes: ['id', 'nombre'] }],
+        include: [
+          { model: Producto, as: 'producto', attributes: ['id', 'nombre'] },
+          { model: Combo, as: 'combo', attributes: ['id', 'nombre'] },
+          {
+            model: Opcion, as: 'opciones', attributes: ['id', 'nombre'], through: { attributes: [] },
+            include: [{ model: GrupoOpciones, as: 'grupo', attributes: ['id', 'nombre'] }],
+          },
+        ],
       },
     ],
     order: [['creado_en', 'DESC']],

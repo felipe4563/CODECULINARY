@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { BarChart2, FileText, Package, Truck, BookOpen, Trophy } from 'lucide-react';
+import { BarChart2, FileText, Package, Truck, BookOpen, Trophy, ListTree } from 'lucide-react';
 import { getConfiguracion, logoSrc } from '../../api/configuracion';
 import { usePermisos } from '../../hooks/usePermisos';
 import TabVentas     from './tabs/TabVentas';
 import TabProductos  from './tabs/TabProductos';
+import TabVariantes  from './tabs/TabVariantes';
 import TabInventario from './tabs/TabInventario';
 import TabCompras    from './tabs/TabCompras';
 import TabCaja       from './tabs/TabCaja';
@@ -12,6 +13,7 @@ import TabCaja       from './tabs/TabCaja';
 const TABS = [
   { id: 'ventas',     label: 'Ventas',        Icono: FileText, Comp: TabVentas },
   { id: 'productos',  label: 'Más vendidos',  Icono: Trophy,   Comp: TabProductos },
+  { id: 'variantes',  label: 'Variantes',     Icono: ListTree, Comp: TabVariantes },
   { id: 'inventario', label: 'Inventario',    Icono: Package,  Comp: TabInventario },
   { id: 'compras',    label: 'Compras',       Icono: Truck,    Comp: TabCompras },
   { id: 'caja',       label: 'Caja',          Icono: BookOpen, Comp: TabCaja },
