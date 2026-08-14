@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Grid3x3, Users, RefreshCw } from 'lucide-react';
+import { Plus, Pencil, Trash2, Grid3x3, Users, RefreshCw, QrCode, Printer } from 'lucide-react';
+import QRCode from 'qrcode';
 import { getAreas } from '../../../api/areas';
 import { getMesas, crearMesa, actualizarMesa, eliminarMesa } from '../../../api/mesas';
 import Modal from '../../../components/ui/Modal';
@@ -13,6 +14,7 @@ export default function TabMesas({ puedeEditar }) {
   const [modal, setModal] = useState(null);
   const [confirmEliminar, setConfirmEliminar] = useState(null);
   const [filtroArea, setFiltroArea] = useState('');
+  const [modalQr, setModalQr] = useState(null);
 
   const { data: areas = [] } = useQuery({ queryKey: ['areas'], queryFn: getAreas });
   const { data: mesas = [], isLoading } = useQuery({ queryKey: ['mesas'], queryFn: () => getMesas() });
@@ -102,6 +104,13 @@ export default function TabMesas({ puedeEditar }) {
                   {puedeEditar && (
                     <div className="flex gap-1 shrink-0">
                       <button
+                        onClick={() => setModalQr(mesa)}
+                        title="Ver código QR"
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                      >
+                        <QrCode className="w-3.5 h-3.5" />
+                      </button>
+                      <button
                         onClick={() => setModal({ modo: 'editar', mesa })}
                         className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                       >
@@ -145,6 +154,13 @@ export default function TabMesas({ puedeEditar }) {
                         {puedeEditar && (
                           <td className="px-4 py-3">
                             <div className="flex gap-1 justify-end">
+                              <button
+                                onClick={() => setModalQr(mesa)}
+                                title="Ver código QR"
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                              >
+                                <QrCode className="w-3.5 h-3.5" />
+                              </button>
                               <button
                                 onClick={() => setModal({ modo: 'editar', mesa })}
                                 className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
@@ -206,6 +222,9 @@ export default function TabMesas({ puedeEditar }) {
           </div>
         </Modal>
       )}
+
+      {/* Modal QR */}
+      {modalQr && <ModalCodigoQr mesa={modalQr} onClose={() => setModalQr(null)} />}
     </SettingsCard>
   );
 }
@@ -293,5 +312,33 @@ function EstadoBadge({ estado }) {
     <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${cfg}`}>
       {estado}
     </span>
+  );
+}
+
+function ModalCodigoQr({ mesa, onClose }) {
+  const [dataUrl, setDataUrl] = useState(null);
+  const url = `${window.location.origin}/m/${mesa.codigo_qr}`;
+
+  useEffect(() => {
+    QRCode.toDataURL(url, { width: 320, margin: 1 }).then(setDataUrl);
+  }, [url]);
+
+  return (
+    <Modal titulo={`QR — ${mesa.nombre}`} onClose={onClose}>
+      <div className="flex flex-col items-center gap-4">
+        {dataUrl ? (
+          <img src={dataUrl} alt={`QR de ${mesa.nombre}`} className="w-64 h-64" id="qr-imprimir" />
+        ) : (
+          <div className="w-64 h-64 flex items-center justify-center text-muted-foreground">Generando...</div>
+        )}
+        <p className="text-xs text-muted-foreground break-all text-center">{url}</p>
+        <button
+          onClick={() => window.print()}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium"
+        >
+          <Printer className="w-4 h-4" /> Imprimir
+        </button>
+      </div>
+    </Modal>
   );
 }
