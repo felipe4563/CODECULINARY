@@ -22,8 +22,24 @@ async function obtenerMenu(codigo_qr) {
   return { mesa: { id: mesa.id, nombre: mesa.nombre }, productos };
 }
 
+// Tope de pedidos con pago QR en curso por sesión de mesa. Cada POST dispara
+// una llamada real (y facturable) a CodePay para generar el QR, y el endpoint
+// es anónimo: quien haya fotografiado el QR de una mesa podría scriptearlo.
+// No es un rate limiter con ventana de tiempo (eso queda para un middleware
+// dedicado, fuera de alcance acá): simplemente no se deja acumular más de
+// MAX_PAGOS_PENDIENTES pagos sin resolver en la misma sesión.
+const MAX_PAGOS_PENDIENTES = 3;
+
 async function crearPedido(codigo_qr, { items }) {
   const { mesa, sesion } = await _mesaConSesionActiva(codigo_qr);
+
+  const pendientes = await Pedido.count({ where: { mesa_sesion_id: sesion.id, estado: 'pendiente_pago' } });
+  if (pendientes >= MAX_PAGOS_PENDIENTES) {
+    throw Object.assign(
+      new Error('Ya tenés pagos pendientes en esta mesa. Esperá a que se confirmen o expiren antes de pedir de nuevo.'),
+      { status: 429 }
+    );
+  }
 
   const sesionCaja = await SesionCaja.findOne({ where: { sucursal_id: mesa.area.sucursal_id, estado: 'abierta' } });
   if (!sesionCaja) {
