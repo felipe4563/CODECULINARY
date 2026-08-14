@@ -263,6 +263,11 @@ function buildCocina(data) {
   }
   t.rule('#');
 
+  // Total: el dueño pidió que cocina también vea cuánto se consumió, no solo caja.
+  const totalCocina = detalles2.reduce((s, d) => s + parseFloat(d.precio) * d.cantidad, 0);
+  t.left().bold(true).dblH().cols('TOTAL', sym + ' ' + totalCocina.toFixed(2)).normal().bold(false);
+  t.rule('#');
+
   if (pedido.notas) {
     t.center().bold(true).line('!! NOTA ESPECIAL !!').bold(false);
     t.left().bold(true).dblH().line(pedido.notas).normal().bold(false);

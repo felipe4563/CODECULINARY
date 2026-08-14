@@ -1,5 +1,6 @@
 import { imprimirTicketVenta } from './ticketVenta';
 import { imprimirTicketCocina } from './ticketCocina';
+import { imprimirTicketCierreCaja } from './ticketCierreCaja';
 import { imprimirBluetoothCaja, imprimirBluetoothCocina } from './rawbt';
 import { useImpresionStore } from '../store/impresionStore';
 
@@ -112,4 +113,18 @@ export function reimprimirConFallback(datosImpresion) {
       });
     }
   }
+}
+
+// Cierre de caja: acción manual del cajero en esta misma PC (a diferencia de
+// venta/cocina, no tiene respaldo por socket ni modo Bluetooth — cada cierre
+// es un evento único, no algo que otra caja necesite recibir como backup).
+// Mismo molde que imprimirLocal: intenta el agente local primero (ESC/POS
+// crudo — evita la corrupción que causaba imprimirla como página HTML
+// rasterizada vía window.print()) y cae al ticket HTML viejo si el agente no
+// está corriendo en esta PC.
+export function imprimirCierreLocal(reporte, config) {
+  const base = `http://127.0.0.1:${PUERTO_AGENTE_LOCAL}`;
+  postConTimeout(`${base}/imprimir/cierre`, { reporte, config }).catch(() => {
+    imprimirTicketCierreCaja(reporte, config);
+  });
 }

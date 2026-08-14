@@ -11,8 +11,7 @@ import {
   getReporte, registrarGasto, getGastos,
 } from '../../api/caja';
 import { getSucursales } from '../../api/sucursales';
-import { imprimirTicketCierreCaja } from '../../utils/ticketCierreCaja';
-import { reimprimirConFallback } from '../../utils/impresionLocal';
+import { imprimirCierreLocal, reimprimirConFallback } from '../../utils/impresionLocal';
 import { reimprimirVenta } from '../../api/ventas';
 import { getConfiguracion } from '../../api/configuracion';
 import { usePermisos } from '../../hooks/usePermisos';
@@ -957,7 +956,7 @@ function ModalReporte({ reporte, config = {}, onClose }) {
 
         <div className="flex gap-3">
           <button
-            onClick={() => imprimirTicketCierreCaja(reporte, config)}
+            onClick={() => imprimirCierreLocal(reporte, config)}
             className="flex-1 py-2.5 border border-border text-foreground hover:bg-accent hover:text-accent-foreground rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2"
           >
             🖨 Imprimir resumen

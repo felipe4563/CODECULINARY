@@ -1,5 +1,5 @@
 const { io }                    = require('socket.io-client');
-const { execFileSync, execFile } = require('child_process');
+const { execFileSync, execSync, execFile } = require('child_process');
 const { writeFileSync, unlinkSync, readFileSync, existsSync, appendFileSync, statSync } = require('fs');
 const path             = require('path');
 const os               = require('os');
@@ -45,29 +45,53 @@ process.on('unhandledRejection', function(reason) {
 });
 
 // ── Instancia única: evita que corran dos agentes al mismo tiempo ─────────────
+// La tarea de arranque (BootTrigger) y la tarea vigía (cada 2 min) son tareas
+// programadas DISTINTAS: Windows solo garantiza "una instancia a la vez" DENTRO
+// de cada tarea, no ENTRE tareas. Si las dos se disparan casi al mismo tiempo
+// (típico justo después de reiniciar la PC), un chequeo "existe el lock? -> no
+// -> lo escribo" deja un hueco entre el chequeo y la escritura donde las dos
+// pueden colarse creyendo que están solas — y quedan dos agentes vivos,
+// duplicando cada impresión. Por eso el lock se toma con flag 'wx': crear el
+// archivo falla si ya existe, en un único paso que el sistema operativo
+// garantiza indivisible, así solo uno de los dos puede ganar la carrera.
 const LOCK_FILE = path.join(CONFIG_DIR, 'agente.lock');
 
-function yaCorriendo() {
-  if (!existsSync(LOCK_FILE)) return false;
+function procesoVivo(pid) {
   try {
-    const pid = parseInt(readFileSync(LOCK_FILE, 'utf8').trim(), 10);
-    if (isNaN(pid)) return false;
     // En Windows, tasklist devuelve la línea solo si el proceso existe
-    execFileSync('tasklist', ['/FI', 'PID eq ' + pid, '/NH'], { stdio: 'pipe' });
-    const out = require('child_process').execSync('tasklist /FI "PID eq ' + pid + '" /NH', { encoding: 'utf8' });
+    const out = execSync('tasklist /FI "PID eq ' + pid + '" /NH', { encoding: 'utf8' });
     return out.includes(String(pid));
   } catch { return false; }
 }
 
-if (yaCorriendo()) {
-  // No es un error: la tarea vigía dispara este intento cada 5 min como red de
+function tomarLock() {
+  try {
+    writeFileSync(LOCK_FILE, String(process.pid), { encoding: 'utf8', flag: 'wx' });
+    return true;
+  } catch (err) {
+    if (err.code !== 'EEXIST') throw err;
+    // El archivo ya existe. Puede ser un lock vigente (hay que retirarse) o uno
+    // abandonado por un proceso que murió sin limpiar (crash, corte de luz) —
+    // en ese caso el PID ya no corresponde a nadie y es seguro tomar el lock.
+    let pidViejo = NaN;
+    try { pidViejo = parseInt(readFileSync(LOCK_FILE, 'utf8').trim(), 10); } catch {}
+    if (!isNaN(pidViejo) && procesoVivo(pidViejo)) return false;
+    try { unlinkSync(LOCK_FILE); } catch {}
+    try {
+      writeFileSync(LOCK_FILE, String(process.pid), { encoding: 'utf8', flag: 'wx' });
+      return true;
+    } catch { return false; }
+  }
+}
+
+if (!tomarLock()) {
+  // No es un error: la tarea vigía dispara este intento cada 2 min como red de
   // seguridad. Si ya hay uno corriendo, es lo esperado — este simplemente se
   // retira sin duplicar la impresión.
   console.log('.. Vigía: ya hay un agente activo, no hace falta relanzar.');
   process.exit(0);
 }
 
-writeFileSync(LOCK_FILE, String(process.pid), 'utf8');
 process.on('exit',    function() { try { unlinkSync(LOCK_FILE); } catch {} });
 process.on('SIGINT',  function() { process.exit(0); });
 process.on('SIGTERM', function() { process.exit(0); });
@@ -152,6 +176,16 @@ async function imprimirCocina(datos, origen, forzar) {
     liberar('cocina', pid);
     throw err;
   }
+}
+
+// El cierre de caja no tiene canal socket (es una acción manual del cajero en
+// esta misma PC, a diferencia de venta/cocina que también pueden llegar como
+// respaldo desde otra caja) — no necesita deduplicación por pedido tampoco,
+// cada cierre es un evento único.
+async function imprimirCierre(datos, origen) {
+  console.log('[' + ts() + '] >> print:cierre Sesión #' + (datos.reporte && datos.reporte.sesion ? datos.reporte.sesion.id : '?') + ' (' + origen + ')');
+  await printRaw(config.impresora_caja, buildCierre(datos));
+  console.log('[' + ts() + '] OK Cierre impreso');
 }
 
 // ── Canal 1: socket.io remoto (respaldo — funciona aunque esta PC no sea la que vendió) ──
@@ -260,6 +294,20 @@ const servidorLocal = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ ok: true }));
     } catch (err) {
       console.error('[' + ts() + '] ERROR ' + tipo + ' (local): ' + err.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, mensaje: err.message }));
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && pathname === '/imprimir/cierre') {
+    try {
+      const datos = await leerCuerpo(req);
+      await imprimirCierre(datos, 'local');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      console.error('[' + ts() + '] ERROR cierre (local): ' + err.message);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: false, mensaje: err.message }));
     }
@@ -560,6 +608,11 @@ function buildCocina(data) {
   }
   t.rule('#');
 
+  // ── Total (pedido del dueño: que cocina también vea cuánto se consumió) ──
+  var totalCocina = detalles2.reduce(function(s, d) { return s + parseFloat(d.precio) * d.cantidad; }, 0);
+  t.left().bold(true).dblH().cols('TOTAL', sym + ' ' + totalCocina.toFixed(2)).normal().bold(false);
+  t.rule('#');
+
   // ── Notas del pedido (grande y visible) ───────────────────────────────────
   if (pedido.notas) {
     t.center().bold(true).line('!! NOTA ESPECIAL !!').bold(false);
@@ -568,6 +621,100 @@ function buildCocina(data) {
   }
 
   t.center().line('-- ticket de cocina --').lf(3).cut();
+  return t.build();
+}
+
+function buildCierre(data) {
+  var reporte = data.reporte;
+  var cfg     = data.config || {};
+  var sesion  = reporte.sesion;
+  var sym     = cfg.simbolo_moneda || 'Bs.';
+  var nombre  = cfg.nombre_negocio || 'RESTAURANTE';
+
+  var ventasPorMetodo = reporte.ventas_por_metodo || [];
+  var productosVendidos = reporte.productos_vendidos || [];
+  var gastos = sesion.gastos || [];
+
+  var totalEfectivo = ventasPorMetodo.find(function(v) { return v.metodo_pago === 'efectivo'; });
+  var totalQR       = ventasPorMetodo.find(function(v) { return v.metodo_pago === 'qr'; });
+
+  var apertura    = parseFloat(sesion.monto_apertura);
+  var totalVentas = parseFloat(sesion.total_ventas);
+  var totalGastos = parseFloat(sesion.total_gastos);
+  var cierre      = parseFloat(sesion.monto_cierre || 0);
+  var diferencia  = parseFloat(sesion.diferencia || 0);
+  var cuadrado    = Math.abs(diferencia) < 0.01;
+
+  function fmtHora(f) {
+    if (!f) return '-';
+    return new Date(f).toLocaleString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  var t = new Esc();
+  t.init().charset();
+
+  // ── Encabezado ────────────────────────────────────────────────────────────
+  t.rule('=');
+  t.center().bold(true).line(nombre.toUpperCase()).bold(false);
+  t.rule('=');
+  t.center().bold(true).line('CIERRE DE CAJA').bold(false);
+  t.rule('-');
+
+  // ── Datos de la sesión ────────────────────────────────────────────────────
+  t.left().cols('Cajero', (sesion.usuario && sesion.usuario.nombre) || '-');
+  t.left().cols('Apertura', fmtHora(sesion.abierto_en));
+  t.left().cols('Cierre', fmtHora(sesion.cerrado_en));
+  t.rule('-');
+
+  // ── Productos vendidos ────────────────────────────────────────────────────
+  t.left().bold(true).line('PRODUCTOS VENDIDOS').bold(false);
+  if (productosVendidos.length) {
+    t.left().line('Cant  Producto                      Total');
+    t.rule('-');
+    for (var i = 0; i < productosVendidos.length; i++) {
+      var p = productosVendidos[i];
+      var cantEtq = String(p.total_cantidad).padEnd(5);
+      t.left().cols(cantEtq + String(p.nombre).toUpperCase(), parseFloat(p.total).toFixed(2));
+    }
+  } else {
+    t.left().line('Sin ventas');
+  }
+  t.rule('-');
+
+  // ── Gastos del turno ──────────────────────────────────────────────────────
+  if (gastos.length) {
+    t.left().bold(true).line('GASTOS DEL TURNO').bold(false);
+    for (var j = 0; j < gastos.length; j++) {
+      t.left().cols(gastos[j].descripcion, parseFloat(gastos[j].monto).toFixed(2));
+    }
+    t.left().bold(true).cols('Total gastos', sym + ' ' + totalGastos.toFixed(2)).bold(false);
+    t.rule('-');
+  }
+
+  // ── Resumen de ventas ─────────────────────────────────────────────────────
+  if (totalEfectivo) t.left().cols('Efectivo (' + totalEfectivo.cantidad + ' ord.)', sym + ' ' + parseFloat(totalEfectivo.total).toFixed(2));
+  if (totalQR) t.left().cols('QR / Transf. (' + totalQR.cantidad + ' ord.)', sym + ' ' + parseFloat(totalQR.total).toFixed(2));
+  t.left().bold(true).dblH().cols('TOTAL VENTAS', sym + ' ' + totalVentas.toFixed(2)).normal().bold(false);
+  t.rule('-');
+
+  // ── Arqueo ────────────────────────────────────────────────────────────────
+  t.left().cols('Apertura', sym + ' ' + apertura.toFixed(2));
+  t.left().cols('+ Efectivo ventas', sym + ' ' + parseFloat((totalEfectivo && totalEfectivo.total) || 0).toFixed(2));
+  t.left().cols('- Gastos', sym + ' ' + totalGastos.toFixed(2));
+  t.left().bold(true).cols('Esperado en caja', sym + ' ' + parseFloat(reporte.efectivo_esperado || 0).toFixed(2)).bold(false);
+  t.left().cols('Contado fisico', sym + ' ' + cierre.toFixed(2));
+  t.rule('=');
+
+  // ── Diferencia ────────────────────────────────────────────────────────────
+  if (cuadrado) {
+    t.center().bold(true).dblH().line('*** CUADRADO ***').normal().bold(false);
+  } else {
+    var signo = diferencia >= 0 ? '+' : '';
+    t.center().bold(true).dblH().line('DIFERENCIA: ' + signo + sym + ' ' + diferencia.toFixed(2)).normal().bold(false);
+  }
+  t.rule('=');
+
+  t.center().line('-- resumen de turno --').lf(3).cut();
   return t.build();
 }
 
