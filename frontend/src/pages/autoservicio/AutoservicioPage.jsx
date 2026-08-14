@@ -132,13 +132,31 @@ export default function AutoservicioPage() {
 }
 
 function EsperaPago({ codigo, pedido, onNuevoPedido }) {
-  const { data: estado } = useQuery({
+  const { data: estado, isError, refetch } = useQuery({
     queryKey: ['autoservicio-estado', pedido.pedido.id],
     queryFn: () => getEstadoPedidoAutoservicio(codigo, pedido.pedido.id),
     refetchInterval: (query) => (query.state.data?.estado === 'pendiente' ? 3000 : false),
   });
 
   const estadoActual = estado?.estado ?? 'pendiente';
+
+  // Sin esta rama, si las consultas de estado fallan (corte de red, backend
+  // reiniciando, sesión de mesa cerrada) `data` queda undefined para siempre,
+  // refetchInterval evalúa `undefined?.estado === 'pendiente'` como false y
+  // nunca se vuelve a armar: la pantalla se queda con el spinner "Esperando
+  // confirmación..." aunque el pago ya se haya confirmado del lado del server.
+  if (isError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 p-6 text-center">
+        <AlertCircle className="w-14 h-14 text-muted-foreground" />
+        <p className="text-lg font-bold text-foreground">No pudimos confirmar el estado de tu pedido</p>
+        <p className="text-sm text-muted-foreground">Revisá tu conexión y volvé a intentar.</p>
+        <button onClick={() => refetch()} className="mt-4 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-medium">
+          Reintentar
+        </button>
+      </div>
+    );
+  }
 
   if (estadoActual === 'completado') {
     return (
