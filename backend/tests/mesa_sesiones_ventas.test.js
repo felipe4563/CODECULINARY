@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
-const { Sucursal, Area, Mesa, Rol, Usuario, Caja, SesionCaja, Pedido, PagoQr } = require('../src/models');
+const { Sucursal, Area, Mesa, MesaSesion, Rol, Usuario, Caja, SesionCaja, Pedido, PagoQr } = require('../src/models');
 const mesasService = require('../src/modules/mesas/mesas.service');
 const ventasService = require('../src/modules/ventas/ventas.service');
 
@@ -71,5 +71,88 @@ describe('ventas.service — sesión de mesa integrada', () => {
     expect(pagoQr.estado).toBe('expirado');
     const actualizado = await Pedido.findByPk(pedido.id);
     expect(actualizado.estado).not.toBe('pendiente_pago');
+  });
+
+  it('un pago QR vencido de STAFF vuelve a su estado_previo (comportamiento sin cambios)', async () => {
+    const pedido = await Pedido.create({
+      sucursal_id: sucursalId, mesa_id: mesaId, usuario_id: usuarioId, sesion_caja_id: sesionCajaId,
+      tipo: 'mesa', origen: 'staff', estado: 'pendiente_pago', total: 22,
+    });
+    await PagoQr.create({
+      pedido_id: pedido.id, sucursal_id: sucursalId, order_id: `pedido_${pedido.id}_1`,
+      estado: 'pendiente', estado_previo: 'pendiente', monto_neto: 22,
+      expires_at: new Date(Date.now() - 60000),
+    });
+
+    await ventasService.revertirPagosQrVencidos();
+
+    const actualizado = await Pedido.findByPk(pedido.id);
+    expect(actualizado.estado).toBe('pendiente');
+  });
+});
+
+describe('ventas.service — pago QR de autoservicio vencido', () => {
+  // Regresión: _revertirPagoQr devolvía el pedido a estado_previo, que para
+  // autoservicio es 'pendiente' — una cola de cocina REAL (listarCocina lee
+  // estado IN ('pendiente','listo')). Un pago abandonado se convertía en un
+  // ticket fantasma de comida que nadie pagó, y la sesión de mesa quedaba
+  // abierta para siempre, bloqueando la mesa para todo pedido futuro.
+  let sucursalId, areaId, mesaId, usuarioId, cajaId, sesionCajaId, sesionMesaId, pedidoId;
+
+  beforeAll(async () => {
+    const sucursal = await Sucursal.create({ nombre: 'Sucursal AutoRevert Test' });
+    sucursalId = sucursal.id;
+    const area = await Area.create({ nombre: 'Area AutoRevert Test', sucursal_id: sucursalId });
+    areaId = area.id;
+    const mesa = await Mesa.create({ area_id: areaId, nombre: 'Mesa AutoRevert Test', estado: 'ocupada' });
+    mesaId = mesa.id;
+    const rol = await Rol.findOne({ where: { nombre: 'Cajero' } });
+    const hash = await bcrypt.hash('clave123', 10);
+    const usuario = await Usuario.create({ rol_id: rol.id, nombre: 'AutoRevert Test', email: 'autorevert-test@restaurante.com', contrasena: hash });
+    usuarioId = usuario.id;
+    const caja = await Caja.create({ sucursal_id: sucursalId, nombre: 'Caja AutoRevert Test' });
+    cajaId = caja.id;
+    const sesionCaja = await SesionCaja.create({ usuario_id: usuarioId, sucursal_id: sucursalId, caja_id: cajaId, monto_apertura: 0 });
+    sesionCajaId = sesionCaja.id;
+
+    const sesionMesa = await mesasService.abrirSesion(mesaId, sucursalId, 'staff');
+    sesionMesaId = sesionMesa.id;
+
+    const pedido = await Pedido.create({
+      sucursal_id: sucursalId, mesa_id: mesaId, mesa_sesion_id: sesionMesaId, usuario_id: usuarioId,
+      sesion_caja_id: sesionCajaId, tipo: 'mesa', origen: 'autoservicio',
+      estado: 'pendiente_pago', total: 40,
+    });
+    pedidoId = pedido.id;
+    await PagoQr.create({
+      pedido_id: pedidoId, sucursal_id: sucursalId, order_id: `pedido_${pedidoId}_1`,
+      estado: 'pendiente', estado_previo: 'pendiente', monto_neto: 40,
+      expires_at: new Date(Date.now() - 60000),
+    });
+  });
+
+  afterAll(async () => {
+    await PagoQr.destroy({ where: { pedido_id: pedidoId } });
+    await Pedido.destroy({ where: { mesa_id: mesaId } });
+    await SesionCaja.destroy({ where: { id: sesionCajaId } });
+    await Caja.destroy({ where: { id: cajaId } });
+    await Usuario.destroy({ where: { id: usuarioId } });
+    await MesaSesion.destroy({ where: { mesa_id: mesaId } });
+    await Mesa.destroy({ where: { id: mesaId } });
+    await Area.destroy({ where: { id: areaId } });
+    await Sucursal.destroy({ where: { id: sucursalId } });
+  });
+
+  it('al expirar, el pedido queda cancelado (no vuelve a la cola de cocina) y la sesión de mesa se cierra', async () => {
+    await ventasService.revertirPagosQrVencidos();
+
+    const actualizado = await Pedido.findByPk(pedidoId);
+    expect(actualizado.estado).toBe('cancelado');
+
+    const sesionActiva = await mesasService.obtenerSesionActiva(mesaId);
+    expect(sesionActiva).toBeNull();
+
+    const mesa = await Mesa.findByPk(mesaId);
+    expect(mesa.estado).toBe('disponible');
   });
 });

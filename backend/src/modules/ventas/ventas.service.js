@@ -588,10 +588,31 @@ async function _revertirPagoQr(pagoQrInicial, nuevoEstado) {
       const cupon = await Cupon.findByPk(pedido.cupon_id, { transaction: t, lock: t.LOCK.UPDATE });
       if (cupon) await cupon.update({ usos_actuales: Math.max(0, cupon.usos_actuales - 1) }, { transaction: t });
     }
+    // Un pedido de autoservicio NO puede volver a su estado_previo: ese
+    // estado es 'pendiente', que es una cola de cocina real (ver
+    // listarCocina). Un pago abandonado/vencido se convertiría en un ticket
+    // fantasma de comida que nadie pagó, y además dejaría la sesión de mesa
+    // abierta para siempre (la mesa queda "ocupada" y bloqueada para todo
+    // pedido futuro, de staff o autoservicio). Se cancela y se libera la
+    // mesa con el mismo criterio que cancelar(). El flujo de staff sí vuelve
+    // a estado_previo: ahí el pedido ya existía en cocina antes del intento
+    // de cobro y el mozo sigue atendiendo la mesa.
+    const esAutoservicio = pedido && pedido.origen === 'autoservicio';
     await Pedido.update(
-      { estado: pagoQr.estado_previo, puntos_canjeados: 0, cupon_id: null, descuento_cupon: 0 },
+      { estado: esAutoservicio ? 'cancelado' : pagoQr.estado_previo, puntos_canjeados: 0, cupon_id: null, descuento_cupon: 0 },
       { where: { id: pagoQr.pedido_id }, transaction: t }
     );
+
+    if (esAutoservicio && pedido.tipo !== 'llevar' && pedido.mesa_id) {
+      const activos = await Pedido.count({
+        where: { mesa_id: pedido.mesa_id, estado: ['pendiente', 'listo', 'pendiente_pago'] },
+        transaction: t,
+      });
+      if (activos === 0) {
+        await Mesa.update({ estado: 'disponible' }, { where: { id: pedido.mesa_id }, transaction: t });
+        await mesasService.cerrarSesion(pedido.mesa_id, t);
+      }
+    }
   });
 }
 
