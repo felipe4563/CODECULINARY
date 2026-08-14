@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { Area, Mesa, MesaSesion } = require('../../models');
+const { Area, Mesa, MesaSesion, sequelize } = require('../../models');
 
 function _generarCodigoQr() {
   return crypto.randomBytes(8).toString('hex');
@@ -51,18 +51,31 @@ async function eliminarArea(id, alcance) {
 
 // --- Mesas ---
 
+// Incluir la sesión activa (si hay) en la respuesta de mesas es lo que le
+// permite al staff ver en el propio mapa de mesas si el autoservicio ya está
+// habilitado ahí, sin tener que consultarlo aparte.
+const _includeSesionActiva = { model: MesaSesion, as: 'sesiones', where: { cerrada_en: null }, required: false, limit: 1 };
+
 async function listarMesas(area_id, alcance) {
   const where = area_id ? { area_id } : {};
   const mesas = await Mesa.findAll({
     where,
-    include: [{ model: Area, as: 'area', attributes: ['id', 'nombre', 'sucursal_id'], where: _filtroSucursal(alcance) }],
+    include: [
+      { model: Area, as: 'area', attributes: ['id', 'nombre', 'sucursal_id'], where: _filtroSucursal(alcance) },
+      _includeSesionActiva,
+    ],
   });
   mesas.sort(_ordenNatural);
   return mesas;
 }
 
 async function obtenerMesa(id, alcance) {
-  const mesa = await Mesa.findByPk(id, { include: [{ model: Area, as: 'area', attributes: ['id', 'nombre', 'sucursal_id'] }] });
+  const mesa = await Mesa.findByPk(id, {
+    include: [
+      { model: Area, as: 'area', attributes: ['id', 'nombre', 'sucursal_id'] },
+      _includeSesionActiva,
+    ],
+  });
   if (!mesa) throw Object.assign(new Error('Mesa no encontrada'), { status: 404 });
   if (alcance && !alcance.acceso_todas && mesa.area.sucursal_id !== alcance.sucursal_id) {
     throw Object.assign(new Error('Mesa no encontrada'), { status: 404 });
@@ -110,9 +123,21 @@ async function obtenerSesionActiva(mesa_id) {
 }
 
 async function abrirSesion(mesa_id, sucursal_id, abierta_por = 'staff', transaction) {
-  const existente = await obtenerSesionActiva(mesa_id);
-  if (existente) return existente;
-  return MesaSesion.create({ mesa_id, sucursal_id, abierta_por, cerrada_en: null }, { transaction });
+  if (transaction) {
+    const existente = await obtenerSesionActiva(mesa_id);
+    if (existente) return existente;
+    return MesaSesion.create({ mesa_id, sucursal_id, abierta_por, cerrada_en: null }, { transaction });
+  }
+  // Sin transacción propia (ej. llamado directo desde el botón "Habilitar
+  // autoservicio"): se abre una interna con lock de fila sobre la mesa, así
+  // dos toques casi simultáneos al mismo botón no crean dos sesiones activas
+  // — mismo problema y misma solución que crear() en ventas.service.js.
+  return sequelize.transaction(async (t) => {
+    await Mesa.findByPk(mesa_id, { transaction: t, lock: t.LOCK.UPDATE });
+    const existente = await obtenerSesionActiva(mesa_id);
+    if (existente) return existente;
+    return MesaSesion.create({ mesa_id, sucursal_id, abierta_por, cerrada_en: null }, { transaction: t });
+  });
 }
 
 async function cerrarSesion(mesa_id, transaction) {

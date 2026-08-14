@@ -13,7 +13,7 @@ describe('Mesas API', () => {
   });
 });
 
-const { Area, Sucursal } = require('../src/models');
+const { Area, Sucursal, Mesa } = require('../src/models');
 
 describe('Mesas y áreas por sucursal', () => {
   let adminToken, sucursalOtra;
@@ -54,5 +54,53 @@ describe('Mesas y áreas por sucursal', () => {
     expect(res.body.datos.find(a => a.id === area.id)).toBeUndefined();
 
     await area.destroy();
+  });
+});
+
+describe('POST/DELETE /api/v1/mesas/:id/sesion — habilitar/deshabilitar autoservicio a mano', () => {
+  let adminToken, area, mesa;
+
+  beforeAll(async () => {
+    const login = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'admin@restaurante.com', contrasena: process.env.ADMIN_PASSWORD || 'admin123' });
+    adminToken = login.body.datos.token;
+
+    area = await Area.create({ nombre: 'Area Sesion Mesa Test', sucursal_id: 1 });
+    mesa = await Mesa.create({ area_id: area.id, nombre: 'Mesa Sesion Mesa Test' });
+  });
+
+  afterAll(async () => {
+    await Mesa.destroy({ where: { id: mesa.id } });
+    await Area.destroy({ where: { id: area.id } });
+  });
+
+  it('GET /mesas incluye sesiones: [] cuando no hay sesión activa', async () => {
+    const res = await request(app).get('/api/v1/mesas').set('Authorization', `Bearer ${adminToken}`);
+    const encontrada = res.body.datos.find(m => m.id === mesa.id);
+    expect(encontrada.sesiones).toEqual([]);
+  });
+
+  it('POST .../sesion habilita el autoservicio, y GET /mesas lo refleja', async () => {
+    const res = await request(app)
+      .post(`/api/v1/mesas/${mesa.id}/sesion`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(201);
+    expect(res.body.datos.cerrada_en).toBeNull();
+
+    const lista = await request(app).get('/api/v1/mesas').set('Authorization', `Bearer ${adminToken}`);
+    const encontrada = lista.body.datos.find(m => m.id === mesa.id);
+    expect(encontrada.sesiones).toHaveLength(1);
+  });
+
+  it('DELETE .../sesion cierra el autoservicio', async () => {
+    const res = await request(app)
+      .delete(`/api/v1/mesas/${mesa.id}/sesion`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+
+    const lista = await request(app).get('/api/v1/mesas').set('Authorization', `Bearer ${adminToken}`);
+    const encontrada = lista.body.datos.find(m => m.id === mesa.id);
+    expect(encontrada.sesiones).toEqual([]);
   });
 });

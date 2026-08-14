@@ -54,4 +54,24 @@ async function eliminarMesa(req, res, next) {
   catch (err) { next(err); }
 }
 
-module.exports = { listarAreas, crearArea, actualizarArea, eliminarArea, listarMesas, obtenerMesa, crearMesa, actualizarMesa, eliminarMesa };
+async function abrirSesionMesa(req, res, next) {
+  try {
+    const mesa = await svc.obtenerMesa(req.params.id, _alcance(req));
+    const sesion = await svc.abrirSesion(mesa.id, mesa.area.sucursal_id, 'staff');
+    res.status(201).json({ ok: true, datos: sesion });
+  } catch (err) { next(err); }
+}
+
+async function cerrarSesionMesa(req, res, next) {
+  try {
+    const mesa = await svc.obtenerMesa(req.params.id, _alcance(req));
+    await svc.cerrarSesion(mesa.id);
+    res.json({ ok: true, datos: null });
+  } catch (err) { next(err); }
+}
+
+module.exports = {
+  listarAreas, crearArea, actualizarArea, eliminarArea,
+  listarMesas, obtenerMesa, crearMesa, actualizarMesa, eliminarMesa,
+  abrirSesionMesa, cerrarSesionMesa,
+};

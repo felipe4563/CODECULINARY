@@ -41,16 +41,18 @@ describe('ventas.service — sesión de mesa integrada', () => {
     await Sucursal.destroy({ where: { id: sucursalId } });
   });
 
-  it('crear() abre una sesión de mesa junto con el pedido', async () => {
+  it('crear() ya no abre una sesión de mesa por sí sola (apertura es 100% explícita)', async () => {
     await ventasService.crear({ mesa_id: mesaId, tipo: 'mesa', usuario_id: usuarioId, sesion_caja_id: sesionCajaId });
     const activa = await mesasService.obtenerSesionActiva(mesaId);
-    expect(activa).not.toBeNull();
+    expect(activa).toBeNull();
   });
 
-  it('crear() rechaza abrir un segundo pedido en una mesa con sesión activa', async () => {
+  it('crear() rechaza abrir un segundo pedido en una mesa con sesión de autoservicio activa (abierta a mano)', async () => {
+    await mesasService.abrirSesion(mesaId, sucursalId, 'staff');
     await expect(
       ventasService.crear({ mesa_id: mesaId, tipo: 'mesa', usuario_id: usuarioId, sesion_caja_id: sesionCajaId })
     ).rejects.toMatchObject({ status: 409 });
+    await mesasService.cerrarSesion(mesaId);
   });
 
   it('revertirPagosQrVencidos revierte un pago QR pendiente ya vencido', async () => {
@@ -91,10 +93,10 @@ describe('ventas.service — sesión de mesa integrada', () => {
   });
 });
 
-describe('ventas.service — dos crear() concurrentes sobre la misma mesa', () => {
-  // Regresión: el chequeo de colisión y abrirSesion eran check-then-act sin
-  // transacción ni lock, así que dos terminales simultáneas podían pasar
-  // ambas el chequeo y dejar la mesa con dos sesiones activas.
+describe('mesasService.abrirSesion — dos toques concurrentes al botón de habilitar', () => {
+  // Regresión: abrirSesion() era check-then-act sin transacción ni lock, así
+  // que dos toques casi simultáneos al botón "Habilitar autoservicio" podían
+  // pasar ambos el chequeo y dejar la mesa con dos sesiones activas.
   let sucursalId, areaId, mesaId, usuarioId, cajaId, sesionCajaId;
 
   beforeAll(async () => {
@@ -125,18 +127,13 @@ describe('ventas.service — dos crear() concurrentes sobre la misma mesa', () =
     await Sucursal.destroy({ where: { id: sucursalId } });
   });
 
-  it('sólo una gana: la otra recibe 409 y queda una única sesión activa', async () => {
-    const args = { mesa_id: mesaId, tipo: 'mesa', usuario_id: usuarioId, sesion_caja_id: sesionCajaId };
-    const resultados = await Promise.allSettled([
-      ventasService.crear({ ...args }),
-      ventasService.crear({ ...args }),
+  it('ambos toques devuelven la misma sesión y queda una única fila activa', async () => {
+    const [primera, segunda] = await Promise.all([
+      mesasService.abrirSesion(mesaId, sucursalId, 'staff'),
+      mesasService.abrirSesion(mesaId, sucursalId, 'staff'),
     ]);
 
-    const ok = resultados.filter((r) => r.status === 'fulfilled');
-    const fallidos = resultados.filter((r) => r.status === 'rejected');
-    expect(ok).toHaveLength(1);
-    expect(fallidos).toHaveLength(1);
-    expect(fallidos[0].reason.status).toBe(409);
+    expect(primera.id).toBe(segunda.id);
 
     const sesiones = await MesaSesion.findAll({ where: { mesa_id: mesaId, cerrada_en: null } });
     expect(sesiones).toHaveLength(1);
@@ -195,14 +192,18 @@ describe('ventas.service — pago QR de autoservicio vencido', () => {
     await Sucursal.destroy({ where: { id: sucursalId } });
   });
 
-  it('al expirar, el pedido queda cancelado (no vuelve a la cola de cocina) y la sesión de mesa se cierra', async () => {
+  it('al expirar, el pedido queda cancelado (no vuelve a la cola de cocina) y la mesa se libera, pero la sesión sigue activa', async () => {
     await ventasService.revertirPagosQrVencidos();
 
     const actualizado = await Pedido.findByPk(pedidoId);
     expect(actualizado.estado).toBe('cancelado');
 
+    // La sesión NO se cierra sola: que un pago se abandone no significa que
+    // la mesa se desocupó, el cliente puede seguir sentado e intentar de
+    // nuevo. Solo el staff cierra la sesión a mano.
     const sesionActiva = await mesasService.obtenerSesionActiva(mesaId);
-    expect(sesionActiva).toBeNull();
+    expect(sesionActiva).not.toBeNull();
+    expect(sesionActiva.id).toBe(sesionMesaId);
 
     const mesa = await Mesa.findByPk(mesaId);
     expect(mesa.estado).toBe('disponible');

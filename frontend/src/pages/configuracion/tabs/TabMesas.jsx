@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Grid3x3, Users, RefreshCw, QrCode, Printer } from 'lucide-react';
+import { Plus, Pencil, Trash2, Grid3x3, Users, RefreshCw, QrCode, Printer, Smartphone } from 'lucide-react';
 import QRCode from 'qrcode';
 import { getAreas } from '../../../api/areas';
-import { getMesas, crearMesa, actualizarMesa, eliminarMesa } from '../../../api/mesas';
+import { getMesas, crearMesa, actualizarMesa, eliminarMesa, abrirSesionMesa, cerrarSesionMesa } from '../../../api/mesas';
 import Modal from '../../../components/ui/Modal';
 import { SettingsCard } from '../shared';
 
@@ -32,6 +32,11 @@ export default function TabMesas({ puedeEditar }) {
   const eliminar = useMutation({
     mutationFn: (id) => eliminarMesa(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['mesas'] }); setConfirmEliminar(null); },
+  });
+
+  const toggleSesion = useMutation({
+    mutationFn: (mesa) => (mesa.sesiones?.length > 0 ? cerrarSesionMesa(mesa.id) : abrirSesionMesa(mesa.id)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['mesas'] }),
   });
 
   // Agrupar por área si no hay filtro
@@ -96,13 +101,22 @@ export default function TabMesas({ puedeEditar }) {
                 <div key={mesa.id} className="bg-background border border-border rounded-xl p-3.5 flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-foreground truncate">{mesa.nombre}</p>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <span className="flex items-center gap-1 text-xs text-muted-foreground"><Users className="w-3.5 h-3.5" />{mesa.asientos}</span>
                       <EstadoBadge estado={mesa.estado} />
+                      {mesa.sesiones?.length > 0 && <AutoservicioBadge />}
                     </div>
                   </div>
                   {puedeEditar && (
                     <div className="flex gap-1 shrink-0">
+                      <button
+                        onClick={() => toggleSesion.mutate(mesa)}
+                        disabled={toggleSesion.isPending}
+                        title={mesa.sesiones?.length > 0 ? 'Cerrar autoservicio' : 'Habilitar autoservicio'}
+                        className={`p-1.5 rounded-lg transition-colors ${mesa.sesiones?.length > 0 ? 'text-violet-600 hover:bg-violet-100 dark:hover:bg-violet-900/30' : 'text-muted-foreground hover:text-primary hover:bg-primary/10'}`}
+                      >
+                        <Smartphone className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         onClick={() => setModalQr(mesa)}
                         title="Ver código QR"
@@ -149,11 +163,22 @@ export default function TabMesas({ puedeEditar }) {
                           <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" />{mesa.asientos}</span>
                         </td>
                         <td className="px-4 py-3">
-                          <EstadoBadge estado={mesa.estado} />
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <EstadoBadge estado={mesa.estado} />
+                            {mesa.sesiones?.length > 0 && <AutoservicioBadge />}
+                          </div>
                         </td>
                         {puedeEditar && (
                           <td className="px-4 py-3">
                             <div className="flex gap-1 justify-end">
+                              <button
+                                onClick={() => toggleSesion.mutate(mesa)}
+                                disabled={toggleSesion.isPending}
+                                title={mesa.sesiones?.length > 0 ? 'Cerrar autoservicio' : 'Habilitar autoservicio'}
+                                className={`p-1.5 rounded-lg transition-colors ${mesa.sesiones?.length > 0 ? 'text-violet-600 hover:bg-violet-100 dark:hover:bg-violet-900/30' : 'text-muted-foreground hover:text-primary hover:bg-primary/10'}`}
+                              >
+                                <Smartphone className="w-3.5 h-3.5" />
+                              </button>
                               <button
                                 onClick={() => setModalQr(mesa)}
                                 title="Ver código QR"
@@ -311,6 +336,14 @@ function EstadoBadge({ estado }) {
   return (
     <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${cfg}`}>
       {estado}
+    </span>
+  );
+}
+
+function AutoservicioBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">
+      <Smartphone className="w-3 h-3" /> Autoservicio
     </span>
   );
 }

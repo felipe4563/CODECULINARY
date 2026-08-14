@@ -256,14 +256,14 @@ async function crear({ mesa_id, tipo = 'mesa', usuario_id, cliente_id, sesion_ca
   const sucursal_id = sesionActiva.sucursal_id;
 
   if (tipo === 'mesa') {
-    // El chequeo de colisión y la apertura de la sesión tienen que ser
-    // atómicos: sin esto, dos terminales que tocan "nueva orden — Mesa 8" con
-    // milisegundos de diferencia pasaban ambas el chequeo antes de que
-    // cualquiera escribiera, y la mesa terminaba con dos sesiones activas
-    // simultáneas — justo lo que el mecanismo de sesiones existe para evitar.
-    // El lock de fila sobre la mesa se toma ANTES de leer la sesión activa y
-    // se sostiene hasta el commit, así la segunda request se bloquea hasta
-    // que la primera termine y entonces sí ve la sesión nueva y devuelve 409.
+    // La apertura/cierre de la sesión de autoservicio es ahora 100% explícita
+    // (ver mesasService.abrirSesion/cerrarSesion invocadas solo desde
+    // POST/DELETE /mesas/:id/sesion) — crear() ya no la abre como efecto
+    // secundario. Igual se avisa si el staff intenta crear un pedido manual
+    // en una mesa que ya tiene autoservicio activo, en vez de mezclarlo en
+    // silencio (Decisión 5 del diseño). El lock de fila sobre la mesa evita
+    // que dos terminales tocando "nueva orden — Mesa 8" casi al mismo tiempo
+    // pasen ambas el chequeo de mesa antes de que cualquiera escriba.
     const t = await sequelize.transaction();
     let pedidoId;
     try {
@@ -285,7 +285,6 @@ async function crear({ mesa_id, tipo = 'mesa', usuario_id, cliente_id, sesion_ca
         tipo_documento: tipo_documento || 'Ticket',
       }, { transaction: t });
       await mesa.update({ estado: 'ocupada' }, { transaction: t });
-      await mesasService.abrirSesion(mesa_id, sucursal_id, 'staff', t);
       await t.commit();
       pedidoId = pedido.id;
     } catch (err) {
@@ -393,10 +392,16 @@ async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, 
     // 'pendiente_pago' cubre un cobro QR en curso en otro pedido de la
     // misma mesa (autoservicio u otro) — si se ignora, la mesa se libera
     // de más mientras ese pago todavía puede confirmarse.
+    //
+    // Esto solo libera mesa.estado (el mapa visual de mesas) — la sesión de
+    // autoservicio NO se cierra acá. Si se cerrara cada vez que la cocina
+    // queda sin pedidos pendientes, la mesa 8 perdería el QR habilitado
+    // apenas se cobra la primera ronda, aunque la familia siga sentada
+    // pidiendo la ronda 2. La sesión solo la cierra el staff a mano
+    // (POST/DELETE /mesas/:id/sesion) cuando la mesa realmente se desocupa.
     const activos = await Pedido.count({ where: { mesa_id: pedido.mesa_id, estado: ['pendiente', 'listo', 'pendiente_pago'] }, transaction });
     if (activos === 0) {
       await Mesa.update({ estado: 'disponible' }, { where: { id: pedido.mesa_id }, transaction });
-      await mesasService.cerrarSesion(pedido.mesa_id, transaction);
     }
   }
 
@@ -654,6 +659,11 @@ async function _revertirPagoQr(pagoQrInicial, nuevoEstado) {
       { where: { id: pagoQr.pedido_id }, transaction: t }
     );
 
+    // Libera mesa.estado (mapa visual) si esta era la última orden pendiente,
+    // pero NO cierra la sesión de autoservicio — que un pago se haya
+    // abandonado no significa que la mesa se desocupó; el cliente puede
+    // seguir sentado e intentar pedir de nuevo. La sesión solo la cierra el
+    // staff a mano.
     if (esAutoservicio && pedido.tipo !== 'llevar' && pedido.mesa_id) {
       const activos = await Pedido.count({
         where: { mesa_id: pedido.mesa_id, estado: ['pendiente', 'listo', 'pendiente_pago'] },
@@ -661,7 +671,6 @@ async function _revertirPagoQr(pagoQrInicial, nuevoEstado) {
       });
       if (activos === 0) {
         await Mesa.update({ estado: 'disponible' }, { where: { id: pedido.mesa_id }, transaction: t });
-        await mesasService.cerrarSesion(pedido.mesa_id, t);
       }
     }
   });
@@ -1011,10 +1020,11 @@ async function cancelar(pedido_id, usuario_id, alcance) {
   await pedido.update({ estado: 'cancelado' });
 
   if (pedido.tipo !== 'llevar' && pedido.mesa_id) {
+    // Libera mesa.estado; la sesión de autoservicio se cierra solo a mano
+    // (mismo motivo que en _finalizarVenta y _revertirPagoQr).
     const activos = await Pedido.count({ where: { mesa_id: pedido.mesa_id, estado: ['pendiente', 'listo', 'pendiente_pago'] } });
     if (activos === 0) {
       await Mesa.update({ estado: 'disponible' }, { where: { id: pedido.mesa_id } });
-      await mesasService.cerrarSesion(pedido.mesa_id);
     }
   }
 
