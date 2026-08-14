@@ -5,6 +5,7 @@ const app = require('./app');
 const { init: initSocket } = require('./socket');
 const { sequelize } = require('./models');
 const { generarCuponesCumpleanos } = require('./jobs/cumpleanos.job');
+const { expirarPagosQrVencidos } = require('./jobs/expirarPagosQr.job');
 
 const PORT = process.env.PORT || 3001;
 
@@ -15,6 +16,12 @@ function _correrJobCumpleanos() {
   generarCuponesCumpleanos()
     .then(({ generados }) => { if (generados > 0) console.log(`Cupones de cumpleaños generados: ${generados}`); })
     .catch(err => console.error('Error generando cupones de cumpleaños:', err));
+}
+
+function _correrJobExpirarPagosQr() {
+  expirarPagosQrVencidos()
+    .then(({ revertidos }) => { if (revertidos > 0) console.log(`Pagos QR vencidos revertidos: ${revertidos}`); })
+    .catch(err => console.error('Error revirtiendo pagos QR vencidos:', err));
 }
 
 sequelize.authenticate()
@@ -28,6 +35,10 @@ sequelize.authenticate()
     // año, así que un cliente ya procesado se salta sin duplicar.
     _correrJobCumpleanos();
     cron.schedule('0 8 * * *', _correrJobCumpleanos, { timezone: 'America/La_Paz' });
+
+    // Corre cada 5 minutos para limpiar pagos QR vencidos. No depende de
+    // hora de negocio, así que corre siempre sin timezone.
+    cron.schedule('*/5 * * * *', _correrJobExpirarPagosQr);
   })
   .catch(err => {
     console.error('Error DB:', err);
