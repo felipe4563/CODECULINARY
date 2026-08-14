@@ -26,6 +26,7 @@ const Permiso = require('./Permiso');
 const Usuario = require('./Usuario');
 const Area = require('./Area');
 const Mesa = require('./Mesa');
+const MesaSesion = require('./MesaSesion');
 const Categoria = require('./Categoria');
 const Producto = require('./Producto');
 const GrupoOpciones = require('./GrupoOpciones');
@@ -78,6 +79,9 @@ Sucursal.belongsToMany(Usuario, { through: UsuariosSucursales, foreignKey: 'sucu
 // Mesas
 Mesa.belongsTo(Area, { foreignKey: 'area_id', as: 'area' });
 Area.hasMany(Mesa, { foreignKey: 'area_id', as: 'mesas' });
+Mesa.hasMany(MesaSesion, { foreignKey: 'mesa_id', as: 'sesiones' });
+MesaSesion.belongsTo(Mesa, { foreignKey: 'mesa_id', as: 'mesa' });
+MesaSesion.belongsTo(Sucursal, { foreignKey: 'sucursal_id', as: 'sucursal' });
 
 // Productos
 Producto.belongsTo(Categoria, { foreignKey: 'categoria_id', as: 'categoria' });
@@ -91,10 +95,12 @@ GrupoOpciones.belongsToMany(Producto, { through: ProductoGrupoOpciones, foreignK
 
 // Pedidos
 Pedido.belongsTo(Mesa, { foreignKey: 'mesa_id', as: 'mesa' });
+Pedido.belongsTo(MesaSesion, { foreignKey: 'mesa_sesion_id', as: 'mesa_sesion' });
 Pedido.belongsTo(Usuario, { foreignKey: 'usuario_id', as: 'usuario' });
 Pedido.belongsTo(Cliente, { foreignKey: 'cliente_id', as: 'cliente' });
 Pedido.belongsTo(SesionCaja, { foreignKey: 'sesion_caja_id', as: 'sesion_caja' });
 Pedido.hasMany(DetallePedido, { foreignKey: 'pedido_id', as: 'detalles' });
+MesaSesion.hasMany(Pedido, { foreignKey: 'mesa_sesion_id', as: 'pedidos' });
 DetallePedido.belongsTo(Pedido, { foreignKey: 'pedido_id' });
 DetallePedido.belongsTo(Producto, { foreignKey: 'producto_id', as: 'producto' });
 DetallePedido.belongsTo(Combo, { foreignKey: 'combo_id', as: 'combo' });
@@ -197,7 +203,7 @@ PagoQr.belongsTo(Sucursal, { foreignKey: 'sucursal_id', as: 'sucursal' });
 module.exports = {
   sequelize,
   Rol, Permiso, Usuario,
-  Area, Mesa,
+  Area, Mesa, MesaSesion,
   Categoria, Producto,
   GrupoOpciones, Opcion, ProductoGrupoOpciones,
   Cliente,

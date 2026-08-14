@@ -5,6 +5,7 @@ const Mesa = sequelize.define('Mesa', {
   id: { type: DataTypes.INTEGER.UNSIGNED, primaryKey: true, autoIncrement: true },
   area_id: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
   nombre: { type: DataTypes.STRING(100), allowNull: false },
+  codigo_qr: { type: DataTypes.STRING(32), allowNull: true, unique: true },
   asientos: { type: DataTypes.INTEGER, defaultValue: 4 },
   estado: { type: DataTypes.ENUM('disponible','ocupada','reservada'), defaultValue: 'disponible' },
 }, {
