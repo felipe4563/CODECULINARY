@@ -397,8 +397,7 @@ CREATE TABLE `mesas` (
   `asientos` int(11) NOT NULL DEFAULT 4,
   `estado` enum('disponible','ocupada','reservada') NOT NULL DEFAULT 'disponible',
   `creado_en` timestamp NOT NULL DEFAULT current_timestamp(),
-  `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  UNIQUE KEY `codigo_qr` (`codigo_qr`)
+  `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -413,9 +412,7 @@ CREATE TABLE `mesa_sesiones` (
   `sucursal_id` int(10) UNSIGNED NOT NULL,
   `abierta_en` datetime NOT NULL DEFAULT current_timestamp(),
   `cerrada_en` datetime DEFAULT NULL,
-  `abierta_por` enum('staff','autoservicio') NOT NULL DEFAULT 'staff',
-  PRIMARY KEY (`id`),
-  KEY `mesa_activa` (`mesa_id`, `cerrada_en`)
+  `abierta_por` enum('staff','autoservicio') NOT NULL DEFAULT 'staff'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -1110,7 +1107,16 @@ ALTER TABLE `libro_caja`
 --
 ALTER TABLE `mesas`
   ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `codigo_qr` (`codigo_qr`),
   ADD KEY `area_id` (`area_id`);
+
+--
+-- Indices de la tabla `mesa_sesiones`
+--
+ALTER TABLE `mesa_sesiones`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `mesa_activa` (`mesa_id`, `cerrada_en`),
+  ADD KEY `sucursal_id` (`sucursal_id`);
 
 --
 -- Indices de la tabla `opciones`
