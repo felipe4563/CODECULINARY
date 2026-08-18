@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const app = require('../src/app');
 const { Op } = require('sequelize');
-const { Sucursal, Area, Mesa, MesaSesion, Rol, Usuario, Pedido, DetallePedido, PagoQr, Categoria, Producto, ProductoStockSucursal, Caja, SesionCaja, Cupon, Cliente } = require('../src/models');
+const { Sucursal, Area, Mesa, MesaSesion, Rol, Usuario, Pedido, DetallePedido, PagoQr, Categoria, Producto, ProductoStockSucursal, Caja, SesionCaja, Cupon, Cliente, Configuracion } = require('../src/models');
 
 describe('Autoservicio API', () => {
   it('GET .../mesa/:codigo_qr con código inexistente → 404', async () => {
@@ -413,7 +413,17 @@ describe('Autoservicio API', () => {
   });
 
   describe('canje de puntos en el pedido de autoservicio', () => {
-    let sucursal, area, mesa, usuario, caja, clienteConPuntos;
+    let sucursal, area, mesa, usuario, caja, clienteConPuntos, clienteB;
+    let configPrevia = {};
+
+    // El canje por QR está detrás de dos flags de Configuracion
+    // (fidelidad_activa, fidelidad_canje_qr) que en la base de datos de
+    // desarrollo compartida vienen en 'false' por defecto — sin esto
+    // encendido, iniciarPagoQr nunca reserva puntos y las pruebas de canje
+    // pasarían igual aunque el gate estuviera roto. Se guarda el valor
+    // previo para restaurarlo en afterAll y no afectar otras suites que
+    // corren contra la misma base compartida.
+    const CLAVES_FIDELIDAD = ['fidelidad_activa', 'fidelidad_canje_qr'];
 
     beforeAll(async () => {
       const timestamp = Date.now();
@@ -435,9 +445,24 @@ describe('Autoservicio API', () => {
       await SesionCaja.create({ usuario_id: usuario.id, sucursal_id: sucursal.id, caja_id: caja.id, monto_apertura: 0 });
 
       clienteConPuntos = await Cliente.create({ nombre: 'Cliente Con Puntos', numero_documento: `pts-${timestamp}`, puntos: 1000 });
+      clienteB = await Cliente.create({ nombre: 'Cliente B (ajeno)', numero_documento: `ajeno-${timestamp}`, puntos: 500 });
+
+      for (const clave of CLAVES_FIDELIDAD) {
+        const fila = await Configuracion.findOne({ where: { clave } });
+        configPrevia[clave] = fila ? fila.valor : null;
+        await Configuracion.upsert({ clave, valor: 'true' });
+      }
     });
 
     afterAll(async () => {
+      for (const clave of CLAVES_FIDELIDAD) {
+        if (configPrevia[clave] === null) {
+          await Configuracion.destroy({ where: { clave } });
+        } else {
+          await Configuracion.upsert({ clave, valor: configPrevia[clave] });
+        }
+      }
+
       const pedidosDeLaMesa = await Pedido.findAll({ where: { mesa_id: mesa.id }, attributes: ['id'] });
       const pedidoIds = pedidosDeLaMesa.map((p) => p.id);
       await PagoQr.destroy({ where: { pedido_id: { [Op.in]: pedidoIds } } });
@@ -446,7 +471,7 @@ describe('Autoservicio API', () => {
       await SesionCaja.destroy({ where: { caja_id: caja.id } });
       await Caja.destroy({ where: { id: caja.id } });
       await Usuario.destroy({ where: { id: usuario.id } });
-      await Cliente.destroy({ where: { id: clienteConPuntos.id } });
+      await Cliente.destroy({ where: { id: [clienteConPuntos.id, clienteB.id] } });
       await MesaSesion.destroy({ where: { mesa_id: mesa.id } });
       await Mesa.destroy({ where: { id: mesa.id } });
       await Area.destroy({ where: { id: area.id } });
@@ -457,7 +482,7 @@ describe('Autoservicio API', () => {
       return jwt.sign({ cliente_id: clienteId, tipo: 'cliente' }, process.env.JWT_SECRET, { expiresIn: '180d' });
     }
 
-    it('sin token, puntos_canjear en el body se ignora (no baja el total ni pisa cliente_id)', async () => {
+    it('sin token, puntos_canjear en el body se ignora (no descuenta puntos ni pisa cliente_id)', async () => {
       const res = await request(app)
         .post(`/api/v1/autoservicio/mesa/${mesa.codigo_qr}/pedido`)
         .send({ items: [{ producto_id: mesa.productoId, cantidad: 1 }], puntos_canjear: 100, numero_documento: clienteConPuntos.numero_documento });
@@ -465,12 +490,20 @@ describe('Autoservicio API', () => {
       expect(res.status).not.toBe(400);
       const pedido = await Pedido.findByPk(res.body.datos.pedido.id);
       // Sin token, cliente_id se resuelve igual por CI (comportamiento ya
-      // existente), pero puntos_canjear no se aplica.
+      // existente), pero puntos_canjear no se aplica: ni se anota en el
+      // pedido ni se descuenta del balance del cliente.
       expect(pedido.cliente_id).toBe(clienteConPuntos.id);
-      expect(parseFloat(pedido.total)).toBe(20);
+      expect(pedido.puntos_canjeados).toBe(0);
+
+      const clienteRecargado = await Cliente.findByPk(clienteConPuntos.id);
+      expect(clienteRecargado.puntos).toBe(1000);
+
+      // Libera el cupo de MAX_PAGOS_PENDIENTES para las siguientes pruebas
+      // de este describe (todas comparten la misma mesa/sesión).
+      await pedido.update({ estado: 'completado' });
     });
 
-    it('con token válido, puntos_canjear baja el total y usa el cliente_id del token', async () => {
+    it('con token válido, puntos_canjear descuenta los puntos del cliente y usa el cliente_id del token', async () => {
       const res = await request(app)
         .post(`/api/v1/autoservicio/mesa/${mesa.codigo_qr}/pedido`)
         .set('Authorization', `Bearer ${tokenPara(clienteConPuntos.id)}`)
@@ -478,11 +511,16 @@ describe('Autoservicio API', () => {
 
       // Mismo límite que el resto de esta suite: sin mock de CodePay, no se
       // afirma un status exacto de éxito (podría depender de la red), solo
-      // que no fue rechazado como error de validación — y que el cliente_id
-      // usado fue el del token, no uno resuelto por CI.
+      // que no fue rechazado como error de validación.
       expect(res.status).not.toBe(400);
       const pedido = await Pedido.findByPk(res.body.datos.pedido.id);
       expect(pedido.cliente_id).toBe(clienteConPuntos.id);
+      expect(pedido.puntos_canjeados).toBe(100);
+
+      const clienteRecargado = await Cliente.findByPk(clienteConPuntos.id);
+      expect(clienteRecargado.puntos).toBe(900);
+
+      await pedido.update({ estado: 'completado' });
     });
 
     it('con token inválido, se comporta como si no hubiera token (no rompe el pedido)', async () => {
@@ -493,6 +531,52 @@ describe('Autoservicio API', () => {
 
       expect(res.status).not.toBe(400);
       expect(res.status).not.toBe(401);
+
+      if (res.body?.datos?.pedido?.id) {
+        await Pedido.update({ estado: 'completado' }, { where: { id: res.body.datos.pedido.id } });
+      }
+    });
+
+    it('token de A + numero_documento de B en el mismo body → el pedido queda en A, B no se toca', async () => {
+      const res = await request(app)
+        .post(`/api/v1/autoservicio/mesa/${mesa.codigo_qr}/pedido`)
+        .set('Authorization', `Bearer ${tokenPara(clienteConPuntos.id)}`)
+        .send({
+          items: [{ producto_id: mesa.productoId, cantidad: 1 }],
+          numero_documento: clienteB.numero_documento,
+          puntos_canjear: 50,
+        });
+
+      expect(res.status).not.toBe(400);
+      const pedido = await Pedido.findByPk(res.body.datos.pedido.id);
+      // La sesión autenticada (A) gana por sobre el CI suelto en el body (B)
+      // — el cortocircuito clienteIdAutenticado || resolverOCrearPorDocumento
+      // nunca llega a mirar numero_documento cuando hay token.
+      expect(pedido.cliente_id).toBe(clienteConPuntos.id);
+      expect(pedido.puntos_canjeados).toBe(50);
+
+      const bSinTocar = await Cliente.findByPk(clienteB.id);
+      expect(bSinTocar.puntos).toBe(500);
+    });
+
+    it('puntos_canjear fraccionario → 400, no llega a ventasService', async () => {
+      const res = await request(app)
+        .post(`/api/v1/autoservicio/mesa/${mesa.codigo_qr}/pedido`)
+        .set('Authorization', `Bearer ${tokenPara(clienteConPuntos.id)}`)
+        .send({ items: [{ producto_id: mesa.productoId, cantidad: 1 }], puntos_canjear: 0.4 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.mensaje).toMatch(/puntos_canjear/);
+    });
+
+    it('puntos_canjear negativo → 400', async () => {
+      const res = await request(app)
+        .post(`/api/v1/autoservicio/mesa/${mesa.codigo_qr}/pedido`)
+        .set('Authorization', `Bearer ${tokenPara(clienteConPuntos.id)}`)
+        .send({ items: [{ producto_id: mesa.productoId, cantidad: 1 }], puntos_canjear: -10 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.mensaje).toMatch(/puntos_canjear/);
     });
   });
 });

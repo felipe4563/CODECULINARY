@@ -28,6 +28,20 @@ function _validarItems(items) {
   return null;
 }
 
+// Mismo borde anónimo que _validarItems: puntos_canjear llega hasta
+// ventasService._resolverCanje y de ahí a un descuento en Bs real. Un valor
+// fraccionario (ej. 0.4) produciría descuento pero Cliente.puntos es
+// INTEGER, así que el descuento posterior (puntos - 0.4) se redondea de
+// vuelta al balance original al guardarse — un bug de descuento gratis
+// repetible. No se valida el límite superior (contra el balance real del
+// cliente) acá: eso ya lo hace _resolverCanje dentro de la transacción,
+// con lock de fila.
+function _validarPuntosCanjear(puntos_canjear) {
+  if (puntos_canjear === undefined || puntos_canjear === null) return null;
+  if (!Number.isInteger(puntos_canjear) || puntos_canjear < 0) return 'puntos_canjear debe ser un entero no negativo';
+  return null;
+}
+
 async function obtenerMenu(req, res, next) {
   try { res.json({ ok: true, datos: await svc.obtenerMenu(req.params.codigo_qr) }); }
   catch (err) { next(err); }
@@ -46,7 +60,7 @@ async function validarCupon(req, res, next) {
 async function crearPedido(req, res, next) {
   try {
     const { items, cupon_codigo, numero_documento, puntos_canjear } = req.body;
-    const error = _validarItems(items);
+    const error = _validarItems(items) || _validarPuntosCanjear(puntos_canjear);
     if (error) return res.status(400).json({ ok: false, mensaje: error });
     res.status(201).json({
       ok: true,
