@@ -11,6 +11,9 @@ const Cliente = sequelize.define('Cliente', {
   direccion: { type: DataTypes.STRING(255) },
   fecha_nacimiento: { type: DataTypes.DATEONLY },
   puntos: { type: DataTypes.INTEGER, defaultValue: 0 },
+  pin_hash: { type: DataTypes.STRING(255), allowNull: true },
+  pin_intentos_fallidos: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  pin_bloqueado_hasta: { type: DataTypes.DATE, allowNull: true },
 }, {
   tableName: 'clientes',
   createdAt: 'creado_en',

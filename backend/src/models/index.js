@@ -33,6 +33,7 @@ const GrupoOpciones = require('./GrupoOpciones');
 const Opcion = require('./Opcion');
 const ProductoGrupoOpciones = require('./ProductoGrupoOpciones');
 const Cliente = require('./Cliente');
+const ClientePinVerificacion = require('./ClientePinVerificacion');
 const SesionCaja = require('./SesionCaja');
 const Pedido = require('./Pedido');
 const DetallePedido = require('./DetallePedido');
@@ -206,7 +207,7 @@ module.exports = {
   Area, Mesa, MesaSesion,
   Categoria, Producto,
   GrupoOpciones, Opcion, ProductoGrupoOpciones,
-  Cliente,
+  Cliente, ClientePinVerificacion,
   SesionCaja, Pedido, DetallePedido,
   DetalleArqueo, Gasto, LibroCaja,
   Proveedor, Compra, DetalleCompra,
