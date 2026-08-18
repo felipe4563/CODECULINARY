@@ -6,5 +6,6 @@ const router = Router();
 router.post('/estado', ctrl.estado);
 router.post('/pin/solicitar', ctrl.solicitarPin);
 router.post('/pin/confirmar', ctrl.confirmarPin);
+router.post('/pin/verificar', ctrl.verificarPin);
 
 module.exports = router;

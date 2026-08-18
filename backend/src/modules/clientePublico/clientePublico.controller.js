@@ -17,4 +17,9 @@ async function confirmarPin(req, res, next) {
   catch (err) { next(err); }
 }
 
-module.exports = { estado, solicitarPin, confirmarPin };
+async function verificarPin(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.verificarPin(req.body) }); }
+  catch (err) { next(err); }
+}
+
+module.exports = { estado, solicitarPin, confirmarPin, verificarPin };

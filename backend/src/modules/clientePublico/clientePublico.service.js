@@ -8,6 +8,8 @@ const CODIGO_EXPIRA_MINUTOS = 10;
 const CODIGO_INTENTOS_MAX = 5;
 const PIN_REGEX = /^\d{4}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PIN_INTENTOS_MAX = 5;
+const PIN_BLOQUEO_MINUTOS = 5;
 
 function emitirToken(cliente_id) {
   return jwt.sign({ cliente_id, tipo: 'cliente' }, process.env.JWT_SECRET, { expiresIn: '180d' });
@@ -87,4 +89,29 @@ async function confirmarPin({ numero_documento, codigo }) {
   return { token: emitirToken(cliente.id) };
 }
 
-module.exports = { estado, solicitarPin, confirmarPin, emitirToken };
+async function verificarPin({ numero_documento, pin }) {
+  const cliente = await _resolverCliente(numero_documento);
+  if (!cliente.pin_hash) {
+    throw Object.assign(new Error('Este CI todavía no tiene un PIN configurado'), { status: 409 });
+  }
+
+  if (cliente.pin_bloqueado_hasta && cliente.pin_bloqueado_hasta > new Date()) {
+    throw Object.assign(new Error('Demasiados intentos, esperá unos minutos y volvé a intentar'), { status: 429 });
+  }
+
+  const coincide = await bcrypt.compare(String(pin || ''), cliente.pin_hash);
+  if (!coincide) {
+    const intentos = cliente.pin_intentos_fallidos + 1;
+    if (intentos >= PIN_INTENTOS_MAX) {
+      await cliente.update({ pin_intentos_fallidos: 0, pin_bloqueado_hasta: new Date(Date.now() + PIN_BLOQUEO_MINUTOS * 60_000) });
+    } else {
+      await cliente.update({ pin_intentos_fallidos: intentos });
+    }
+    throw Object.assign(new Error('PIN incorrecto'), { status: 401 });
+  }
+
+  await cliente.update({ pin_intentos_fallidos: 0 });
+  return { token: emitirToken(cliente.id) };
+}
+
+module.exports = { estado, solicitarPin, confirmarPin, verificarPin, emitirToken };

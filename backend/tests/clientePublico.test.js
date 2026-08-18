@@ -199,4 +199,72 @@ describe('Cliente público — PIN', () => {
       expect(pendiente).toBeNull();
     });
   });
+
+  describe('POST /api/v1/cliente/pin/verificar', () => {
+    beforeEach(async () => {
+      await cliente.update({ pin_hash: await bcrypt.hash('4321', 10) });
+    });
+
+    it('sin PIN configurado (otro cliente) → 409', async () => {
+      const timestamp = Date.now();
+      const sinPin = await Cliente.create({ nombre: 'Sin PIN', numero_documento: `sinpin-${timestamp}` });
+
+      const res = await request(app)
+        .post('/api/v1/cliente/pin/verificar')
+        .send({ numero_documento: sinPin.numero_documento, pin: '0000' });
+
+      expect(res.status).toBe(409);
+      await Cliente.destroy({ where: { id: sinPin.id } });
+    });
+
+    it('PIN correcto → 200 con token y resetea el contador de intentos', async () => {
+      await cliente.update({ pin_intentos_fallidos: 2 });
+
+      const res = await request(app)
+        .post('/api/v1/cliente/pin/verificar')
+        .send({ numero_documento: cliente.numero_documento, pin: '4321' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.datos.token).toBeDefined();
+      const payload = jwt.verify(res.body.datos.token, process.env.JWT_SECRET);
+      expect(payload.cliente_id).toBe(cliente.id);
+
+      const actualizado = await Cliente.findByPk(cliente.id);
+      expect(actualizado.pin_intentos_fallidos).toBe(0);
+    });
+
+    it('PIN incorrecto → 401 e incrementa el contador', async () => {
+      const res = await request(app)
+        .post('/api/v1/cliente/pin/verificar')
+        .send({ numero_documento: cliente.numero_documento, pin: '0000' });
+
+      expect(res.status).toBe(401);
+      const actualizado = await Cliente.findByPk(cliente.id);
+      expect(actualizado.pin_intentos_fallidos).toBe(1);
+    });
+
+    it('5 intentos fallidos seguidos → bloquea 5 minutos y resetea el contador', async () => {
+      for (let i = 0; i < 5; i++) {
+        await request(app).post('/api/v1/cliente/pin/verificar')
+          .send({ numero_documento: cliente.numero_documento, pin: '0000' });
+      }
+
+      const actualizado = await Cliente.findByPk(cliente.id);
+      expect(actualizado.pin_intentos_fallidos).toBe(0);
+      expect(actualizado.pin_bloqueado_hasta).not.toBeNull();
+      expect(actualizado.pin_bloqueado_hasta.getTime()).toBeGreaterThan(Date.now());
+    });
+
+    it('bloqueo vigente → 429 aunque el PIN sea correcto, sin tocar el contador', async () => {
+      await cliente.update({ pin_bloqueado_hasta: new Date(Date.now() + 60_000), pin_intentos_fallidos: 0 });
+
+      const res = await request(app)
+        .post('/api/v1/cliente/pin/verificar')
+        .send({ numero_documento: cliente.numero_documento, pin: '4321' });
+
+      expect(res.status).toBe(429);
+      const actualizado = await Cliente.findByPk(cliente.id);
+      expect(actualizado.pin_intentos_fallidos).toBe(0);
+    });
+  });
 });
