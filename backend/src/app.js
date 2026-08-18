@@ -30,6 +30,7 @@ const cuponesRoutes = require('./modules/cupones/cupones.routes');
 const ruletaRoutes = require('./modules/ruleta/ruleta.routes');
 const insumosRoutes = require('./modules/insumos/insumos.routes');
 const autoservicioRoutes = require('./modules/autoservicio/autoservicio.routes');
+const clientePublicoRoutes = require('./modules/clientePublico/clientePublico.routes');
 const codepayWebhookRoutes = require('./webhooks/codepay.webhook.routes');
 
 const app = express();
@@ -75,6 +76,7 @@ app.use('/api/v1/cupones', cuponesRoutes);
 app.use('/api/v1/ruleta', ruletaRoutes);
 app.use('/api/v1/insumos', insumosRoutes);
 app.use('/api/v1/autoservicio', autoservicioRoutes);
+app.use('/api/v1/cliente', clientePublicoRoutes);
 app.use('/api/v1/uploads', uploadsRoutes);
 
 app.use(manejarErrores);
