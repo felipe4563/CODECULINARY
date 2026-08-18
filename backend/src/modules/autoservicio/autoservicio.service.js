@@ -1,4 +1,4 @@
-const { SesionCaja, Pedido, Producto, Cliente } = require('../../models');
+const { SesionCaja, Pedido, Producto } = require('../../models');
 const mesasService = require('../mesas/mesas.service');
 const ventasService = require('../ventas/ventas.service');
 const cuponesService = require('../cupones/cupones.service');
@@ -47,34 +47,6 @@ async function validarCupon(codigo_qr, { codigo, items }) {
   return cuponesService.validar(codigo, subtotal, null, itemsConPrecio);
 }
 
-// Identificación opcional y silenciosa del cliente por CI, para que el
-// pedido sume puntos de fidelidad como cualquier venta con cliente_id (esa
-// parte ya funciona sola en ventasService — acá solo se resuelve el id).
-// Nunca bloquea el pedido: si el documento está vacío, no matchea con nadie
-// en la API de Personas, o esa API falla (red, 502), se sigue de largo sin
-// cliente_id — el cliente nunca ve un error por esto, es opcional.
-async function _resolverClientePorDocumento(numero_documento) {
-  const doc = (numero_documento || '').trim();
-  if (!doc) return null;
-
-  try {
-    const existente = await Cliente.findOne({ where: { numero_documento: doc } });
-    if (existente) return existente.id;
-
-    const persona = await clientesService.buscarPorDocumento(doc);
-    if (!persona) return null;
-
-    const creado = await Cliente.create({
-      nombre: persona.nombre || 'Cliente',
-      numero_documento: persona.numero_documento || doc,
-      fecha_nacimiento: persona.fecha_nacimiento || null,
-    });
-    return creado.id;
-  } catch {
-    return null;
-  }
-}
-
 // Tope de pedidos con pago QR en curso por sesión de mesa. Cada POST dispara
 // una llamada real (y facturable) a CodePay para generar el QR, y el endpoint
 // es anónimo: quien haya fotografiado el QR de una mesa podría scriptearlo.
@@ -85,7 +57,7 @@ const MAX_PAGOS_PENDIENTES = 3;
 
 async function crearPedido(codigo_qr, { items, cupon_codigo, numero_documento }) {
   const { mesa, sesion } = await _mesaConSesionActiva(codigo_qr);
-  const cliente_id = await _resolverClientePorDocumento(numero_documento);
+  const cliente_id = await clientesService.resolverOCrearPorDocumento(numero_documento);
 
   const pendientes = await Pedido.count({ where: { mesa_sesion_id: sesion.id, estado: 'pendiente_pago' } });
   if (pendientes >= MAX_PAGOS_PENDIENTES) {

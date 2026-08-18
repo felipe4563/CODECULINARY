@@ -84,4 +84,33 @@ async function buscarPorCodigo(codigo) {
   return persona ? _mapPersona(persona) : null;
 }
 
-module.exports = { listar, obtener, crear, actualizar, buscarPorDocumento, buscarPorNombre, buscarPorCodigo };
+// Resuelve un Cliente por CI, creándolo si no existe (vía la API de
+// Personas) — usado tanto por el flujo silencioso de "sumar puntos con
+// solo CI" en autoservicio como por el flujo de creación de PIN. Nunca
+// lanza: si el documento está vacío, no matchea con nadie en la API de
+// Personas, o esa API falla (red, 502), devuelve null — el llamador decide
+// qué hacer con eso (en autoservicio, seguir sin cliente_id; en el flujo de
+// PIN, cortar con un error propio).
+async function resolverOCrearPorDocumento(numero_documento) {
+  const doc = (numero_documento || '').trim();
+  if (!doc) return null;
+
+  try {
+    const existente = await Cliente.findOne({ where: { numero_documento: doc } });
+    if (existente) return existente.id;
+
+    const persona = await buscarPorDocumento(doc);
+    if (!persona) return null;
+
+    const creado = await Cliente.create({
+      nombre: persona.nombre || 'Cliente',
+      numero_documento: persona.numero_documento || doc,
+      fecha_nacimiento: persona.fecha_nacimiento || null,
+    });
+    return creado.id;
+  } catch {
+    return null;
+  }
+}
+
+module.exports = { listar, obtener, crear, actualizar, buscarPorDocumento, buscarPorNombre, buscarPorCodigo, resolverOCrearPorDocumento };
