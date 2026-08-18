@@ -114,4 +114,23 @@ async function verificarPin({ numero_documento, pin }) {
   return { token: emitirToken(cliente.id) };
 }
 
-module.exports = { estado, solicitarPin, confirmarPin, verificarPin, emitirToken };
+async function cambiarPin(cliente_id, { pin_actual, pin_nuevo }) {
+  if (!PIN_REGEX.test(pin_nuevo || '')) {
+    throw Object.assign(new Error('El PIN nuevo debe ser de 4 dígitos'), { status: 400 });
+  }
+  const cliente = await Cliente.findByPk(cliente_id);
+  const coincide = cliente?.pin_hash && await bcrypt.compare(String(pin_actual || ''), cliente.pin_hash);
+  if (!coincide) {
+    throw Object.assign(new Error('El PIN actual no coincide'), { status: 401 });
+  }
+  await cliente.update({ pin_hash: await bcrypt.hash(pin_nuevo, 10) });
+  return { ok: true };
+}
+
+async function perfil(cliente_id) {
+  const cliente = await Cliente.findByPk(cliente_id, { attributes: ['nombre', 'puntos'] });
+  if (!cliente) throw Object.assign(new Error('Cliente no encontrado'), { status: 404 });
+  return { nombre: cliente.nombre, puntos: cliente.puntos };
+}
+
+module.exports = { estado, solicitarPin, confirmarPin, verificarPin, cambiarPin, perfil, emitirToken };

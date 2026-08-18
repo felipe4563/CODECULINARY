@@ -26,6 +26,10 @@ const app = require('../src/app');
 const { Cliente, ClientePinVerificacion } = require('../src/models');
 const { enviarCodigoPin } = require('../src/integrations/email/email.client');
 
+function tokenPara(clienteId) {
+  return jwt.sign({ cliente_id: clienteId, tipo: 'cliente' }, process.env.JWT_SECRET, { expiresIn: '180d' });
+}
+
 describe('Cliente público — PIN', () => {
   let cliente;
 
@@ -265,6 +269,70 @@ describe('Cliente público — PIN', () => {
       expect(res.status).toBe(429);
       const actualizado = await Cliente.findByPk(cliente.id);
       expect(actualizado.pin_intentos_fallidos).toBe(0);
+    });
+  });
+
+  describe('PUT /api/v1/cliente/pin (cambiar) y GET /api/v1/cliente/perfil', () => {
+    beforeEach(async () => {
+      await cliente.update({ pin_hash: await bcrypt.hash('1111', 10), puntos: 42 });
+    });
+
+    it('GET /perfil sin token → 401', async () => {
+      const res = await request(app).get('/api/v1/cliente/perfil');
+      expect(res.status).toBe(401);
+    });
+
+    it('GET /perfil con token válido → nombre y puntos', async () => {
+      const res = await request(app)
+        .get('/api/v1/cliente/perfil')
+        .set('Authorization', `Bearer ${tokenPara(cliente.id)}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.datos).toEqual({ nombre: cliente.nombre, puntos: 42 });
+    });
+
+    it('PUT /pin sin token → 401', async () => {
+      const res = await request(app)
+        .put('/api/v1/cliente/pin')
+        .send({ pin_actual: '1111', pin_nuevo: '2222' });
+      expect(res.status).toBe(401);
+    });
+
+    it('PUT /pin con pin_actual incorrecto → 401, no cambia nada', async () => {
+      const res = await request(app)
+        .put('/api/v1/cliente/pin')
+        .set('Authorization', `Bearer ${tokenPara(cliente.id)}`)
+        .send({ pin_actual: '0000', pin_nuevo: '2222' });
+
+      expect(res.status).toBe(401);
+      const actualizado = await Cliente.findByPk(cliente.id);
+      expect(await bcrypt.compare('1111', actualizado.pin_hash)).toBe(true);
+    });
+
+    it('PUT /pin con pin_actual correcto → cambia el PIN', async () => {
+      const res = await request(app)
+        .put('/api/v1/cliente/pin')
+        .set('Authorization', `Bearer ${tokenPara(cliente.id)}`)
+        .send({ pin_actual: '1111', pin_nuevo: '2222' });
+
+      expect(res.status).toBe(200);
+      const actualizado = await Cliente.findByPk(cliente.id);
+      expect(await bcrypt.compare('2222', actualizado.pin_hash)).toBe(true);
+    });
+
+    it('token inválido → 401', async () => {
+      const res = await request(app)
+        .get('/api/v1/cliente/perfil')
+        .set('Authorization', 'Bearer token-basura');
+      expect(res.status).toBe(401);
+    });
+
+    it('token de staff (tipo distinto) no sirve acá → 401', async () => {
+      const tokenStaff = jwt.sign({ id: 1, sucursal_id: null }, process.env.JWT_SECRET, { expiresIn: '1h' });
+      const res = await request(app)
+        .get('/api/v1/cliente/perfil')
+        .set('Authorization', `Bearer ${tokenStaff}`);
+      expect(res.status).toBe(401);
     });
   });
 });

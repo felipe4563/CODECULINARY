@@ -22,4 +22,14 @@ async function verificarPin(req, res, next) {
   catch (err) { next(err); }
 }
 
-module.exports = { estado, solicitarPin, confirmarPin, verificarPin };
+async function cambiarPin(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.cambiarPin(req.clienteId, req.body) }); }
+  catch (err) { next(err); }
+}
+
+async function perfil(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.perfil(req.clienteId) }); }
+  catch (err) { next(err); }
+}
+
+module.exports = { estado, solicitarPin, confirmarPin, verificarPin, cambiarPin, perfil };
