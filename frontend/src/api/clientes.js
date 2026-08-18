@@ -20,3 +20,6 @@ export const buscarClientesPorNombre = (q) =>
 
 export const buscarClientePorCodigo = (codigo) =>
   api.get(`/clientes/buscar-codigo/${encodeURIComponent(codigo)}`).then(r => r.data.datos);
+
+export const resetearPinCliente = (id) =>
+  api.post(`/clientes/${id}/resetear-pin`).then(r => r.data.datos);

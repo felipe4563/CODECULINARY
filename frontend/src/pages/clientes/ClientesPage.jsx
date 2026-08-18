@@ -1,10 +1,10 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermisos } from '../../hooks/usePermisos';
-import { getClientes, crearCliente, actualizarCliente, buscarClientePorDocumento, buscarClientesPorNombre, buscarClientePorCodigo } from '../../api/clientes';
+import { getClientes, crearCliente, actualizarCliente, buscarClientePorDocumento, buscarClientesPorNombre, buscarClientePorCodigo, resetearPinCliente } from '../../api/clientes';
 import {
   Users, Plus, Search, X, Edit2, Phone, Mail, MapPin,
-  CreditCard, UserCircle, AlertTriangle, Star, Loader2,
+  CreditCard, UserCircle, AlertTriangle, Star, Loader2, KeyRound,
 } from 'lucide-react';
 
 /* ─── helpers ─── */
@@ -24,7 +24,7 @@ function Avatar({ nombre, size = 'md' }) {
 }
 
 /* ─── modal crear/editar ─── */
-function ModalCliente({ cliente, onClose, onGuardar, loading }) {
+function ModalCliente({ cliente, onClose, onGuardar, loading, onResetearPin, reseteandoPin }) {
   const [form, setForm] = useState({
     nombre:           cliente?.nombre           ?? '',
     tipo_documento:   cliente?.tipo_documento   ?? 'CI',
@@ -308,6 +308,18 @@ function ModalCliente({ cliente, onClose, onGuardar, loading }) {
             </p>
           )}
 
+          {cliente?.tiene_pin && (
+            <button
+              type="button"
+              onClick={() => onResetearPin(cliente.id)}
+              disabled={reseteandoPin}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-sm font-medium hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors disabled:opacity-60"
+            >
+              <KeyRound className="w-4 h-4" />
+              {reseteandoPin ? 'Reseteando...' : 'Resetear PIN de autoservicio'}
+            </button>
+          )}
+
           <div className="flex gap-2 pt-1">
             <button
               type="button"
@@ -438,6 +450,15 @@ export default function ClientesPage() {
     onError: (e) => mostrarToast(e?.response?.data?.mensaje ?? 'Error al actualizar', false),
   });
 
+  const mutResetearPin = useMutation({
+    mutationFn: resetearPinCliente,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['clientes'] });
+      mostrarToast('PIN reseteado — el cliente puede crear uno nuevo desde autoservicio');
+    },
+    onError: (e) => mostrarToast(e?.response?.data?.mensaje ?? 'Error al resetear el PIN', false),
+  });
+
   const handleGuardar = (datos) => {
     if (modal === 'nuevo') mutCrear.mutate(datos);
     else mutEditar.mutate({ id: modal.id, datos });
@@ -488,6 +509,8 @@ export default function ClientesPage() {
           onClose={() => setModal(null)}
           onGuardar={handleGuardar}
           loading={isMutLoading}
+          onResetearPin={mutResetearPin.mutate}
+          reseteandoPin={mutResetearPin.isPending}
         />
       )}
 

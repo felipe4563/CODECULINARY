@@ -37,4 +37,9 @@ async function actualizar(req, res, next) {
   catch (err) { next(err); }
 }
 
-module.exports = { listar, obtener, crear, actualizar, buscarDocumento, buscarNombre, buscarCodigo };
+async function resetearPin(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.resetearPin(req.params.id) }); }
+  catch (err) { next(err); }
+}
+
+module.exports = { listar, obtener, crear, actualizar, buscarDocumento, buscarNombre, buscarCodigo, resetearPin };

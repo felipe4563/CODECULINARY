@@ -14,5 +14,6 @@ router.get('/buscar-nombre', verificarPermiso('clientes', 'crear'), ctrl.buscarN
 router.get('/buscar-codigo/:codigo', verificarPermiso('clientes', 'crear'), ctrl.buscarCodigo);
 router.get('/:id', verificarPermiso('clientes', 'ver'), ctrl.obtener);
 router.put('/:id', verificarPermiso('clientes', 'editar'), ctrl.actualizar);
+router.post('/:id/resetear-pin', verificarPermiso('clientes', 'editar'), ctrl.resetearPin);
 
 module.exports = router;

@@ -2,6 +2,15 @@ const { Op } = require('sequelize');
 const { Cliente } = require('../../models');
 const personasClient = require('../../integrations/personas/personas.client');
 
+function _sinPin(cliente) {
+  const json = cliente.toJSON();
+  json.tiene_pin = !!json.pin_hash;
+  delete json.pin_hash;
+  delete json.pin_intentos_fallidos;
+  delete json.pin_bloqueado_hasta;
+  return json;
+}
+
 async function listar({ buscar } = {}) {
   const where = {};
   if (buscar) {
@@ -10,13 +19,14 @@ async function listar({ buscar } = {}) {
       { numero_documento: { [Op.like]: `%${buscar}%` } },
     ];
   }
-  return Cliente.findAll({ where, order: [['nombre', 'ASC']] });
+  const clientes = await Cliente.findAll({ where, order: [['nombre', 'ASC']] });
+  return clientes.map(_sinPin);
 }
 
 async function obtener(id) {
   const c = await Cliente.findByPk(id);
   if (!c) throw Object.assign(new Error('Cliente no encontrado'), { status: 404 });
-  return c;
+  return _sinPin(c);
 }
 
 async function crear({ nombre, tipo_documento = 'CI', numero_documento, email, telefono, direccion, fecha_nacimiento }) {
@@ -113,4 +123,11 @@ async function resolverOCrearPorDocumento(numero_documento) {
   }
 }
 
-module.exports = { listar, obtener, crear, actualizar, buscarPorDocumento, buscarPorNombre, buscarPorCodigo, resolverOCrearPorDocumento };
+async function resetearPin(id) {
+  const c = await Cliente.findByPk(id);
+  if (!c) throw Object.assign(new Error('Cliente no encontrado'), { status: 404 });
+  await c.update({ pin_hash: null, pin_intentos_fallidos: 0, pin_bloqueado_hasta: null });
+  return { ok: true };
+}
+
+module.exports = { listar, obtener, crear, actualizar, buscarPorDocumento, buscarPorNombre, buscarPorCodigo, resolverOCrearPorDocumento, resetearPin };
