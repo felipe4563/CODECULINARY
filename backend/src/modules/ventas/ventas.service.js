@@ -160,12 +160,13 @@ const INCLUDE_PEDIDO_COMPLETO = [
   { model: Cupon, as: 'cupon', attributes: ['id', 'codigo', 'tipo', 'valor'], required: false },
 ];
 
-async function listar({ estado, mesa_id, sucursal_id, acceso_todas } = {}) {
+async function listar({ estado, mesa_id, sucursal_id, cliente_id, acceso_todas } = {}) {
   const where = {};
   if (estado) {
     where.estado = estado.includes(',') ? { [Op.in]: estado.split(',') } : estado;
   }
   if (mesa_id) where.mesa_id = mesa_id;
+  if (cliente_id) where.cliente_id = cliente_id;
   if (!acceso_todas) where.sucursal_id = sucursal_id;
   return Pedido.findAll({ where, include: INCLUDE_PEDIDO_COMPLETO, order: [['creado_en', 'DESC']] });
 }

@@ -23,7 +23,7 @@ const request = require('supertest');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const app = require('../src/app');
-const { Cliente, ClientePinVerificacion } = require('../src/models');
+const { Cliente, ClientePinVerificacion, Pedido, Sucursal, Area, Mesa, Categoria, Producto, SesionCaja, Caja, Rol, Usuario } = require('../src/models');
 const { enviarCodigoPin } = require('../src/integrations/email/email.client');
 
 function tokenPara(clienteId) {
@@ -333,6 +333,69 @@ describe('Cliente público — PIN', () => {
         .get('/api/v1/cliente/perfil')
         .set('Authorization', `Bearer ${tokenStaff}`);
       expect(res.status).toBe(401);
+    });
+  });
+
+  describe('GET /api/v1/cliente/pedidos (historial)', () => {
+    // Nota: NO reutiliza el `cliente` del beforeEach de nivel superior — el
+    // orden relativo entre un beforeAll anidado y un beforeEach del describe
+    // padre no es algo en lo que valga la pena confiar. Este bloque crea su
+    // propio cliente, autocontenido.
+    let sucursal, area, mesa, categoria, producto, usuario, caja, sesionCaja, clienteHistorial, otroCliente, pedidoDeEsteCliente, pedidoDeOtroCliente;
+
+    beforeAll(async () => {
+      const timestamp = Date.now();
+      sucursal = await Sucursal.create({ nombre: `Sucursal Historial Test ${timestamp}` });
+      area = await Area.create({ nombre: `Area Historial Test ${timestamp}`, sucursal_id: sucursal.id });
+      mesa = await Mesa.create({ area_id: area.id, nombre: 'Mesa Historial Test' });
+      categoria = await Categoria.create({ nombre: `Categoria Historial Test ${timestamp}` });
+      producto = await Producto.create({ categoria_id: categoria.id, nombre: `Producto Historial Test ${timestamp}`, precio: 10, stock: 0 });
+
+      const rol = await Rol.findOne({ where: { nombre: 'Cajero' } });
+      usuario = await Usuario.create({ rol_id: rol.id, nombre: `Historial Test ${timestamp}`, email: `historial-test-${timestamp}@restaurante.com`, contrasena: 'x' });
+      caja = await Caja.create({ sucursal_id: sucursal.id, nombre: 'Caja Historial Test' });
+      sesionCaja = await SesionCaja.create({ usuario_id: usuario.id, sucursal_id: sucursal.id, caja_id: caja.id, monto_apertura: 0 });
+
+      clienteHistorial = await Cliente.create({ nombre: 'Cliente Historial', numero_documento: `hist-${timestamp}` });
+      otroCliente = await Cliente.create({ nombre: 'Otro Cliente', numero_documento: `otro-${timestamp}` });
+
+      pedidoDeEsteCliente = await Pedido.create({
+        mesa_id: mesa.id, tipo: 'mesa', usuario_id: usuario.id, cliente_id: clienteHistorial.id,
+        sesion_caja_id: sesionCaja.id, sucursal_id: sucursal.id, estado: 'completado', total: 10,
+      });
+      pedidoDeOtroCliente = await Pedido.create({
+        mesa_id: mesa.id, tipo: 'mesa', usuario_id: usuario.id, cliente_id: otroCliente.id,
+        sesion_caja_id: sesionCaja.id, sucursal_id: sucursal.id, estado: 'completado', total: 20,
+      });
+    });
+
+    afterAll(async () => {
+      await Pedido.destroy({ where: { id: [pedidoDeEsteCliente.id, pedidoDeOtroCliente.id] } });
+      await SesionCaja.destroy({ where: { id: sesionCaja.id } });
+      await Caja.destroy({ where: { id: caja.id } });
+      await Usuario.destroy({ where: { id: usuario.id } });
+      await Cliente.destroy({ where: { id: [clienteHistorial.id, otroCliente.id] } });
+      await Producto.destroy({ where: { id: producto.id } });
+      await Categoria.destroy({ where: { id: categoria.id } });
+      await Mesa.destroy({ where: { id: mesa.id } });
+      await Area.destroy({ where: { id: area.id } });
+      await Sucursal.destroy({ where: { id: sucursal.id } });
+    });
+
+    it('sin token → 401', async () => {
+      const res = await request(app).get('/api/v1/cliente/pedidos');
+      expect(res.status).toBe(401);
+    });
+
+    it('devuelve solo los pedidos de ese cliente_id, no los de otro cliente', async () => {
+      const res = await request(app)
+        .get('/api/v1/cliente/pedidos')
+        .set('Authorization', `Bearer ${tokenPara(clienteHistorial.id)}`);
+
+      expect(res.status).toBe(200);
+      const ids = res.body.datos.map((p) => p.id);
+      expect(ids).toContain(pedidoDeEsteCliente.id);
+      expect(ids).not.toContain(pedidoDeOtroCliente.id);
     });
   });
 });

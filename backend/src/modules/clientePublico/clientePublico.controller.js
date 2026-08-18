@@ -32,4 +32,9 @@ async function perfil(req, res, next) {
   catch (err) { next(err); }
 }
 
-module.exports = { estado, solicitarPin, confirmarPin, verificarPin, cambiarPin, perfil };
+async function historial(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.historial(req.clienteId) }); }
+  catch (err) { next(err); }
+}
+
+module.exports = { estado, solicitarPin, confirmarPin, verificarPin, cambiarPin, perfil, historial };

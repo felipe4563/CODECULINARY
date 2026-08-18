@@ -10,5 +10,6 @@ router.post('/pin/confirmar', ctrl.confirmarPin);
 router.post('/pin/verificar', ctrl.verificarPin);
 router.put('/pin', authCliente, ctrl.cambiarPin);
 router.get('/perfil', authCliente, ctrl.perfil);
+router.get('/pedidos', authCliente, ctrl.historial);
 
 module.exports = router;

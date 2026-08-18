@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Cliente, ClientePinVerificacion } = require('../../models');
 const clientesService = require('../clientes/clientes.service');
+const ventasService = require('../ventas/ventas.service');
 const { enviarCodigoPin } = require('../../integrations/email/email.client');
 
 const CODIGO_EXPIRA_MINUTOS = 10;
@@ -133,4 +134,8 @@ async function perfil(cliente_id) {
   return { nombre: cliente.nombre, puntos: cliente.puntos };
 }
 
-module.exports = { estado, solicitarPin, confirmarPin, verificarPin, cambiarPin, perfil, emitirToken };
+async function historial(cliente_id) {
+  return ventasService.listar({ cliente_id, estado: 'completado', acceso_todas: true });
+}
+
+module.exports = { estado, solicitarPin, confirmarPin, verificarPin, cambiarPin, perfil, historial, emitirToken };
