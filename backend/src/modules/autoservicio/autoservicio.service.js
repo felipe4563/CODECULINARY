@@ -55,9 +55,15 @@ async function validarCupon(codigo_qr, { codigo, items }) {
 // MAX_PAGOS_PENDIENTES pagos sin resolver en la misma sesión.
 const MAX_PAGOS_PENDIENTES = 3;
 
-async function crearPedido(codigo_qr, { items, cupon_codigo, numero_documento }) {
+async function crearPedido(codigo_qr, { items, cupon_codigo, numero_documento, puntos_canjear, clienteIdAutenticado }) {
   const { mesa, sesion } = await _mesaConSesionActiva(codigo_qr);
-  const cliente_id = await clientesService.resolverOCrearPorDocumento(numero_documento);
+  // El cliente_id que gana puntos puede venir de un CI suelto (silencioso,
+  // sin PIN) o de una sesión de cliente autenticada — la sesión manda si
+  // está presente. Solo con sesión autenticada se permite canjear puntos:
+  // sin eso, cualquiera podría mandar el CI de otro y gastarle los puntos
+  // solo con saber ese número (ver spec de fidelidad).
+  const cliente_id = clienteIdAutenticado || await clientesService.resolverOCrearPorDocumento(numero_documento);
+  const puntosCanjearFinal = clienteIdAutenticado ? (puntos_canjear || 0) : 0;
 
   const pendientes = await Pedido.count({ where: { mesa_sesion_id: sesion.id, estado: 'pendiente_pago' } });
   if (pendientes >= MAX_PAGOS_PENDIENTES) {
@@ -80,6 +86,7 @@ async function crearPedido(codigo_qr, { items, cupon_codigo, numero_documento })
     sesion_caja_id: sesionCaja.id,
     usuario_id: sesionCaja.usuario_id,
     cliente_id,
+    puntos_canjear: puntosCanjearFinal,
     mesa_sesion_id: sesion.id,
     origen: 'autoservicio',
     // crearCompleta ya sabe validar y aplicar el cupón (misma lógica que usa

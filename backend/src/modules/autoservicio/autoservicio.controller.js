@@ -45,10 +45,15 @@ async function validarCupon(req, res, next) {
 
 async function crearPedido(req, res, next) {
   try {
-    const { items, cupon_codigo, numero_documento } = req.body;
+    const { items, cupon_codigo, numero_documento, puntos_canjear } = req.body;
     const error = _validarItems(items);
     if (error) return res.status(400).json({ ok: false, mensaje: error });
-    res.status(201).json({ ok: true, datos: await svc.crearPedido(req.params.codigo_qr, { items, cupon_codigo, numero_documento }) });
+    res.status(201).json({
+      ok: true,
+      datos: await svc.crearPedido(req.params.codigo_qr, {
+        items, cupon_codigo, numero_documento, puntos_canjear, clienteIdAutenticado: req.clienteId,
+      }),
+    });
   } catch (err) { next(err); }
 }
 

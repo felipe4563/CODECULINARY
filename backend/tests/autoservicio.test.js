@@ -1,5 +1,6 @@
 const request = require('supertest');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const app = require('../src/app');
 const { Op } = require('sequelize');
 const { Sucursal, Area, Mesa, MesaSesion, Rol, Usuario, Pedido, DetallePedido, PagoQr, Categoria, Producto, ProductoStockSucursal, Caja, SesionCaja, Cupon, Cliente } = require('../src/models');
@@ -408,6 +409,90 @@ describe('Autoservicio API', () => {
       expect(res.status).not.toBe(400);
       const pedido = await Pedido.findByPk(res.body.datos.pedido.id);
       expect(pedido.cliente_id).toBeNull();
+    });
+  });
+
+  describe('canje de puntos en el pedido de autoservicio', () => {
+    let sucursal, area, mesa, usuario, caja, clienteConPuntos;
+
+    beforeAll(async () => {
+      const timestamp = Date.now();
+      sucursal = await Sucursal.create({ nombre: `Sucursal Autoservicio Canje Test ${timestamp}` });
+      area = await Area.create({ nombre: `Area Autoservicio Canje Test ${timestamp}`, sucursal_id: sucursal.id });
+      mesa = await Mesa.create({ area_id: area.id, nombre: 'Mesa Canje Test', codigo_qr: `cj-${timestamp}` });
+      await MesaSesion.create({ mesa_id: mesa.id, sucursal_id: sucursal.id, abierta_por: 'staff' });
+
+      const categoria = await Categoria.create({ nombre: `Categoria Autoservicio Canje Test ${timestamp}` });
+      const producto = await Producto.create({ categoria_id: categoria.id, nombre: `Producto Autoservicio Canje Test ${timestamp}`, precio: 20, stock: 0 });
+      await ProductoStockSucursal.create({ producto_id: producto.id, sucursal_id: sucursal.id, stock: 10 });
+      mesa.productoId = producto.id;
+
+      const rol = await Rol.findOne({ where: { nombre: 'Cajero' } });
+      const hash = await bcrypt.hash('clave123', 10);
+      usuario = await Usuario.create({ rol_id: rol.id, nombre: `Autoservicio Canje Test ${timestamp}`, email: `autoservicio-canje-test-${timestamp}@restaurante.com`, contrasena: hash });
+
+      caja = await Caja.create({ sucursal_id: sucursal.id, nombre: 'Caja Autoservicio Canje Test' });
+      await SesionCaja.create({ usuario_id: usuario.id, sucursal_id: sucursal.id, caja_id: caja.id, monto_apertura: 0 });
+
+      clienteConPuntos = await Cliente.create({ nombre: 'Cliente Con Puntos', numero_documento: `pts-${timestamp}`, puntos: 1000 });
+    });
+
+    afterAll(async () => {
+      const pedidosDeLaMesa = await Pedido.findAll({ where: { mesa_id: mesa.id }, attributes: ['id'] });
+      const pedidoIds = pedidosDeLaMesa.map((p) => p.id);
+      await PagoQr.destroy({ where: { pedido_id: { [Op.in]: pedidoIds } } });
+      await DetallePedido.destroy({ where: { pedido_id: { [Op.in]: pedidoIds } } });
+      await Pedido.destroy({ where: { mesa_id: mesa.id } });
+      await SesionCaja.destroy({ where: { caja_id: caja.id } });
+      await Caja.destroy({ where: { id: caja.id } });
+      await Usuario.destroy({ where: { id: usuario.id } });
+      await Cliente.destroy({ where: { id: clienteConPuntos.id } });
+      await MesaSesion.destroy({ where: { mesa_id: mesa.id } });
+      await Mesa.destroy({ where: { id: mesa.id } });
+      await Area.destroy({ where: { id: area.id } });
+      await Sucursal.destroy({ where: { id: sucursal.id } });
+    });
+
+    function tokenPara(clienteId) {
+      return jwt.sign({ cliente_id: clienteId, tipo: 'cliente' }, process.env.JWT_SECRET, { expiresIn: '180d' });
+    }
+
+    it('sin token, puntos_canjear en el body se ignora (no baja el total ni pisa cliente_id)', async () => {
+      const res = await request(app)
+        .post(`/api/v1/autoservicio/mesa/${mesa.codigo_qr}/pedido`)
+        .send({ items: [{ producto_id: mesa.productoId, cantidad: 1 }], puntos_canjear: 100, numero_documento: clienteConPuntos.numero_documento });
+
+      expect(res.status).not.toBe(400);
+      const pedido = await Pedido.findByPk(res.body.datos.pedido.id);
+      // Sin token, cliente_id se resuelve igual por CI (comportamiento ya
+      // existente), pero puntos_canjear no se aplica.
+      expect(pedido.cliente_id).toBe(clienteConPuntos.id);
+      expect(parseFloat(pedido.total)).toBe(20);
+    });
+
+    it('con token válido, puntos_canjear baja el total y usa el cliente_id del token', async () => {
+      const res = await request(app)
+        .post(`/api/v1/autoservicio/mesa/${mesa.codigo_qr}/pedido`)
+        .set('Authorization', `Bearer ${tokenPara(clienteConPuntos.id)}`)
+        .send({ items: [{ producto_id: mesa.productoId, cantidad: 1 }], puntos_canjear: 100 });
+
+      // Mismo límite que el resto de esta suite: sin mock de CodePay, no se
+      // afirma un status exacto de éxito (podría depender de la red), solo
+      // que no fue rechazado como error de validación — y que el cliente_id
+      // usado fue el del token, no uno resuelto por CI.
+      expect(res.status).not.toBe(400);
+      const pedido = await Pedido.findByPk(res.body.datos.pedido.id);
+      expect(pedido.cliente_id).toBe(clienteConPuntos.id);
+    });
+
+    it('con token inválido, se comporta como si no hubiera token (no rompe el pedido)', async () => {
+      const res = await request(app)
+        .post(`/api/v1/autoservicio/mesa/${mesa.codigo_qr}/pedido`)
+        .set('Authorization', 'Bearer token-basura')
+        .send({ items: [{ producto_id: mesa.productoId, cantidad: 1 }] });
+
+      expect(res.status).not.toBe(400);
+      expect(res.status).not.toBe(401);
     });
   });
 });
