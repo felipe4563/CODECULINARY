@@ -1,9 +1,16 @@
 import { useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Plus, Minus, ShoppingCart, X, Loader2, CheckCircle2, AlertCircle, Package, Sun, Moon } from 'lucide-react';
-import { getMenuAutoservicio, crearPedidoAutoservicio, validarCuponAutoservicio, getEstadoPedidoAutoservicio } from '../../api/autoservicio';
+import { Plus, Minus, ShoppingCart, X, Loader2, CheckCircle2, AlertCircle, Package, Sun, Moon, User, Star, History, LogOut, KeyRound } from 'lucide-react';
+import {
+  getMenuAutoservicio, crearPedidoAutoservicio, validarCuponAutoservicio, getEstadoPedidoAutoservicio,
+} from '../../api/autoservicio';
 import { getConfiguracionPublica, logoSrc } from '../../api/configuracion';
+import {
+  estadoCliente, solicitarPinCliente, confirmarPinCliente, verificarPinCliente,
+  cambiarPinCliente, perfilCliente, historialCliente,
+} from '../../api/clientePublico';
+import { useClienteAutoservicioStore } from '../../store/clienteAutoservicioStore';
 import { useTemaAutoservicio } from '../../hooks/useTemaAutoservicio';
 
 const bs = (n) => `Bs ${parseFloat(n || 0).toFixed(2)}`;
@@ -17,6 +24,9 @@ export default function AutoservicioPage() {
   const [cuponAplicado, setCuponAplicado] = useState(null); // { codigo, descuento } tras validar OK
   const [ciCliente, setCiCliente] = useState('');
   const { modo, toggleModo } = useTemaAutoservicio();
+  const [mostrarCuenta, setMostrarCuenta] = useState(false);
+  const [puntosACanjear, setPuntosACanjear] = useState(0);
+  const { token } = useClienteAutoservicioStore();
 
   const { data: config } = useQuery({ queryKey: ['configuracion-publica'], queryFn: getConfiguracionPublica });
   const { data: menu, isLoading, isError, error } = useQuery({
@@ -67,7 +77,7 @@ export default function AutoservicioPage() {
   }));
 
   const crear = useMutation({
-    mutationFn: () => crearPedidoAutoservicio(codigo, itemsParaBackend(), cuponCodigo.trim(), ciCliente.trim()),
+    mutationFn: () => crearPedidoAutoservicio(codigo, itemsParaBackend(), cuponCodigo.trim(), ciCliente.trim(), puedeCanjear ? puntosACanjear : 0),
     onSuccess: (datos) => setPedido(datos),
   });
 
@@ -83,6 +93,17 @@ export default function AutoservicioPage() {
   };
 
   const totalConDescuento = Math.max(0, totalCarrito - (cuponAplicado?.descuento ?? 0));
+
+  const puedeCanjear = token && config?.fidelidad_activa === 'true' && config?.fidelidad_canje_qr === 'true';
+  const { data: perfil } = useQuery({
+    queryKey: ['cliente-perfil'],
+    queryFn: perfilCliente,
+    enabled: !!token,
+  });
+  // No hay una vista previa del descuento en Bs acá: el valor de cada punto
+  // (Configuracion.valor_punto_bs) no está expuesto en la config pública, y
+  // el backend ya recalcula todo dentro de crearCompleta/iniciarPagoQr — el
+  // cliente ve el monto final recién en la pantalla del QR de pago.
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
@@ -121,6 +142,13 @@ export default function AutoservicioPage() {
           className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
         >
           {modo === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+        </button>
+        <button
+          onClick={() => setMostrarCuenta(true)}
+          title="Mi cuenta"
+          className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
+        >
+          <User className="w-5 h-5" />
         </button>
       </header>
 
@@ -259,6 +287,22 @@ export default function AutoservicioPage() {
                 className="w-full bg-background border border-input rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
+            {puedeCanjear && perfil?.puntos > 0 && (
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  Usar puntos ({perfil.puntos} disponibles)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={perfil.puntos}
+                  value={puntosACanjear}
+                  onChange={(e) => setPuntosACanjear(Math.max(0, Math.min(perfil.puntos, parseInt(e.target.value, 10) || 0)))}
+                  placeholder="0"
+                  className="w-full bg-background border border-input rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+            )}
             {crear.isError && (
               <p className="text-sm text-destructive">{crear.error?.response?.data?.mensaje ?? 'No se pudo crear el pedido.'}</p>
             )}
@@ -271,6 +315,10 @@ export default function AutoservicioPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {mostrarCuenta && (
+        <CuentaSheet onClose={() => setMostrarCuenta(false)} />
       )}
     </div>
   );
@@ -286,6 +334,158 @@ function ToggleTema() {
     >
       {modo === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
     </button>
+  );
+}
+
+function CuentaSheet({ onClose }) {
+  const { token, setToken, logout } = useClienteAutoservicioStore();
+  const [vista, setVista] = useState('inicio'); // inicio | pin | codigo | historial | cambiar-pin
+  const [numeroDocumento, setNumeroDocumento] = useState('');
+  const [pin, setPin] = useState('');
+  const [email, setEmail] = useState('');
+  const [codigo, setCodigo] = useState('');
+  const [pinNuevo, setPinNuevo] = useState('');
+  const [pinActual, setPinActual] = useState('');
+  const [error, setError] = useState('');
+
+  const { data: perfil } = useQuery({ queryKey: ['cliente-perfil'], queryFn: perfilCliente, enabled: !!token });
+  const { data: historial = [] } = useQuery({ queryKey: ['cliente-historial'], queryFn: historialCliente, enabled: !!token && vista === 'historial' });
+
+  const consultarEstado = useMutation({
+    mutationFn: () => estadoCliente(numeroDocumento.trim()),
+    onSuccess: (datos) => { setError(''); setVista(datos.tiene_pin ? 'ingresar-pin' : 'crear-pin'); },
+    onError: (e) => setError(e?.response?.data?.mensaje ?? 'No se pudo verificar ese CI'),
+  });
+
+  const login = useMutation({
+    mutationFn: () => verificarPinCliente(numeroDocumento.trim(), pin.trim()),
+    onSuccess: (datos) => { setToken(datos.token); setError(''); setVista('inicio'); },
+    onError: (e) => setError(e?.response?.data?.mensaje ?? 'PIN incorrecto'),
+  });
+
+  const solicitar = useMutation({
+    mutationFn: () => solicitarPinCliente(numeroDocumento.trim(), pin.trim(), email.trim()),
+    onSuccess: () => { setError(''); setVista('codigo'); },
+    onError: (e) => setError(e?.response?.data?.mensaje ?? 'No se pudo enviar el código'),
+  });
+
+  const confirmar = useMutation({
+    mutationFn: () => confirmarPinCliente(numeroDocumento.trim(), codigo.trim()),
+    onSuccess: (datos) => { setToken(datos.token); setError(''); setVista('inicio'); },
+    onError: (e) => setError(e?.response?.data?.mensaje ?? 'Código incorrecto'),
+  });
+
+  const cambiar = useMutation({
+    mutationFn: () => cambiarPinCliente(pinActual.trim(), pinNuevo.trim()),
+    onSuccess: () => { setError(''); setPinActual(''); setPinNuevo(''); setVista('inicio'); },
+    onError: (e) => setError(e?.response?.data?.mensaje ?? 'No se pudo cambiar el PIN'),
+  });
+
+  const inputCls = 'w-full bg-background border border-input rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring';
+  const botonCls = 'w-full py-3 rounded-xl bg-primary text-primary-foreground font-semibold disabled:opacity-60';
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-end bg-black/50" onClick={onClose}>
+      <div className="w-full max-w-md mx-auto bg-card rounded-t-2xl p-4 space-y-3 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h2 className="font-bold text-foreground flex items-center gap-2"><User className="w-4 h-4" /> Mi cuenta</h2>
+          <button onClick={onClose}><X className="w-5 h-5 text-muted-foreground" /></button>
+        </div>
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+
+        {token && vista === 'inicio' && (
+          <div className="space-y-3">
+            <div className="rounded-xl bg-primary/10 p-3">
+              <p className="font-semibold text-foreground">{perfil?.nombre}</p>
+              <p className="text-sm text-primary flex items-center gap-1 mt-0.5"><Star className="w-3.5 h-3.5" /> {perfil?.puntos ?? 0} puntos</p>
+            </div>
+            <button onClick={() => setVista('historial')} className="w-full flex items-center gap-2 py-2.5 px-3 rounded-lg hover:bg-accent transition-colors text-sm text-foreground">
+              <History className="w-4 h-4" /> Ver historial de pedidos
+            </button>
+            <button onClick={() => setVista('cambiar-pin')} className="w-full flex items-center gap-2 py-2.5 px-3 rounded-lg hover:bg-accent transition-colors text-sm text-foreground">
+              <KeyRound className="w-4 h-4" /> Cambiar PIN
+            </button>
+            <button onClick={() => { logout(); onClose(); }} className="w-full flex items-center gap-2 py-2.5 px-3 rounded-lg hover:bg-accent transition-colors text-sm text-destructive">
+              <LogOut className="w-4 h-4" /> Cerrar sesión
+            </button>
+          </div>
+        )}
+
+        {!token && vista === 'inicio' && (
+          <div className="space-y-3">
+            <label className="block text-xs font-medium text-muted-foreground">Tu número de CI</label>
+            <input value={numeroDocumento} onChange={(e) => setNumeroDocumento(e.target.value)} placeholder="Número de CI" className={inputCls} />
+            <button onClick={() => consultarEstado.mutate()} disabled={!numeroDocumento.trim() || consultarEstado.isPending} className={botonCls}>
+              {consultarEstado.isPending ? 'Verificando...' : 'Continuar'}
+            </button>
+          </div>
+        )}
+
+        {vista === 'ingresar-pin' && (
+          <div className="space-y-3">
+            <label className="block text-xs font-medium text-muted-foreground">Ingresá tu PIN</label>
+            <input value={pin} onChange={(e) => setPin(e.target.value)} placeholder="••••" maxLength={4} className={inputCls} />
+            <button onClick={() => login.mutate()} disabled={pin.trim().length !== 4 || login.isPending} className={botonCls}>
+              {login.isPending ? 'Ingresando...' : 'Ingresar'}
+            </button>
+          </div>
+        )}
+
+        {vista === 'crear-pin' && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Todavía no tenés un PIN. Creá uno para poder canjear puntos y ver tu historial.</p>
+            <label className="block text-xs font-medium text-muted-foreground">Elegí un PIN de 4 dígitos</label>
+            <input value={pin} onChange={(e) => setPin(e.target.value)} placeholder="••••" maxLength={4} className={inputCls} />
+            <label className="block text-xs font-medium text-muted-foreground">Tu email (para confirmar)</label>
+            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="correo@ejemplo.com" className={inputCls} />
+            <button onClick={() => solicitar.mutate()} disabled={pin.trim().length !== 4 || !email.trim() || solicitar.isPending} className={botonCls}>
+              {solicitar.isPending ? 'Enviando...' : 'Crear PIN'}
+            </button>
+          </div>
+        )}
+
+        {vista === 'codigo' && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Te mandamos un código a tu email. Ingresalo acá (vence en 10 minutos):</p>
+            <input value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="Código de 6 dígitos" maxLength={6} className={inputCls} />
+            <button onClick={() => confirmar.mutate()} disabled={codigo.trim().length !== 6 || confirmar.isPending} className={botonCls}>
+              {confirmar.isPending ? 'Confirmando...' : 'Confirmar'}
+            </button>
+          </div>
+        )}
+
+        {vista === 'cambiar-pin' && (
+          <div className="space-y-3">
+            <label className="block text-xs font-medium text-muted-foreground">PIN actual</label>
+            <input value={pinActual} onChange={(e) => setPinActual(e.target.value)} placeholder="••••" maxLength={4} className={inputCls} />
+            <label className="block text-xs font-medium text-muted-foreground">PIN nuevo</label>
+            <input value={pinNuevo} onChange={(e) => setPinNuevo(e.target.value)} placeholder="••••" maxLength={4} className={inputCls} />
+            <button onClick={() => cambiar.mutate()} disabled={pinActual.trim().length !== 4 || pinNuevo.trim().length !== 4 || cambiar.isPending} className={botonCls}>
+              {cambiar.isPending ? 'Guardando...' : 'Cambiar PIN'}
+            </button>
+          </div>
+        )}
+
+        {vista === 'historial' && (
+          <div className="space-y-2">
+            {historial.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">Todavía no tenés pedidos.</p>
+            ) : (
+              historial.map((p) => (
+                <div key={p.id} className="flex items-center justify-between text-sm border-b border-border pb-2">
+                  <div>
+                    <p className="text-foreground">{new Date(p.creado_en).toLocaleDateString('es-BO')}</p>
+                    <p className="text-xs text-muted-foreground">{p.mesa?.nombre ?? p.tipo}</p>
+                  </div>
+                  <span className="font-medium text-foreground">{bs(p.total)}</span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
