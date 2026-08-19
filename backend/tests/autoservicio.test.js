@@ -444,7 +444,11 @@ describe('Autoservicio API', () => {
       caja = await Caja.create({ sucursal_id: sucursal.id, nombre: 'Caja Autoservicio Canje Test' });
       await SesionCaja.create({ usuario_id: usuario.id, sucursal_id: sucursal.id, caja_id: caja.id, monto_apertura: 0 });
 
-      clienteConPuntos = await Cliente.create({ nombre: 'Cliente Con Puntos', numero_documento: `pts-${timestamp}`, puntos: 1000 });
+      // pin_hash seteado porque authClienteOpcional ahora exige una sesión
+      // vigente (ver fix de "PIN reseteado no revoca el token"): en la
+      // realidad un token de cliente solo se emite después de que
+      // verificarPin/confirmarPin confirman que el PIN ya existe.
+      clienteConPuntos = await Cliente.create({ nombre: 'Cliente Con Puntos', numero_documento: `pts-${timestamp}`, puntos: 1000, pin_hash: await bcrypt.hash('1234', 10) });
       clienteB = await Cliente.create({ nombre: 'Cliente B (ajeno)', numero_documento: `ajeno-${timestamp}`, puntos: 500 });
 
       for (const clave of CLAVES_FIDELIDAD) {

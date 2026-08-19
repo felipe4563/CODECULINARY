@@ -343,7 +343,8 @@ function ToggleTema() {
 
 function CuentaSheet({ onClose }) {
   const { token, setToken, logout } = useClienteAutoservicioStore();
-  const [vista, setVista] = useState('inicio'); // inicio | pin | codigo | historial | cambiar-pin
+  const queryClient = useQueryClient();
+  const [vista, setVista] = useState('inicio'); // inicio | ingresar-pin | crear-pin | codigo | historial | cambiar-pin
   const [numeroDocumento, setNumeroDocumento] = useState('');
   const [pin, setPin] = useState('');
   const [email, setEmail] = useState('');
@@ -355,6 +356,17 @@ function CuentaSheet({ onClose }) {
   const { data: perfil } = useQuery({ queryKey: ['cliente-perfil'], queryFn: perfilCliente, enabled: !!token });
   const { data: historial = [] } = useQuery({ queryKey: ['cliente-historial'], queryFn: historialCliente, enabled: !!token && vista === 'historial' });
 
+  // Purga el caché de react-query de la sesión anterior antes de guardar el
+  // token nuevo: 'cliente-perfil'/'cliente-historial' son claves globales,
+  // no por cliente, así que sin esto el próximo render podría mostrar por un
+  // instante el nombre/puntos/historial del cliente que tenía la sesión
+  // previa en este mismo dispositivo compartido, antes de que el refetch
+  // resuelva.
+  const limpiarCacheCliente = () => {
+    queryClient.removeQueries({ queryKey: ['cliente-perfil'] });
+    queryClient.removeQueries({ queryKey: ['cliente-historial'] });
+  };
+
   const consultarEstado = useMutation({
     mutationFn: () => estadoCliente(numeroDocumento.trim()),
     onSuccess: (datos) => { setError(''); setVista(datos.tiene_pin ? 'ingresar-pin' : 'crear-pin'); },
@@ -363,7 +375,7 @@ function CuentaSheet({ onClose }) {
 
   const login = useMutation({
     mutationFn: () => verificarPinCliente(numeroDocumento.trim(), pin.trim()),
-    onSuccess: (datos) => { setToken(datos.token); setError(''); setVista('inicio'); },
+    onSuccess: (datos) => { limpiarCacheCliente(); setToken(datos.token); setError(''); setVista('inicio'); },
     onError: (e) => setError(e?.response?.data?.mensaje ?? 'PIN incorrecto'),
   });
 
@@ -375,7 +387,7 @@ function CuentaSheet({ onClose }) {
 
   const confirmar = useMutation({
     mutationFn: () => confirmarPinCliente(numeroDocumento.trim(), codigo.trim()),
-    onSuccess: (datos) => { setToken(datos.token); setError(''); setVista('inicio'); },
+    onSuccess: (datos) => { limpiarCacheCliente(); setToken(datos.token); setError(''); setVista('inicio'); },
     onError: (e) => setError(e?.response?.data?.mensaje ?? 'Código incorrecto'),
   });
 
@@ -410,7 +422,7 @@ function CuentaSheet({ onClose }) {
             <button onClick={() => setVista('cambiar-pin')} className="w-full flex items-center gap-2 py-2.5 px-3 rounded-lg hover:bg-accent transition-colors text-sm text-foreground">
               <KeyRound className="w-4 h-4" /> Cambiar PIN
             </button>
-            <button onClick={() => { logout(); onClose(); }} className="w-full flex items-center gap-2 py-2.5 px-3 rounded-lg hover:bg-accent transition-colors text-sm text-destructive">
+            <button onClick={() => { limpiarCacheCliente(); logout(); onClose(); }} className="w-full flex items-center gap-2 py-2.5 px-3 rounded-lg hover:bg-accent transition-colors text-sm text-destructive">
               <LogOut className="w-4 h-4" /> Cerrar sesión
             </button>
           </div>
@@ -429,7 +441,7 @@ function CuentaSheet({ onClose }) {
         {vista === 'ingresar-pin' && (
           <div className="space-y-3">
             <label className="block text-xs font-medium text-muted-foreground">Ingresá tu PIN</label>
-            <input value={pin} onChange={(e) => setPin(e.target.value)} placeholder="••••" maxLength={4} className={inputCls} />
+            <input type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(e.target.value)} placeholder="••••" maxLength={4} className={inputCls} />
             <button onClick={() => login.mutate()} disabled={pin.trim().length !== 4 || login.isPending} className={botonCls}>
               {login.isPending ? 'Ingresando...' : 'Ingresar'}
             </button>
@@ -440,7 +452,7 @@ function CuentaSheet({ onClose }) {
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">Todavía no tenés un PIN. Creá uno para poder canjear puntos y ver tu historial.</p>
             <label className="block text-xs font-medium text-muted-foreground">Elegí un PIN de 4 dígitos</label>
-            <input value={pin} onChange={(e) => setPin(e.target.value)} placeholder="••••" maxLength={4} className={inputCls} />
+            <input type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(e.target.value)} placeholder="••••" maxLength={4} className={inputCls} />
             <label className="block text-xs font-medium text-muted-foreground">Tu email (para confirmar)</label>
             <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="correo@ejemplo.com" className={inputCls} />
             <button onClick={() => solicitar.mutate()} disabled={pin.trim().length !== 4 || !email.trim() || solicitar.isPending} className={botonCls}>
@@ -462,9 +474,9 @@ function CuentaSheet({ onClose }) {
         {vista === 'cambiar-pin' && (
           <div className="space-y-3">
             <label className="block text-xs font-medium text-muted-foreground">PIN actual</label>
-            <input value={pinActual} onChange={(e) => setPinActual(e.target.value)} placeholder="••••" maxLength={4} className={inputCls} />
+            <input type="password" inputMode="numeric" value={pinActual} onChange={(e) => setPinActual(e.target.value)} placeholder="••••" maxLength={4} className={inputCls} />
             <label className="block text-xs font-medium text-muted-foreground">PIN nuevo</label>
-            <input value={pinNuevo} onChange={(e) => setPinNuevo(e.target.value)} placeholder="••••" maxLength={4} className={inputCls} />
+            <input type="password" inputMode="numeric" value={pinNuevo} onChange={(e) => setPinNuevo(e.target.value)} placeholder="••••" maxLength={4} className={inputCls} />
             <button onClick={() => cambiar.mutate()} disabled={pinActual.trim().length !== 4 || pinNuevo.trim().length !== 4 || cambiar.isPending} className={botonCls}>
               {cambiar.isPending ? 'Guardando...' : 'Cambiar PIN'}
             </button>

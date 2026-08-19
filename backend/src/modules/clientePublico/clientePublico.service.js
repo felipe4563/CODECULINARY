@@ -11,6 +11,7 @@ const PIN_REGEX = /^\d{4}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PIN_INTENTOS_MAX = 5;
 const PIN_BLOQUEO_MINUTOS = 5;
+const SOLICITUD_MIN_INTERVALO_MS = 60_000;
 
 function emitirToken(cliente_id) {
   return jwt.sign({ cliente_id, tipo: 'cliente' }, process.env.JWT_SECRET, { expiresIn: '180d' });
@@ -44,6 +45,11 @@ async function solicitarPin({ numero_documento, pin, email }) {
   const cliente = await _resolverCliente(numero_documento);
   if (cliente.pin_hash) {
     throw Object.assign(new Error('Este CI ya tiene un PIN configurado'), { status: 409 });
+  }
+
+  const pendienteExistente = await ClientePinVerificacion.findOne({ where: { cliente_id: cliente.id } });
+  if (pendienteExistente && pendienteExistente.creado_en > new Date(Date.now() - SOLICITUD_MIN_INTERVALO_MS)) {
+    throw Object.assign(new Error('Ya te mandamos un código hace poco, esperá un momento antes de pedir otro'), { status: 429 });
   }
 
   const codigo = _generarCodigo();

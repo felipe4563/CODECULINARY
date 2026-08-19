@@ -113,15 +113,37 @@ describe('Cliente público — PIN', () => {
       expect(pendiente.email).toBe('cliente@example.com');
     });
 
-    it('una segunda solicitud reemplaza la verificación pendiente anterior', async () => {
+    it('una segunda solicitud, pasado el intervalo mínimo, reemplaza la verificación pendiente anterior', async () => {
       await request(app).post('/api/v1/cliente/pin/solicitar')
         .send({ numero_documento: cliente.numero_documento, pin: '1111', email: 'primero@example.com' });
+      // Simula que la solicitud pendiente ya pasó el intervalo mínimo de
+      // 60s (ver siguiente test), para poder probar el reemplazo sin
+      // depender de un sleep real en el test.
+      await ClientePinVerificacion.update(
+        { creado_en: new Date(Date.now() - 61_000) },
+        { where: { cliente_id: cliente.id } }
+      );
       await request(app).post('/api/v1/cliente/pin/solicitar')
         .send({ numero_documento: cliente.numero_documento, pin: '2222', email: 'segundo@example.com' });
 
       const filas = await ClientePinVerificacion.findAll({ where: { cliente_id: cliente.id } });
       expect(filas.length).toBe(1);
       expect(filas[0].email).toBe('segundo@example.com');
+    });
+
+    it('una segunda solicitud dentro de los 60s → 429, no manda otro email ni reemplaza la pendiente', async () => {
+      await request(app).post('/api/v1/cliente/pin/solicitar')
+        .send({ numero_documento: cliente.numero_documento, pin: '1111', email: 'primero@example.com' });
+
+      const res = await request(app).post('/api/v1/cliente/pin/solicitar')
+        .send({ numero_documento: cliente.numero_documento, pin: '2222', email: 'segundo@example.com' });
+
+      expect(res.status).toBe(429);
+      expect(enviarCodigoPin).toHaveBeenCalledTimes(1);
+
+      const filas = await ClientePinVerificacion.findAll({ where: { cliente_id: cliente.id } });
+      expect(filas.length).toBe(1);
+      expect(filas[0].email).toBe('primero@example.com');
     });
   });
 
@@ -356,7 +378,11 @@ describe('Cliente público — PIN', () => {
       caja = await Caja.create({ sucursal_id: sucursal.id, nombre: 'Caja Historial Test' });
       sesionCaja = await SesionCaja.create({ usuario_id: usuario.id, sucursal_id: sucursal.id, caja_id: caja.id, monto_apertura: 0 });
 
-      clienteHistorial = await Cliente.create({ nombre: 'Cliente Historial', numero_documento: `hist-${timestamp}` });
+      // pin_hash seteado porque authCliente ahora exige una sesión vigente
+      // (ver Task de fix de "PIN reseteado no revoca el token"): en la
+      // realidad un token de cliente solo se emite después de que
+      // verificarPin/confirmarPin confirman que el PIN ya existe.
+      clienteHistorial = await Cliente.create({ nombre: 'Cliente Historial', numero_documento: `hist-${timestamp}`, pin_hash: await bcrypt.hash('1234', 10) });
       otroCliente = await Cliente.create({ nombre: 'Otro Cliente', numero_documento: `otro-${timestamp}` });
 
       pedidoDeEsteCliente = await Pedido.create({

@@ -1,6 +1,7 @@
 const request = require('supertest');
 const app = require('../src/app');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const { Cliente, Rol, Usuario } = require('../src/models');
 
 describe('Clientes API', () => {
@@ -49,6 +50,31 @@ describe('Clientes API', () => {
       expect(actualizado.pin_hash).toBeNull();
       expect(actualizado.pin_intentos_fallidos).toBe(0);
       expect(actualizado.pin_bloqueado_hasta).toBeNull();
+    });
+
+    it('resetear el PIN revoca la sesión de cualquier token de cliente ya emitido', async () => {
+      const clienteConSesion = await Cliente.create({
+        nombre: 'Cliente Sesion Test',
+        numero_documento: `sesion-${Date.now()}`,
+        pin_hash: await bcrypt.hash('4321', 10),
+      });
+      const tokenCliente = jwt.sign({ cliente_id: clienteConSesion.id, tipo: 'cliente' }, process.env.JWT_SECRET, { expiresIn: '180d' });
+
+      const antes = await request(app)
+        .get('/api/v1/cliente/perfil')
+        .set('Authorization', `Bearer ${tokenCliente}`);
+      expect(antes.status).toBe(200);
+
+      await request(app)
+        .post(`/api/v1/clientes/${clienteConSesion.id}/resetear-pin`)
+        .set('Authorization', `Bearer ${token}`);
+
+      const despues = await request(app)
+        .get('/api/v1/cliente/perfil')
+        .set('Authorization', `Bearer ${tokenCliente}`);
+      expect(despues.status).toBe(401);
+
+      await Cliente.destroy({ where: { id: clienteConSesion.id } });
     });
   });
 });
