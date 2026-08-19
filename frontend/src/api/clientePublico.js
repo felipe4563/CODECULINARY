@@ -1,4 +1,4 @@
-import api from './cliente';
+import api from './clienteAnonimo';
 import { useClienteAutoservicioStore } from '../store/clienteAutoservicioStore';
 
 function authHeader() {

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Minus, ShoppingCart, X, Loader2, CheckCircle2, AlertCircle, Package, Sun, Moon, User, Star, History, LogOut, KeyRound } from 'lucide-react';
 import {
   getMenuAutoservicio, crearPedidoAutoservicio, validarCuponAutoservicio, getEstadoPedidoAutoservicio,
@@ -17,6 +17,7 @@ const bs = (n) => `Bs ${parseFloat(n || 0).toFixed(2)}`;
 
 export default function AutoservicioPage() {
   const { codigo } = useParams();
+  const queryClient = useQueryClient();
   const [carrito, setCarrito] = useState([]); // [{ producto, opcion_ids, cantidad }]
   const [mostrarCarrito, setMostrarCarrito] = useState(false);
   const [pedido, setPedido] = useState(null); // { pedido, pago_qr } luego de confirmar
@@ -78,7 +79,10 @@ export default function AutoservicioPage() {
 
   const crear = useMutation({
     mutationFn: () => crearPedidoAutoservicio(codigo, itemsParaBackend(), cuponCodigo.trim(), ciCliente.trim(), puedeCanjear ? puntosACanjear : 0),
-    onSuccess: (datos) => setPedido(datos),
+    onSuccess: (datos) => {
+      setPedido(datos);
+      queryClient.invalidateQueries({ queryKey: ['cliente-perfil'] });
+    },
   });
 
   const validarCupon = useMutation({
@@ -123,7 +127,7 @@ export default function AutoservicioPage() {
   }
 
   if (pedido) {
-    return <EsperaPago codigo={codigo} pedido={pedido} onNuevoPedido={() => { setPedido(null); setCarrito([]); setCuponCodigo(''); setCuponAplicado(null); setCiCliente(''); }} />;
+    return <EsperaPago codigo={codigo} pedido={pedido} onNuevoPedido={() => { setPedido(null); setCarrito([]); setCuponCodigo(''); setCuponAplicado(null); setCiCliente(''); setPuntosACanjear(0); }} />;
   }
 
   const totalItems = carrito.reduce((s, l) => s + l.cantidad, 0);
