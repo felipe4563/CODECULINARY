@@ -9,7 +9,7 @@ async function obtenerTodo() {
 }
 
 async function obtenerPublica() {
-  const claves = ['nombre_negocio', 'logo', 'color_primario', 'color_secundario'];
+  const claves = ['nombre_negocio', 'logo', 'color_primario', 'color_secundario', 'fidelidad_activa', 'fidelidad_canje_qr'];
   const configs = await Configuracion.findAll({ where: { clave: claves } });
   return configs.reduce((obj, c) => {
     obj[c.clave] = c.valor;
