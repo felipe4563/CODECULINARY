@@ -47,6 +47,11 @@ services:
       PERSONAS_API_URL: ${PERSONAS_API_URL:-https://perapi.codewave.com.bo}
       PERSONAS_API_USERNAME: ${PERSONAS_API_USERNAME:-}
       PERSONAS_API_PASSWORD: ${PERSONAS_API_PASSWORD:-}
+      SMTP_HOST: ${SMTP_HOST:-mail.codewave.com.bo}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@codewave.com.bo}
     volumes:
       - uploads:/app/uploads
 
