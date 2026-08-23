@@ -39,7 +39,14 @@ export default function PantallaCocinaImpresion() {
   useWakeLock();
 
   useEffect(() => {
-    if (cajaVinculada) socket.emit('unirse_caja', Number(cajaVinculada));
+    if (!cajaVinculada) return;
+    const id = Number(cajaVinculada);
+    socket.emit('unirse_caja', id);
+    function onConnect() {
+      socket.emit('unirse_caja', id);
+    }
+    socket.on('connect', onConnect);
+    return () => socket.off('connect', onConnect);
   }, [cajaVinculada]);
 
   useEffect(() => {
