@@ -7,7 +7,7 @@ import {
   LayoutDashboard, UtensilsCrossed, Wallet, BookOpen,
   Package, Boxes, Truck, Users, UserCog, Shield, Settings, X,
   BarChart2, ChefHat, ChevronDown, ChevronRight, Building2, Landmark, Store, Grid3x3,
-  Gift, Tag, Star, Ticket, Cake, Disc3, Wheat,
+  Gift, Tag, Star, Ticket, Cake, Disc3, Wheat, Printer,
 } from 'lucide-react';
 
 const NAV_GROUPS = [
@@ -18,6 +18,7 @@ const NAV_GROUPS = [
       { to: '/',           label: 'Dashboard',    Icono: LayoutDashboard, siempre: true },
       { to: '/ventas',     label: 'Ventas / POS',  Icono: UtensilsCrossed, modulo: 'ventas',     accion: 'ver' },
       { to: '/cocina',     label: 'Cocina',        Icono: ChefHat,         modulo: 'cocina',     accion: 'ver' },
+      { to: '/pantalla-cocina-impresion', label: 'Pantalla Cocina (BT)', Icono: Printer, modulo: 'cocina', accion: 'ver' },
       { to: '/caja',       label: 'Caja',          Icono: Wallet,          modulo: 'caja',       accion: 'ver' },
       { to: '/libro-caja', label: 'Libro Caja',    Icono: BookOpen,        modulo: 'libro_caja', accion: 'ver' },
     ],

@@ -18,6 +18,7 @@ import ComprasPage from '../pages/compras/ComprasPage';
 import ClientesPage from '../pages/clientes/ClientesPage';
 import ReportesPage from '../pages/reportes/ReportesPage';
 import CocinaPage from '../pages/cocina/CocinaPage';
+import PantallaCocinaImpresion from '../pages/cocina/PantallaCocinaImpresion';
 import PerfilPage from '../pages/perfil/PerfilPage';
 import CombosPage from '../pages/combos/CombosPage';
 import PromocionesPage from '../pages/promociones/PromocionesPage';
@@ -58,6 +59,7 @@ export const router = createBrowserRouter(
             { path: '/clientes',         element: <ClientesPage /> },
             { path: '/reportes',         element: <ReportesPage /> },
             { path: '/cocina',           element: <CocinaPage /> },
+            { path: '/pantalla-cocina-impresion', element: <PantallaCocinaImpresion /> },
             { path: '/perfil',           element: <PerfilPage /> },
           ],
         },
