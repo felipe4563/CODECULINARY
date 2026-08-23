@@ -24,3 +24,6 @@ api_personas/
 
 # Doc interna para coordinar con el equipo de la app de pedidos — no se sube.
 docs/sincronizacion-productos-websocket.md
+
+# Workspace de trabajo de Superpowers (ledgers, briefs, reportes) — scratch local.
+.superpowers/
