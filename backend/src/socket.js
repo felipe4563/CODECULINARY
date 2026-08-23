@@ -2,6 +2,12 @@ const { Server } = require('socket.io');
 
 let _io = null;
 
+// socket.id -> { sucursal_id, caja_id, conectado_en } — solo agentes de
+// impresión física que se identificaron con 'agente:conectado' (ver
+// print-agent/agent.js). Un navegador de staff normal nunca emite ese
+// evento, así que nunca aparece acá.
+const agentesConectados = new Map();
+
 function init(server) {
   const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
     .split(',')
@@ -28,7 +34,23 @@ function init(server) {
     socket.on('unirse_caja', (caja_id) => {
       if (caja_id) socket.join(`caja:${caja_id}`);
     });
-    socket.on('disconnect', () => console.log('Socket desconectado:', socket.id));
+    // El agente de impresión física se identifica apenas conecta (ver
+    // print-agent/agent.js) — a diferencia de unirse_sucursal/unirse_caja
+    // (que también usan pantallas de staff normales), esto es exclusivo
+    // del agente, así que sirve para saber "está vivo" desde el backend.
+    socket.on('agente:conectado', ({ sucursal_id, caja_id } = {}) => {
+      if (!sucursal_id) return;
+      agentesConectados.set(socket.id, { sucursal_id, caja_id: caja_id || null, conectado_en: Date.now() });
+      emitir('agente:estado', { caja_id: caja_id || null, conectado: true }, sucursal_id);
+    });
+    socket.on('disconnect', () => {
+      console.log('Socket desconectado:', socket.id);
+      const info = agentesConectados.get(socket.id);
+      if (info) {
+        agentesConectados.delete(socket.id);
+        emitir('agente:estado', { caja_id: info.caja_id, conectado: false }, info.sucursal_id);
+      }
+    });
   });
   return _io;
 }
@@ -44,4 +66,8 @@ function emitir(evento, datos = {}, sucursal_id = null, caja_id = null) {
   }
 }
 
-module.exports = { init, emitir };
+function estadoAgentes() {
+  return Array.from(agentesConectados.values());
+}
+
+module.exports = { init, emitir, estadoAgentes };
