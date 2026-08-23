@@ -40,12 +40,18 @@ export function imprimirLocal(datosImpresion, { forzar = false } = {}) {
   const qs = forzar ? '?forzar=1' : '';
   const cajaBT = datosImpresion.caja?.modo_impresion === 'bluetooth';
   const cocinaBT = datosImpresion.cocina?.modo_impresion === 'bluetooth';
+  // Si hay una pantalla dedicada en cocina (ver PantallaCocinaImpresion.jsx),
+  // esa pantalla es la única responsable de imprimir la comanda por
+  // Bluetooth — el dispositivo que vendió no debe imprimirla también, o
+  // sale duplicada. El flag viaja en el propio payload de cocina (lo agrega
+  // el backend en _emitirImpresion), así que no hace falta otra consulta.
+  const cocinaConPantallaDedicada = datosImpresion.cocina?.config?.cocina_pantalla_dedicada === 'true';
 
   // Los dos tickets Bluetooth no se disparan juntos (ver por qué en
   // store/impresionStore.js) — se imprime caja y cocina queda pendiente de
   // un botón manual ("Imprimir cocina") para que la persona corte el papel
   // con calma antes de mandar el siguiente.
-  if (cajaBT && cocinaBT) {
+  if (cajaBT && cocinaBT && !cocinaConPantallaDedicada) {
     imprimirBluetoothCaja(datosImpresion.caja).then(() => {
       useImpresionStore.getState().marcarCocinaPendiente(datosImpresion.cocina);
     });
@@ -60,7 +66,7 @@ export function imprimirLocal(datosImpresion, { forzar = false } = {}) {
         });
       }
     }
-    if (datosImpresion.cocina) {
+    if (datosImpresion.cocina && !cocinaConPantallaDedicada) {
       if (cocinaBT) {
         imprimirBluetoothCocina(datosImpresion.cocina);
       } else {
