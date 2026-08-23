@@ -15,6 +15,7 @@ export default function TabFlujo({ puedeEditar }) {
 
   const flujoActual   = config.flujo_cocina ?? 'digital';
   const destinoActual = config.cocina_destino ?? 'centralizada';
+  const pantallaDedicadaActiva = config.cocina_pantalla_dedicada === 'true';
 
   const guardar = useMutation({
     mutationFn: (flujo) => actualizarConfiguracion({ flujo_cocina: flujo }),
@@ -27,6 +28,15 @@ export default function TabFlujo({ puedeEditar }) {
 
   const guardarDestino = useMutation({
     mutationFn: (destino) => actualizarConfiguracion({ cocina_destino: destino }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['configuracion'] });
+      setGuardado(true);
+      setTimeout(() => setGuardado(false), 2500);
+    },
+  });
+
+  const guardarPantallaDedicada = useMutation({
+    mutationFn: (activo) => actualizarConfiguracion({ cocina_pantalla_dedicada: activo ? 'true' : 'false' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['configuracion'] });
       setGuardado(true);
@@ -131,6 +141,21 @@ export default function TabFlujo({ puedeEditar }) {
                 </div>
               </button>
             ))}
+            <div className="pt-2 flex items-start gap-3">
+              <input
+                id="cocina-pantalla-dedicada"
+                type="checkbox"
+                checked={pantallaDedicadaActiva}
+                onChange={(e) => puedeEditar && guardarPantallaDedicada.mutate(e.target.checked)}
+                disabled={!puedeEditar || guardarPantallaDedicada.isPending}
+                className="mt-0.5 w-4 h-4 rounded border-input"
+              />
+              <label htmlFor="cocina-pantalla-dedicada" className="text-xs text-muted-foreground leading-relaxed">
+                <span className="font-semibold text-foreground">Pantalla dedicada en cocina (Bluetooth)</span> — si tu impresora de cocina es Bluetooth y usás la pantalla{' '}
+                <code className="text-[11px] bg-muted px-1 py-0.5 rounded">/pantalla-cocina-impresion</code>{' '}
+                en un dispositivo fijo, activá esto para que la comanda salga sola incluso en pedidos de autoservicio (sin cajero vendiendo). El dispositivo que vende deja de imprimir la comanda — queda solo en manos de esa pantalla.
+              </label>
+            </div>
           </div>
         )}
 
