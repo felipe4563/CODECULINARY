@@ -466,7 +466,7 @@ async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, 
 }
 
 async function _emitirImpresion(pedido, metodo_pago, cambio, sucursal_id, numeroOrdenDiarioOverride) {
-  const cfgRows = await Configuracion.findAll({ where: { clave: ['nombre_negocio', 'simbolo_moneda', 'direccion', 'telefono', 'flujo_cocina', 'cocina_destino', 'logo'] } });
+  const cfgRows = await Configuracion.findAll({ where: { clave: ['nombre_negocio', 'simbolo_moneda', 'direccion', 'telefono', 'flujo_cocina', 'cocina_destino', 'cocina_pantalla_dedicada', 'logo'] } });
   const cfg = cfgRows.reduce((o, r) => { o[r.clave] = r.valor; return o; }, {});
 
   // Los llamadores normales (crearCompleta, cobrar, _confirmarPagoQr) no
