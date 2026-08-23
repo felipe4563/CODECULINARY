@@ -11,6 +11,7 @@ import { getEstadoCajas } from '../api/caja';
 import { getLibroCaja } from '../api/libroCaja';
 import socket from '../socket';
 import { TrendingUp, TrendingDown, PiggyBank, ShoppingBag, Wallet, XCircle, CalendarDays } from 'lucide-react';
+import EstadoAgentesImpresion from '../components/dashboard/EstadoAgentesImpresion';
 
 /* ─── Paleta de colores ───────────────────────────────────────── */
 const PALETA = ['#6366f1','#10b981','#f59e0b','#ec4899','#3b82f6','#14b8a6','#f97316','#8b5cf6'];
@@ -534,6 +535,8 @@ export default function Dashboard() {
             )}
           </div>
         )}
+
+        {puedeVerCaja && <EstadoAgentesImpresion />}
 
         {/* ── Sin datos ────────────────────────────────────────── */}
         {!cvVentas && puedeVerVentas && !haySuficientesDatos && (
