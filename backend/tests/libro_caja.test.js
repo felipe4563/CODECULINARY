@@ -54,7 +54,10 @@ describe('Libro Caja — aislamiento entre sucursales', () => {
   });
 
   afterAll(async () => {
-    await LibroCaja.destroy({ where: { sesion_caja_id: [sesionAId, sesionBId] } });
+    // El test "Sin sesión" crea un movimiento con sesion_caja_id NULL — filtrar
+    // solo por sesion_caja_id lo deja huérfano y rompe el Usuario.destroy de
+    // abajo por la FK, así que acá se filtra también por usuario_id.
+    await LibroCaja.destroy({ where: { usuario_id: [usuarioAId, usuarioBId] } });
     await SesionCaja.destroy({ where: { id: [sesionAId, sesionBId] } });
     await Caja.destroy({ where: { id: [cajaAId, cajaBId] } });
     await Usuario.destroy({ where: { id: [usuarioAId, usuarioBId] } });
@@ -102,13 +105,14 @@ describe('Libro Caja — aislamiento entre sucursales', () => {
     expect(entradas).toBe(1); // solo el movimiento original, no se creó el intruso
   });
 
-  it('POST /api/v1/libro-caja sin sesion_caja_id → 400', async () => {
+  it('POST /api/v1/libro-caja sin sesion_caja_id → lo crea igual, sin sesión asociada (gasto/ingreso fuera de caja)', async () => {
     const res = await request(app)
       .post('/api/v1/libro-caja')
       .set('Authorization', `Bearer ${tokenA}`)
       .send({ tipo: 'ingreso', concepto: 'Sin sesión', monto: 10 });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(201);
+    expect(res.body.datos.sesion_caja_id).toBeNull();
   });
 
   it('un egreso en efectivo registrado por Libro de Caja suma a total_gastos de la sesión (regresión)', async () => {

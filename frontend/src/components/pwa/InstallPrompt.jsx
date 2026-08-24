@@ -6,7 +6,14 @@ export default function InstallPrompt() {
   const { canInstall, install } = usePWAInstall();
   const [dismissed, setDismissed] = useState(false);
 
-  if (!canInstall || dismissed) return null;
+  // La pantalla de autoservicio (/m/:codigo) la abre el cliente desde su
+  // propio celular escaneando un QR de mesa — instalar la PWA del staff ahí
+  // no tiene sentido y solo tapa la pantalla de pedido. Se lee
+  // window.location directo (este componente se monta fuera del contexto
+  // de <RouterProvider>, así que useLocation() no está disponible acá).
+  const esAutoservicio = window.location.pathname.startsWith('/m/');
+
+  if (!canInstall || dismissed || esAutoservicio) return null;
 
   return (
     <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 z-[9998] bg-white dark:bg-[#1E1208] border border-amber-200 dark:border-amber-900/40 rounded-2xl shadow-xl p-4 flex items-start gap-3">

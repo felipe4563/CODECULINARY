@@ -9,7 +9,10 @@ const sequelize = require('../config/database');
 const ClientePinVerificacion = sequelize.define('ClientePinVerificacion', {
   id: { type: DataTypes.INTEGER.UNSIGNED, primaryKey: true, autoIncrement: true },
   cliente_id: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, unique: true },
-  pin_hash: { type: DataTypes.STRING(255), allowNull: false },
+  // NULL mientras la fila representa un pedido de recuperación de PIN: en
+  // ese flujo todavía no se conoce el PIN nuevo cuando se manda el código,
+  // recién se define al confirmar (ver recuperarPinConfirmar).
+  pin_hash: { type: DataTypes.STRING(255), allowNull: true },
   email: { type: DataTypes.STRING(255), allowNull: false },
   codigo_hash: { type: DataTypes.STRING(255), allowNull: false },
   intentos: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },

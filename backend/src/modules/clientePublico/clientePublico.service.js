@@ -144,4 +144,80 @@ async function historial(cliente_id) {
   return ventasService.listar({ cliente_id, estado: 'completado', acceso_todas: true });
 }
 
-module.exports = { estado, solicitarPin, confirmarPin, verificarPin, cambiarPin, perfil, historial, emitirToken };
+// Enmascara el email para mostrarlo en pantalla sin revelarlo completo
+// (ej. "ru***@gmail.com") — el cliente ya lo conoce, esto es solo para que
+// reconozca a cuál cuenta le llegó el código sin exponerlo a quien mire por
+// encima del hombro en un dispositivo compartido de mesa.
+function _enmascararEmail(email) {
+  const [usuario, dominio] = email.split('@');
+  const visible = usuario.slice(0, 2);
+  return `${visible}${'*'.repeat(Math.max(1, usuario.length - visible.length))}@${dominio}`;
+}
+
+async function recuperarPinSolicitar({ numero_documento }) {
+  const cliente = await _resolverCliente(numero_documento);
+  if (!cliente.pin_hash) {
+    throw Object.assign(new Error('Este CI todavía no tiene un PIN configurado'), { status: 409 });
+  }
+  if (!cliente.email) {
+    throw Object.assign(new Error('No tenés un email registrado para recuperar el PIN. Pedile al staff que te ayude.'), { status: 409 });
+  }
+
+  const pendienteExistente = await ClientePinVerificacion.findOne({ where: { cliente_id: cliente.id } });
+  if (pendienteExistente && pendienteExistente.creado_en > new Date(Date.now() - SOLICITUD_MIN_INTERVALO_MS)) {
+    throw Object.assign(new Error('Ya te mandamos un código hace poco, esperá un momento antes de pedir otro'), { status: 429 });
+  }
+
+  const codigo = _generarCodigo();
+  const codigo_hash = await bcrypt.hash(codigo, 10);
+
+  await ClientePinVerificacion.destroy({ where: { cliente_id: cliente.id } });
+  await ClientePinVerificacion.create({
+    cliente_id: cliente.id,
+    pin_hash: null,
+    email: cliente.email,
+    codigo_hash,
+    intentos: 0,
+    expira_en: new Date(Date.now() + CODIGO_EXPIRA_MINUTOS * 60_000),
+  });
+
+  await enviarCodigoPin({ to: cliente.email, codigo });
+  return { ok: true, email_parcial: _enmascararEmail(cliente.email) };
+}
+
+async function recuperarPinConfirmar({ numero_documento, codigo, pin_nuevo }) {
+  if (!PIN_REGEX.test(pin_nuevo || '')) {
+    throw Object.assign(new Error('El PIN nuevo debe ser de 4 dígitos'), { status: 400 });
+  }
+
+  const cliente = await _resolverCliente(numero_documento);
+  const pendiente = await ClientePinVerificacion.findOne({ where: { cliente_id: cliente.id } });
+
+  if (!pendiente || pendiente.expira_en < new Date()) {
+    if (pendiente) await pendiente.destroy();
+    throw Object.assign(new Error('Código vencido, pedí uno nuevo'), { status: 400 });
+  }
+  if (pendiente.intentos >= CODIGO_INTENTOS_MAX) {
+    throw Object.assign(new Error('Demasiados intentos, pedí un código nuevo'), { status: 429 });
+  }
+
+  const coincide = await bcrypt.compare(String(codigo || ''), pendiente.codigo_hash);
+  if (!coincide) {
+    await pendiente.update({ intentos: pendiente.intentos + 1 });
+    throw Object.assign(new Error('Código incorrecto'), { status: 400 });
+  }
+
+  await cliente.update({
+    pin_hash: await bcrypt.hash(pin_nuevo, 10),
+    pin_intentos_fallidos: 0,
+    pin_bloqueado_hasta: null,
+  });
+  await pendiente.destroy();
+
+  return { token: emitirToken(cliente.id) };
+}
+
+module.exports = {
+  estado, solicitarPin, confirmarPin, verificarPin, cambiarPin, perfil, historial, emitirToken,
+  recuperarPinSolicitar, recuperarPinConfirmar,
+};

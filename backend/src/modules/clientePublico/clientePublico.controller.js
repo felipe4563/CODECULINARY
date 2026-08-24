@@ -37,4 +37,17 @@ async function historial(req, res, next) {
   catch (err) { next(err); }
 }
 
-module.exports = { estado, solicitarPin, confirmarPin, verificarPin, cambiarPin, perfil, historial };
+async function recuperarPinSolicitar(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.recuperarPinSolicitar(req.body) }); }
+  catch (err) { next(err); }
+}
+
+async function recuperarPinConfirmar(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.recuperarPinConfirmar(req.body) }); }
+  catch (err) { next(err); }
+}
+
+module.exports = {
+  estado, solicitarPin, confirmarPin, verificarPin, cambiarPin, perfil, historial,
+  recuperarPinSolicitar, recuperarPinConfirmar,
+};

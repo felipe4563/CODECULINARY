@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const app = require('../src/app');
 const { Op } = require('sequelize');
-const { Sucursal, Area, Mesa, MesaSesion, Rol, Usuario, Pedido, DetallePedido, PagoQr, Categoria, Producto, ProductoStockSucursal, Caja, SesionCaja, Cupon, Cliente, Configuracion } = require('../src/models');
+const { Sucursal, Area, Mesa, MesaSesion, Rol, Usuario, Pedido, DetallePedido, PagoQr, Categoria, Producto, ProductoStockSucursal, Caja, SesionCaja, Cupon, Cliente, Configuracion, Combo, ComboProducto, Promocion } = require('../src/models');
 
 describe('Autoservicio API', () => {
   it('GET .../mesa/:codigo_qr con código inexistente → 404', async () => {
@@ -38,6 +38,31 @@ describe('Autoservicio API', () => {
       expect(res.status).toBe(200);
       expect(res.body.datos.mesa.id).toBe(mesa.id);
       expect(Array.isArray(res.body.datos.productos)).toBe(true);
+      expect(Array.isArray(res.body.datos.combos)).toBe(true);
+      expect(Array.isArray(res.body.datos.promociones)).toBe(true);
+    });
+
+    it('el menú incluye combos activos y promociones vigentes, con la categoría de cada producto', async () => {
+      const timestamp = Date.now();
+      const categoria = await Categoria.create({ nombre: `Categoria Menu Test ${timestamp}` });
+      const producto = await Producto.create({ categoria_id: categoria.id, nombre: `Producto Menu Test ${timestamp}`, precio: 15, es_vendible: 1 });
+      const combo = await Combo.create({ nombre: `Combo Menu Test ${timestamp}`, precio: 20, activo: 1 });
+      await ComboProducto.create({ combo_id: combo.id, producto_id: producto.id, cantidad: 1 });
+      const promo = await Promocion.create({ nombre: `Promo Menu Test ${timestamp}`, tipo: 'porcentaje', valor: 10, activo: 1 });
+      await promo.setProductos([producto.id]);
+
+      const res = await request(app).get(`/api/v1/autoservicio/mesa/${mesa.codigo_qr}`);
+
+      expect(res.status).toBe(200);
+      const productoEnMenu = res.body.datos.productos.find((p) => p.id === producto.id);
+      expect(productoEnMenu.categoria.id).toBe(categoria.id);
+      expect(res.body.datos.combos.some((c) => c.id === combo.id)).toBe(true);
+      expect(res.body.datos.promociones.some((p) => p.producto_id === producto.id)).toBe(true);
+
+      await promo.destroy();
+      await combo.destroy();
+      await producto.destroy();
+      await categoria.destroy();
     });
 
     it('crear pedido sin caja abierta en la sucursal → 409', async () => {
@@ -266,6 +291,67 @@ describe('Autoservicio API', () => {
       // prueba — acá lo que importa es que la ausencia de cupon_codigo no
       // sea, por sí sola, motivo de rechazo (no debe dar 400 de validación).
       expect(res.status).not.toBe(400);
+    });
+  });
+
+  describe('combo en el pedido de autoservicio', () => {
+    // Igual que con los cupones: el item con combo_id viaja tal cual a
+    // ventasService.crearCompleta, que ya sabe resolver combos (misma lógica
+    // que usa el cajero) — acá solo se prueba que autoservicio lo deja pasar
+    // y que el detalle del pedido queda con combo_id (no producto_id).
+    let sucursal, area, mesa, usuario, caja, combo;
+
+    beforeAll(async () => {
+      const timestamp = Date.now();
+      sucursal = await Sucursal.create({ nombre: `Sucursal Autoservicio Combo Test ${timestamp}` });
+      area = await Area.create({ nombre: `Area Autoservicio Combo Test ${timestamp}`, sucursal_id: sucursal.id });
+      mesa = await Mesa.create({ area_id: area.id, nombre: 'Mesa Combo Test', codigo_qr: `test-qr-combo-${timestamp}` });
+      await MesaSesion.create({ mesa_id: mesa.id, sucursal_id: sucursal.id, abierta_por: 'staff' });
+
+      const categoria = await Categoria.create({ nombre: `Categoria Autoservicio Combo Test ${timestamp}` });
+      const producto = await Producto.create({ categoria_id: categoria.id, nombre: `Producto Autoservicio Combo Test ${timestamp}`, precio: 25, stock: 0 });
+      await ProductoStockSucursal.create({ producto_id: producto.id, sucursal_id: sucursal.id, stock: 10 });
+      combo = await Combo.create({ nombre: `Combo Autoservicio Test ${timestamp}`, precio: 40, activo: 1 });
+      await ComboProducto.create({ combo_id: combo.id, producto_id: producto.id, cantidad: 1 });
+
+      const rol = await Rol.findOne({ where: { nombre: 'Cajero' } });
+      const hash = await bcrypt.hash('clave123', 10);
+      usuario = await Usuario.create({ rol_id: rol.id, nombre: `Autoservicio Combo Test ${timestamp}`, email: `autoservicio-combo-test-${timestamp}@restaurante.com`, contrasena: hash });
+
+      caja = await Caja.create({ sucursal_id: sucursal.id, nombre: 'Caja Autoservicio Combo Test' });
+      await SesionCaja.create({ usuario_id: usuario.id, sucursal_id: sucursal.id, caja_id: caja.id, monto_apertura: 0 });
+    });
+
+    afterAll(async () => {
+      const pedidosDeLaMesa = await Pedido.findAll({ where: { mesa_id: mesa.id }, attributes: ['id'] });
+      const pedidoIds = pedidosDeLaMesa.map((p) => p.id);
+      await PagoQr.destroy({ where: { pedido_id: { [Op.in]: pedidoIds } } });
+      await DetallePedido.destroy({ where: { pedido_id: { [Op.in]: pedidoIds } } });
+      await Pedido.destroy({ where: { mesa_id: mesa.id } });
+      await Combo.destroy({ where: { id: combo.id } });
+      await SesionCaja.destroy({ where: { caja_id: caja.id } });
+      await Caja.destroy({ where: { id: caja.id } });
+      await Usuario.destroy({ where: { id: usuario.id } });
+      await MesaSesion.destroy({ where: { mesa_id: mesa.id } });
+      await Mesa.destroy({ where: { id: mesa.id } });
+      await Area.destroy({ where: { id: area.id } });
+      await Sucursal.destroy({ where: { id: sucursal.id } });
+    });
+
+    it('un pedido con combo_id no lo rechaza por validación, y el detalle queda con combo_id (no producto_id)', async () => {
+      const res = await request(app)
+        .post(`/api/v1/autoservicio/mesa/${mesa.codigo_qr}/pedido`)
+        .send({ items: [{ combo_id: combo.id, cantidad: 1 }] });
+
+      // Sin mock de CodePay en esta suite, el camino feliz completo (QR real
+      // generado) queda fuera de esta prueba — lo que importa es que no lo
+      // corte la validación de items/combo en sí.
+      expect(res.status).not.toBe(400);
+
+      const detalle = await DetallePedido.findOne({ where: { combo_id: combo.id } });
+      expect(detalle).not.toBeNull();
+      expect(detalle.producto_id).toBeNull();
+      expect(parseFloat(detalle.precio)).toBe(40);
     });
   });
 

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Minus, ShoppingCart, X, Loader2, CheckCircle2, AlertCircle, Package, Sun, Moon, User, Star, History, LogOut, KeyRound } from 'lucide-react';
+import { Plus, Minus, ShoppingCart, X, Loader2, CheckCircle2, AlertCircle, Package, Sun, Moon, User, Star, History, LogOut, KeyRound, Gift, ChevronDown } from 'lucide-react';
 import {
   getMenuAutoservicio, crearPedidoAutoservicio, validarCuponAutoservicio, getEstadoPedidoAutoservicio,
 } from '../../api/autoservicio';
@@ -9,16 +9,18 @@ import { getConfiguracionPublica, logoSrc } from '../../api/configuracion';
 import {
   estadoCliente, solicitarPinCliente, confirmarPinCliente, verificarPinCliente,
   cambiarPinCliente, perfilCliente, historialCliente,
+  recuperarPinSolicitarCliente, recuperarPinConfirmarCliente,
 } from '../../api/clientePublico';
 import { useClienteAutoservicioStore } from '../../store/clienteAutoservicioStore';
 import { useTemaAutoservicio } from '../../hooks/useTemaAutoservicio';
+import SelectorOpcionModal from '../ventas/components/SelectorOpcionModal';
 
 const bs = (n) => `Bs ${parseFloat(n || 0).toFixed(2)}`;
 
 export default function AutoservicioPage() {
   const { codigo } = useParams();
   const queryClient = useQueryClient();
-  const [carrito, setCarrito] = useState([]); // [{ producto, opcion_ids, cantidad }]
+  const [carrito, setCarrito] = useState([]); // [{ tipo: 'producto', producto, opcion_ids, cantidad } | { tipo: 'combo', combo, cantidad }]
   const [mostrarCarrito, setMostrarCarrito] = useState(false);
   const [pedido, setPedido] = useState(null); // { pedido, pago_qr } luego de confirmar
   const [cuponCodigo, setCuponCodigo] = useState('');
@@ -27,6 +29,8 @@ export default function AutoservicioPage() {
   const { modo, toggleModo } = useTemaAutoservicio();
   const [mostrarCuenta, setMostrarCuenta] = useState(false);
   const [puntosACanjear, setPuntosACanjear] = useState(0);
+  const [categoriaActiva, setCategoriaActiva] = useState(null); // null = todas
+  const [selectorOpcion, setSelectorOpcion] = useState(null); // producto con grupos_opciones, mientras se elige
   const { token } = useClienteAutoservicioStore();
 
   const { data: config } = useQuery({ queryKey: ['configuracion-publica'], queryFn: getConfiguracionPublica });
@@ -36,35 +40,88 @@ export default function AutoservicioPage() {
     retry: false,
   });
 
+  const promoPorProducto = useMemo(() => {
+    const mapa = {};
+    (menu?.promociones ?? []).forEach((p) => { mapa[p.producto_id] = p; });
+    return mapa;
+  }, [menu]);
+
+  const precioConPromo = (producto) => {
+    const base = parseFloat(producto.precio);
+    const promo = promoPorProducto[producto.id];
+    if (!promo) return base;
+    const descuento = promo.tipo === 'porcentaje' ? base * (parseFloat(promo.valor) / 100) : parseFloat(promo.valor);
+    return Math.max(0, base - descuento);
+  };
+
+  const categorias = useMemo(() => {
+    const vistas = new Map();
+    (menu?.productos ?? []).forEach((p) => { if (p.categoria) vistas.set(p.categoria.id, p.categoria); });
+    return [...vistas.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [menu]);
+
+  const productosFiltrados = useMemo(() => {
+    const productos = menu?.productos ?? [];
+    if (!categoriaActiva) return productos;
+    return productos.filter((p) => p.categoria?.id === categoriaActiva);
+  }, [menu, categoriaActiva]);
+
   const totalCarrito = useMemo(
-    () => carrito.reduce((s, l) => s + l.producto.precio * l.cantidad, 0),
-    [carrito]
+    () => carrito.reduce((s, l) => s + (l.tipo === 'combo' ? parseFloat(l.combo.precio) : precioConPromo(l.producto) + l.extra) * l.cantidad, 0),
+    [carrito, promoPorProducto]
   );
 
-  // Sin variantes/opciones en esta pantalla todavía, cada producto es una
-  // sola línea — sumar cantidad en vez de apilar líneas repetidas evita que
-  // "Charque x1" aparezca 3 veces seguidas en el carrito.
+  // Un producto sin opciones es siempre una sola línea (sumar cantidad en
+  // vez de apilar evita que "Charque x1" aparezca repetido en el carrito).
+  // Con opciones, dos elecciones distintas del mismo producto (ej. "Grande"
+  // vs "Chico") SÍ son líneas separadas — por eso acá se suma el total por
+  // producto_id (para el contador en la grilla), no se pisa una con otra.
   const cantidadPorProducto = useMemo(() => {
     const map = {};
-    carrito.forEach((l) => { map[l.producto.id] = l.cantidad; });
+    carrito.forEach((l) => { if (l.tipo === 'producto') map[l.producto.id] = (map[l.producto.id] ?? 0) + l.cantidad; });
     return map;
   }, [carrito]);
 
-  const agregarAlCarrito = (producto) => {
+  const cantidadPorCombo = useMemo(() => {
+    const map = {};
+    carrito.forEach((l) => { if (l.tipo === 'combo') map[l.combo.id] = l.cantidad; });
+    return map;
+  }, [carrito]);
+
+  // seleccion viene de SelectorOpcionModal: { nota, opcionIds, extra } — null
+  // para un producto sin opciones. Dos líneas del mismo producto se
+  // consideran la misma solo si eligieron exactamente lo mismo (mismo nota).
+  const agregarAlCarrito = (producto, seleccion = null) => {
+    const opcion_ids = seleccion?.opcionIds ?? [];
+    const nota = seleccion?.nota ?? null;
+    const extra = seleccion?.extra ?? 0;
     setCarrito((c) => {
-      const idx = c.findIndex((l) => l.producto.id === producto.id);
+      const idx = c.findIndex((l) => l.tipo === 'producto' && l.producto.id === producto.id && l.nota === nota);
       if (idx >= 0) {
         const copia = [...c];
         copia[idx] = { ...copia[idx], cantidad: copia[idx].cantidad + 1 };
         return copia;
       }
-      return [...c, { producto, opcion_ids: [], cantidad: 1 }];
+      return [...c, { tipo: 'producto', producto, opcion_ids, nota, extra, cantidad: 1 }];
     });
+  };
+
+  const handleAgregarProducto = (producto) => {
+    if (producto.grupos_opciones?.length > 0) {
+      setSelectorOpcion(producto);
+      return;
+    }
+    agregarAlCarrito(producto);
+  };
+
+  const elegirOpcionProducto = (seleccion) => {
+    agregarAlCarrito(selectorOpcion, seleccion);
+    setSelectorOpcion(null);
   };
 
   const restarDelCarrito = (producto) => {
     setCarrito((c) => {
-      const idx = c.findIndex((l) => l.producto.id === producto.id);
+      const idx = c.findIndex((l) => l.tipo === 'producto' && l.producto.id === producto.id);
       if (idx < 0) return c;
       if (c[idx].cantidad <= 1) return c.filter((_, i) => i !== idx);
       const copia = [...c];
@@ -73,9 +130,51 @@ export default function AutoservicioPage() {
     });
   };
 
-  const itemsParaBackend = () => carrito.map(l => ({
-    producto_id: l.producto.id, cantidad: l.cantidad, opcion_ids: l.opcion_ids,
-  }));
+  // Para líneas de producto en el carrito (a diferencia de la grilla, acá
+  // puede haber más de una línea del mismo producto_id con opciones
+  // distintas) — se opera por índice, nunca por producto_id, para no tocar
+  // la variante equivocada.
+  const incrementarLinea = (idx) => {
+    setCarrito((c) => c.map((l, i) => (i === idx ? { ...l, cantidad: l.cantidad + 1 } : l)));
+  };
+
+  const decrementarLinea = (idx) => {
+    setCarrito((c) => {
+      if (c[idx].cantidad <= 1) return c.filter((_, i) => i !== idx);
+      return c.map((l, i) => (i === idx ? { ...l, cantidad: l.cantidad - 1 } : l));
+    });
+  };
+
+  const agregarComboAlCarrito = (combo) => {
+    setCarrito((c) => {
+      const idx = c.findIndex((l) => l.tipo === 'combo' && l.combo.id === combo.id);
+      if (idx >= 0) {
+        const copia = [...c];
+        copia[idx] = { ...copia[idx], cantidad: copia[idx].cantidad + 1 };
+        return copia;
+      }
+      return [...c, { tipo: 'combo', combo, cantidad: 1 }];
+    });
+  };
+
+  const restarComboDelCarrito = (combo) => {
+    setCarrito((c) => {
+      const idx = c.findIndex((l) => l.tipo === 'combo' && l.combo.id === combo.id);
+      if (idx < 0) return c;
+      if (c[idx].cantidad <= 1) return c.filter((_, i) => i !== idx);
+      const copia = [...c];
+      copia[idx] = { ...copia[idx], cantidad: copia[idx].cantidad - 1 };
+      return copia;
+    });
+  };
+
+  const comboContenido = (combo) => (combo.productos || []).map((p) => `${p.ComboProducto?.cantidad ?? 1}x ${p.nombre}`).join(', ');
+
+  const itemsParaBackend = () => carrito.map(l => (
+    l.tipo === 'combo'
+      ? { combo_id: l.combo.id, cantidad: l.cantidad }
+      : { producto_id: l.producto.id, cantidad: l.cantidad, opcion_ids: l.opcion_ids }
+  ));
 
   const crear = useMutation({
     mutationFn: () => crearPedidoAutoservicio(codigo, itemsParaBackend(), cuponCodigo.trim(), ciCliente.trim(), puedeCanjear ? puntosACanjear : 0),
@@ -156,9 +255,56 @@ export default function AutoservicioPage() {
         </button>
       </header>
 
+      {categorias.length > 1 && (
+        <div className="px-4 pt-4 pb-1">
+          <div className="relative">
+            <select
+              value={categoriaActiva ?? ''}
+              onChange={(e) => setCategoriaActiva(e.target.value ? Number(e.target.value) : null)}
+              className="w-full appearance-none bg-card border border-input rounded-lg pl-3 pr-9 py-2 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">Todas las categorías</option>
+              {categorias.map((cat) => (
+                <option key={cat.id} value={cat.id}>{cat.nombre}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          </div>
+        </div>
+      )}
+
+      {menu.combos?.length > 0 && (
+        <div className="relative">
+          <div className="flex gap-2 overflow-x-auto px-4 pt-3 pb-1 scrollbar-hide">
+            {menu.combos.map((combo) => {
+              const cantidad = cantidadPorCombo[combo.id] ?? 0;
+              return (
+                <button
+                  key={combo.id}
+                  onClick={() => agregarComboAlCarrito(combo)}
+                  className={`shrink-0 flex flex-col items-start gap-0.5 px-3.5 py-2.5 rounded-xl border transition-colors text-left ${cantidad ? 'border-primary bg-primary/10' : 'border-border bg-card hover:bg-accent'}`}
+                >
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                    <Gift className="w-3.5 h-3.5 text-primary shrink-0" /> {combo.nombre}
+                    {cantidad > 0 && <span className="text-xs font-bold text-primary">×{cantidad}</span>}
+                  </span>
+                  {combo.productos?.length > 0 && (
+                    <span className="text-[11px] text-muted-foreground max-w-[220px] truncate">{comboContenido(combo)}</span>
+                  )}
+                  <span className="text-xs font-bold text-primary">{bs(combo.precio)}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="pointer-events-none absolute right-0 top-0 bottom-1 w-10 bg-gradient-to-l from-background to-transparent" />
+        </div>
+      )}
+
       <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {menu.productos.map((p) => {
+        {productosFiltrados.map((p) => {
           const cantidad = cantidadPorProducto[p.id] ?? 0;
+          const promo = promoPorProducto[p.id];
+          const tieneOpciones = p.grupos_opciones?.length > 0;
           return (
             <div
               key={p.id}
@@ -176,10 +322,22 @@ export default function AutoservicioPage() {
               <div className="p-3 flex flex-col gap-2 flex-1">
                 <div className="flex-1">
                   <p className="text-sm font-medium text-foreground leading-tight line-clamp-2">{p.nombre}</p>
-                  <p className="text-sm font-bold text-primary mt-1">{bs(p.precio)}</p>
+                  {promo ? (
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{bs(precioConPromo(p))}</p>
+                      <p className="text-xs text-muted-foreground line-through">{bs(p.precio)}</p>
+                    </div>
+                  ) : (
+                    <p className="text-sm font-bold text-primary mt-1">{bs(p.precio)}{tieneOpciones ? ' desde' : ''}</p>
+                  )}
+                  {tieneOpciones && <p className="text-[11px] text-muted-foreground mt-0.5">Elegí opciones</p>}
                 </div>
 
-                {cantidad > 0 ? (
+                {/* Con opciones, "+"/"-" en la grilla es ambiguo (¿a cuál
+                    variante le suma?) — siempre abre el selector; el badge
+                    muestra el total ya agregado y las cantidades por
+                    variante se ajustan desde el carrito. */}
+                {cantidad > 0 && !tieneOpciones ? (
                   <div className="flex items-center justify-between bg-primary/10 rounded-lg p-1">
                     <button
                       onClick={() => restarDelCarrito(p)}
@@ -197,10 +355,10 @@ export default function AutoservicioPage() {
                   </div>
                 ) : (
                   <button
-                    onClick={() => agregarAlCarrito(p)}
+                    onClick={() => handleAgregarProducto(p)}
                     className="w-full py-1.5 rounded-lg bg-primary/10 text-primary text-sm font-semibold hover:bg-primary/20 transition-colors flex items-center justify-center gap-1"
                   >
-                    <Plus className="w-3.5 h-3.5" /> Agregar
+                    <Plus className="w-3.5 h-3.5" /> {cantidad > 0 ? `Agregar (${cantidad} en el pedido)` : 'Agregar'}
                   </button>
                 )}
               </div>
@@ -226,31 +384,46 @@ export default function AutoservicioPage() {
               <h2 className="font-bold text-foreground">Tu pedido</h2>
               <button onClick={() => setMostrarCarrito(false)}><X className="w-5 h-5 text-muted-foreground" /></button>
             </div>
-            {carrito.map((l) => (
-              <div key={l.producto.id} className="flex items-center gap-3 text-sm">
-                <div className="w-11 h-11 rounded-lg bg-muted overflow-hidden shrink-0">
-                  {l.producto.imagen ? (
-                    <img src={l.producto.imagen} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center"><Package className="w-4 h-4 text-muted-foreground/60" /></div>
-                  )}
+            {carrito.map((l, idx) => {
+              const esCombo = l.tipo === 'combo';
+              const nombre = esCombo ? l.combo.nombre : l.producto.nombre;
+              const imagen = esCombo ? null : l.producto.imagen;
+              const precioUnitario = esCombo ? parseFloat(l.combo.precio) : precioConPromo(l.producto) + l.extra;
+              // Los combos se identifican por combo.id (una sola variante
+              // posible), así que siguen sumando/restando por esa función;
+              // los productos con opciones pueden tener varias líneas del
+              // mismo producto_id, así que acá se opera por índice.
+              const onSumar = () => (esCombo ? agregarComboAlCarrito(l.combo) : incrementarLinea(idx));
+              const onRestar = () => (esCombo ? restarComboDelCarrito(l.combo) : decrementarLinea(idx));
+              return (
+                <div key={esCombo ? `combo-${l.combo.id}` : `producto-${l.producto.id}-${l.nota ?? 'base'}`} className="flex items-center gap-3 text-sm">
+                  <div className="w-11 h-11 rounded-lg bg-muted overflow-hidden shrink-0 flex items-center justify-center">
+                    {imagen ? (
+                      <img src={imagen} alt="" className="w-full h-full object-cover" />
+                    ) : esCombo ? (
+                      <Gift className="w-4 h-4 text-primary" />
+                    ) : (
+                      <Package className="w-4 h-4 text-muted-foreground/60" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-foreground truncate">{esCombo && <Gift className="w-3 h-3 inline mr-1 text-primary" />}{nombre}</p>
+                    {l.nota && <p className="text-muted-foreground text-xs truncate">{l.nota}</p>}
+                    <p className="text-muted-foreground text-xs">{bs(precioUnitario)} c/u</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button onClick={onRestar} className="w-6 h-6 rounded-md bg-muted flex items-center justify-center hover:bg-accent transition-colors">
+                      <Minus className="w-3 h-3 text-foreground" />
+                    </button>
+                    <span className="w-4 text-center font-semibold text-foreground">{l.cantidad}</span>
+                    <button onClick={onSumar} className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors">
+                      <Plus className="w-3 h-3 text-primary" />
+                    </button>
+                  </div>
+                  <span className="text-foreground font-medium w-16 text-right">{bs(precioUnitario * l.cantidad)}</span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-foreground truncate">{l.producto.nombre}</p>
-                  <p className="text-muted-foreground text-xs">{bs(l.producto.precio)} c/u</p>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button onClick={() => restarDelCarrito(l.producto)} className="w-6 h-6 rounded-md bg-muted flex items-center justify-center hover:bg-accent transition-colors">
-                    <Minus className="w-3 h-3 text-foreground" />
-                  </button>
-                  <span className="w-4 text-center font-semibold text-foreground">{l.cantidad}</span>
-                  <button onClick={() => agregarAlCarrito(l.producto)} className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors">
-                    <Plus className="w-3 h-3 text-primary" />
-                  </button>
-                </div>
-                <span className="text-foreground font-medium w-16 text-right">{bs(l.producto.precio * l.cantidad)}</span>
-              </div>
-            ))}
+              );
+            })}
             <div className="pt-2 border-t border-border space-y-1">
               {cuponAplicado && (
                 <div className="flex items-center justify-between text-sm text-emerald-600 dark:text-emerald-400">
@@ -324,6 +497,14 @@ export default function AutoservicioPage() {
       {mostrarCuenta && (
         <CuentaSheet onClose={() => setMostrarCuenta(false)} />
       )}
+
+      {selectorOpcion && (
+        <SelectorOpcionModal
+          producto={selectorOpcion}
+          onElegir={elegirOpcionProducto}
+          onClose={() => setSelectorOpcion(null)}
+        />
+      )}
     </div>
   );
 }
@@ -344,13 +525,15 @@ function ToggleTema() {
 function CuentaSheet({ onClose }) {
   const { token, setToken, logout } = useClienteAutoservicioStore();
   const queryClient = useQueryClient();
-  const [vista, setVista] = useState('inicio'); // inicio | ingresar-pin | crear-pin | codigo | historial | cambiar-pin
+  const [vista, setVista] = useState('inicio'); // inicio | ingresar-pin | crear-pin | codigo | historial | cambiar-pin | recuperar-codigo
   const [numeroDocumento, setNumeroDocumento] = useState('');
   const [pin, setPin] = useState('');
   const [email, setEmail] = useState('');
   const [codigo, setCodigo] = useState('');
   const [pinNuevo, setPinNuevo] = useState('');
   const [pinActual, setPinActual] = useState('');
+  const [emailParcial, setEmailParcial] = useState('');
+  const [pedidoAbierto, setPedidoAbierto] = useState(null);
   const [error, setError] = useState('');
 
   const { data: perfil } = useQuery({ queryKey: ['cliente-perfil'], queryFn: perfilCliente, enabled: !!token });
@@ -395,6 +578,21 @@ function CuentaSheet({ onClose }) {
     mutationFn: () => cambiarPinCliente(pinActual.trim(), pinNuevo.trim()),
     onSuccess: () => { setError(''); setPinActual(''); setPinNuevo(''); setVista('inicio'); },
     onError: (e) => setError(e?.response?.data?.mensaje ?? 'No se pudo cambiar el PIN'),
+  });
+
+  const recuperarSolicitar = useMutation({
+    mutationFn: () => recuperarPinSolicitarCliente(numeroDocumento.trim()),
+    onSuccess: (datos) => { setError(''); setEmailParcial(datos.email_parcial); setVista('recuperar-codigo'); },
+    onError: (e) => setError(e?.response?.data?.mensaje ?? 'No se pudo enviar el código'),
+  });
+
+  const recuperarConfirmar = useMutation({
+    mutationFn: () => recuperarPinConfirmarCliente(numeroDocumento.trim(), codigo.trim(), pinNuevo.trim()),
+    onSuccess: (datos) => {
+      limpiarCacheCliente(); setToken(datos.token); setError('');
+      setCodigo(''); setPinNuevo(''); setVista('inicio');
+    },
+    onError: (e) => setError(e?.response?.data?.mensaje ?? 'Código incorrecto'),
   });
 
   const inputCls = 'w-full bg-background border border-input rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring';
@@ -445,6 +643,13 @@ function CuentaSheet({ onClose }) {
             <button onClick={() => login.mutate()} disabled={pin.trim().length !== 4 || login.isPending} className={botonCls}>
               {login.isPending ? 'Ingresando...' : 'Ingresar'}
             </button>
+            <button
+              onClick={() => { setError(''); recuperarSolicitar.mutate(); }}
+              disabled={recuperarSolicitar.isPending}
+              className="w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-60"
+            >
+              {recuperarSolicitar.isPending ? 'Enviando código...' : '¿Olvidaste tu PIN?'}
+            </button>
           </div>
         )}
 
@@ -471,6 +676,23 @@ function CuentaSheet({ onClose }) {
           </div>
         )}
 
+        {vista === 'recuperar-codigo' && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Te mandamos un código a {emailParcial || 'tu email registrado'}. Ingresalo y elegí un PIN nuevo (vence en 10 minutos):</p>
+            <label className="block text-xs font-medium text-muted-foreground">Código de 6 dígitos</label>
+            <input value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="Código de 6 dígitos" maxLength={6} className={inputCls} />
+            <label className="block text-xs font-medium text-muted-foreground">PIN nuevo</label>
+            <input type="password" inputMode="numeric" value={pinNuevo} onChange={(e) => setPinNuevo(e.target.value)} placeholder="••••" maxLength={4} className={inputCls} />
+            <button
+              onClick={() => recuperarConfirmar.mutate()}
+              disabled={codigo.trim().length !== 6 || pinNuevo.trim().length !== 4 || recuperarConfirmar.isPending}
+              className={botonCls}
+            >
+              {recuperarConfirmar.isPending ? 'Confirmando...' : 'Confirmar y entrar'}
+            </button>
+          </div>
+        )}
+
         {vista === 'cambiar-pin' && (
           <div className="space-y-3">
             <label className="block text-xs font-medium text-muted-foreground">PIN actual</label>
@@ -488,15 +710,33 @@ function CuentaSheet({ onClose }) {
             {historial.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-6">Todavía no tenés pedidos.</p>
             ) : (
-              historial.map((p) => (
-                <div key={p.id} className="flex items-center justify-between text-sm border-b border-border pb-2">
-                  <div>
-                    <p className="text-foreground">{new Date(p.creado_en).toLocaleDateString('es-BO')}</p>
-                    <p className="text-xs text-muted-foreground">{p.mesa?.nombre ?? p.tipo}</p>
+              historial.map((p) => {
+                const abierto = pedidoAbierto === p.id;
+                return (
+                  <div key={p.id} className="border-b border-border pb-2">
+                    <button
+                      onClick={() => setPedidoAbierto(abierto ? null : p.id)}
+                      className="w-full flex items-center justify-between text-sm text-left"
+                    >
+                      <div>
+                        <p className="text-foreground">{new Date(p.creado_en).toLocaleDateString('es-BO')}</p>
+                        <p className="text-xs text-muted-foreground">{p.mesa?.nombre ?? p.tipo}</p>
+                      </div>
+                      <span className="font-medium text-foreground">{bs(p.total)}</span>
+                    </button>
+                    {abierto && (
+                      <div className="mt-2 space-y-1 pl-1">
+                        {(p.detalles ?? []).map((d) => (
+                          <div key={d.id} className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>{d.cantidad}x {d.producto?.nombre ?? d.combo?.nombre ?? 'Ítem'}</span>
+                            <span>{bs(d.precio * d.cantidad)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <span className="font-medium text-foreground">{bs(p.total)}</span>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}

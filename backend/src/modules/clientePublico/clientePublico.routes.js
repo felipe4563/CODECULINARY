@@ -8,6 +8,8 @@ router.post('/estado', ctrl.estado);
 router.post('/pin/solicitar', ctrl.solicitarPin);
 router.post('/pin/confirmar', ctrl.confirmarPin);
 router.post('/pin/verificar', ctrl.verificarPin);
+router.post('/pin/recuperar/solicitar', ctrl.recuperarPinSolicitar);
+router.post('/pin/recuperar/confirmar', ctrl.recuperarPinConfirmar);
 router.put('/pin', authCliente, ctrl.cambiarPin);
 router.get('/perfil', authCliente, ctrl.perfil);
 router.get('/pedidos', authCliente, ctrl.historial);

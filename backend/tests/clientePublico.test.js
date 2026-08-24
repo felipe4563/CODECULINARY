@@ -358,6 +358,97 @@ describe('Cliente público — PIN', () => {
     });
   });
 
+  describe('POST /api/v1/cliente/pin/recuperar/solicitar y /confirmar', () => {
+    beforeEach(async () => {
+      await cliente.update({ pin_hash: await bcrypt.hash('1111', 10), email: 'registrado@example.com' });
+    });
+
+    it('solicitar sin PIN configurado (otro cliente) → 409', async () => {
+      const timestamp = Date.now();
+      const sinPin = await Cliente.create({ nombre: 'Sin PIN Recuperar', numero_documento: `sinpin-rec-${timestamp}` });
+
+      const res = await request(app)
+        .post('/api/v1/cliente/pin/recuperar/solicitar')
+        .send({ numero_documento: sinPin.numero_documento });
+
+      expect(res.status).toBe(409);
+      await Cliente.destroy({ where: { id: sinPin.id } });
+    });
+
+    it('solicitar sin email registrado → 409', async () => {
+      await cliente.update({ email: null });
+
+      const res = await request(app)
+        .post('/api/v1/cliente/pin/recuperar/solicitar')
+        .send({ numero_documento: cliente.numero_documento });
+
+      expect(res.status).toBe(409);
+    });
+
+    it('solicitar manda el código al email YA registrado, no a uno enviado por el body', async () => {
+      const res = await request(app)
+        .post('/api/v1/cliente/pin/recuperar/solicitar')
+        .send({ numero_documento: cliente.numero_documento, email: 'otro-cualquiera@ejemplo.com' });
+
+      expect(res.status).toBe(200);
+      expect(enviarCodigoPin).toHaveBeenCalledTimes(1);
+      expect(enviarCodigoPin.mock.calls[0][0].to).toBe('registrado@example.com');
+      expect(res.body.datos.email_parcial).toContain('@example.com');
+    });
+
+    it('segunda solicitud dentro de los 60s → 429', async () => {
+      await request(app).post('/api/v1/cliente/pin/recuperar/solicitar').send({ numero_documento: cliente.numero_documento });
+      const res = await request(app).post('/api/v1/cliente/pin/recuperar/solicitar').send({ numero_documento: cliente.numero_documento });
+
+      expect(res.status).toBe(429);
+      expect(enviarCodigoPin).toHaveBeenCalledTimes(1);
+    });
+
+    it('confirmar con PIN nuevo inválido → 400', async () => {
+      await request(app).post('/api/v1/cliente/pin/recuperar/solicitar').send({ numero_documento: cliente.numero_documento });
+      const codigo = enviarCodigoPin.mock.calls[0][0].codigo;
+
+      const res = await request(app)
+        .post('/api/v1/cliente/pin/recuperar/confirmar')
+        .send({ numero_documento: cliente.numero_documento, codigo, pin_nuevo: '12' });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('confirmar con código incorrecto → 400 e incrementa intentos', async () => {
+      await request(app).post('/api/v1/cliente/pin/recuperar/solicitar').send({ numero_documento: cliente.numero_documento });
+
+      const res = await request(app)
+        .post('/api/v1/cliente/pin/recuperar/confirmar')
+        .send({ numero_documento: cliente.numero_documento, codigo: '000000', pin_nuevo: '9999' });
+
+      expect(res.status).toBe(400);
+      const pendiente = await ClientePinVerificacion.findOne({ where: { cliente_id: cliente.id } });
+      expect(pendiente.intentos).toBe(1);
+    });
+
+    it('confirmar correcto → cambia el PIN, resetea el bloqueo, borra el pendiente y devuelve token', async () => {
+      await cliente.update({ pin_intentos_fallidos: 3, pin_bloqueado_hasta: new Date(Date.now() + 60_000) });
+      await request(app).post('/api/v1/cliente/pin/recuperar/solicitar').send({ numero_documento: cliente.numero_documento });
+      const codigo = enviarCodigoPin.mock.calls[0][0].codigo;
+
+      const res = await request(app)
+        .post('/api/v1/cliente/pin/recuperar/confirmar')
+        .send({ numero_documento: cliente.numero_documento, codigo, pin_nuevo: '9999' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.datos.token).toBeDefined();
+
+      const actualizado = await Cliente.findByPk(cliente.id);
+      expect(await bcrypt.compare('9999', actualizado.pin_hash)).toBe(true);
+      expect(actualizado.pin_intentos_fallidos).toBe(0);
+      expect(actualizado.pin_bloqueado_hasta).toBeNull();
+
+      const pendiente = await ClientePinVerificacion.findOne({ where: { cliente_id: cliente.id } });
+      expect(pendiente).toBeNull();
+    });
+  });
+
   describe('GET /api/v1/cliente/pedidos (historial)', () => {
     // Nota: NO reutiliza el `cliente` del beforeEach de nivel superior — el
     // orden relativo entre un beforeAll anidado y un beforeEach del describe

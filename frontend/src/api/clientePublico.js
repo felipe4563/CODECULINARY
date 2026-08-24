@@ -26,3 +26,9 @@ export const perfilCliente = () =>
 
 export const historialCliente = () =>
   api.get('/cliente/pedidos', { headers: authHeader() }).then(r => r.data.datos);
+
+export const recuperarPinSolicitarCliente = (numeroDocumento) =>
+  api.post('/cliente/pin/recuperar/solicitar', { numero_documento: numeroDocumento }).then(r => r.data.datos);
+
+export const recuperarPinConfirmarCliente = (numeroDocumento, codigo, pinNuevo) =>
+  api.post('/cliente/pin/recuperar/confirmar', { numero_documento: numeroDocumento, codigo, pin_nuevo: pinNuevo }).then(r => r.data.datos);

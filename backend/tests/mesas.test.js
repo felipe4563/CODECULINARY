@@ -65,8 +65,9 @@ describe('POST/DELETE /api/v1/mesas/:id/sesion — habilitar/deshabilitar autose
       .post('/api/v1/auth/login')
       .send({ email: 'admin@restaurante.com', contrasena: process.env.ADMIN_PASSWORD || 'admin123' });
     adminToken = login.body.datos.token;
+    const sucursalAdminId = login.body.datos.usuario.sucursal_activa.id;
 
-    area = await Area.create({ nombre: 'Area Sesion Mesa Test', sucursal_id: 1 });
+    area = await Area.create({ nombre: 'Area Sesion Mesa Test', sucursal_id: sucursalAdminId });
     mesa = await Mesa.create({ area_id: area.id, nombre: 'Mesa Sesion Mesa Test' });
   });
 

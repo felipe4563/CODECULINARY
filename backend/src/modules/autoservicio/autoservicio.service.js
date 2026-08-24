@@ -1,9 +1,11 @@
-const { SesionCaja, Pedido, Producto } = require('../../models');
+const { SesionCaja, Pedido, Producto, Combo } = require('../../models');
 const mesasService = require('../mesas/mesas.service');
 const ventasService = require('../ventas/ventas.service');
 const cuponesService = require('../cupones/cupones.service');
 const clientesService = require('../clientes/clientes.service');
 const { listarProductos } = require('../productos/productos.service');
+const { listarActivos: listarCombosActivos } = require('../combos/combos.service');
+const { listarActivas: listarPromocionesActivas } = require('../promociones/promociones.service');
 
 async function _mesaConSesionActiva(codigo_qr) {
   const mesa = await mesasService.obtenerMesaPorCodigoQr(codigo_qr);
@@ -20,8 +22,12 @@ async function _mesaConSesionActiva(codigo_qr) {
 async function obtenerMenu(codigo_qr) {
   const { mesa } = await _mesaConSesionActiva(codigo_qr);
   const alcance = { sucursal_id: mesa.area.sucursal_id, acceso_todas: false };
-  const productos = await listarProductos({ solo_vendibles: true, solo_disponibles: true }, alcance);
-  return { mesa: { id: mesa.id, nombre: mesa.nombre }, productos };
+  const [productos, combos, promociones] = await Promise.all([
+    listarProductos({ solo_vendibles: true, solo_disponibles: true }, alcance),
+    listarCombosActivos(),
+    listarPromocionesActivas(),
+  ]);
+  return { mesa: { id: mesa.id, nombre: mesa.nombre }, productos, combos, promociones };
 }
 
 // Previsualización de cupón para el checkout público: no confía en los
@@ -33,15 +39,20 @@ async function obtenerMenu(codigo_qr) {
 async function validarCupon(codigo_qr, { codigo, items }) {
   await _mesaConSesionActiva(codigo_qr);
 
-  const ids = [...new Set((items || []).filter((i) => i.producto_id).map((i) => Number(i.producto_id)))];
-  const productos = ids.length > 0 ? await Producto.findAll({ where: { id: ids }, attributes: ['id', 'precio'] }) : [];
-  const precios = new Map(productos.map((p) => [p.id, parseFloat(p.precio)]));
+  const idsProducto = [...new Set((items || []).filter((i) => i.producto_id).map((i) => Number(i.producto_id)))];
+  const idsCombo = [...new Set((items || []).filter((i) => i.combo_id).map((i) => Number(i.combo_id)))];
+  const [productos, combos] = await Promise.all([
+    idsProducto.length > 0 ? Producto.findAll({ where: { id: idsProducto }, attributes: ['id', 'precio'] }) : [],
+    idsCombo.length > 0 ? Combo.findAll({ where: { id: idsCombo }, attributes: ['id', 'precio'] }) : [],
+  ]);
+  const preciosProducto = new Map(productos.map((p) => [p.id, parseFloat(p.precio)]));
+  const preciosCombo = new Map(combos.map((c) => [c.id, parseFloat(c.precio)]));
 
-  const itemsConPrecio = (items || []).map((i) => ({
-    producto_id: i.producto_id,
-    cantidad: i.cantidad,
-    precio: precios.get(Number(i.producto_id)) ?? 0,
-  }));
+  const itemsConPrecio = (items || []).map((i) => (
+    i.combo_id
+      ? { producto_id: null, cantidad: i.cantidad, precio: preciosCombo.get(Number(i.combo_id)) ?? 0 }
+      : { producto_id: i.producto_id, cantidad: i.cantidad, precio: preciosProducto.get(Number(i.producto_id)) ?? 0 }
+  ));
   const subtotal = itemsConPrecio.reduce((s, i) => s + i.precio * i.cantidad, 0);
 
   return cuponesService.validar(codigo, subtotal, null, itemsConPrecio);
