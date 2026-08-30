@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Grid3x3, Users, RefreshCw, QrCode, Printer, Smartphone } from 'lucide-react';
+import { Plus, Pencil, Trash2, Grid3x3, Users, RefreshCw, QrCode, Download, Smartphone } from 'lucide-react';
 import QRCode from 'qrcode';
 import { getAreas } from '../../../api/areas';
 import { getMesas, crearMesa, actualizarMesa, eliminarMesa, abrirSesionMesa, cerrarSesionMesa } from '../../../api/mesas';
+import { getConfiguracion, logoSrc } from '../../../api/configuracion';
 import Modal from '../../../components/ui/Modal';
 import { SettingsCard } from '../shared';
 
@@ -348,28 +349,123 @@ function AutoservicioBadge() {
   );
 }
 
+// Trae el logo como blob por fetch (no vía <img crossOrigin> + canvas): esa
+// combinación tiñe el canvas si el Service Worker de la PWA responde la
+// imagen desde caché de forma opaca — mismo problema ya resuelto en
+// pages/reportes/utils/exportarPDF.js. Leyendo el blob con FileReader se
+// evita el canvas por completo.
+function cargarLogo(url) {
+  return new Promise((resolve) => {
+    if (!url) return resolve(null);
+    const urlSinCache = url + (url.includes('?') ? '&' : '?') + '_qr=' + Date.now();
+    fetch(urlSinCache, { mode: 'cors', cache: 'no-store' })
+      .then((resp) => (resp.ok ? resp.blob() : null))
+      .then((blob) => {
+        if (!blob) return resolve(null);
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+          img.src = reader.result;
+        };
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      })
+      .catch(() => resolve(null));
+  });
+}
+
 function ModalCodigoQr({ mesa, onClose }) {
-  const [dataUrl, setDataUrl] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [imagenBlob, setImagenBlob] = useState(null);
   const url = `${window.location.origin}/m/${mesa.codigo_qr}`;
 
   useEffect(() => {
-    QRCode.toDataURL(url, { width: 320, margin: 1 }).then(setDataUrl);
-  }, [url]);
+    let cancelado = false;
+
+    async function componer() {
+      const [config, qrImg] = await Promise.all([
+        getConfiguracion().catch(() => null),
+        // errorCorrectionLevel 'H' tolera hasta ~30% de daño — necesario
+        // para poder tapar el centro con el logo sin romper el escaneo.
+        QRCode.toDataURL(url, { width: 640, margin: 1, errorCorrectionLevel: 'H' })
+          .then((dataUrl) => new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.src = dataUrl;
+          })),
+      ]);
+      const logoImg = await cargarLogo(logoSrc(config?.logo));
+      if (cancelado) return;
+
+      const padding = 48;
+      const alturaTexto = 72;
+      const ancho = qrImg.width + padding * 2;
+      const alto = qrImg.height + padding * 2 + alturaTexto;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = ancho;
+      canvas.height = alto;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, ancho, alto);
+      ctx.drawImage(qrImg, padding, padding);
+
+      if (logoImg) {
+        const logoLado = qrImg.width * 0.2;
+        const logoX = padding + (qrImg.width - logoLado) / 2;
+        const logoY = padding + (qrImg.height - logoLado) / 2;
+        const fondoPad = logoLado * 0.12;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(logoX - fondoPad, logoY - fondoPad, logoLado + fondoPad * 2, logoLado + fondoPad * 2);
+        ctx.drawImage(logoImg, logoX, logoY, logoLado, logoLado);
+      }
+
+      ctx.fillStyle = '#111111';
+      ctx.font = 'bold 36px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(mesa.nombre, ancho / 2, padding + qrImg.height + alturaTexto / 2);
+
+      canvas.toBlob((blob) => {
+        if (cancelado || !blob) return;
+        setImagenBlob(blob);
+        setPreviewUrl(URL.createObjectURL(blob));
+      }, 'image/png');
+    }
+
+    componer();
+    return () => { cancelado = true; };
+  }, [url, mesa.nombre]);
+
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
+
+  function descargar() {
+    if (!imagenBlob) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(imagenBlob);
+    a.download = `qr-mesa-${mesa.nombre.replace(/\s+/g, '-').toLowerCase()}.png`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
 
   return (
     <Modal titulo={`QR — ${mesa.nombre}`} onClose={onClose}>
       <div className="flex flex-col items-center gap-4">
-        {dataUrl ? (
-          <img src={dataUrl} alt={`QR de ${mesa.nombre}`} className="w-64 h-64" id="qr-imprimir" />
+        {previewUrl ? (
+          <img src={previewUrl} alt={`QR de ${mesa.nombre}`} className="w-64 h-64 rounded-lg bg-white" />
         ) : (
           <div className="w-64 h-64 flex items-center justify-center text-muted-foreground">Generando...</div>
         )}
         <p className="text-xs text-muted-foreground break-all text-center">{url}</p>
         <button
-          onClick={() => window.print()}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium"
+          onClick={descargar}
+          disabled={!imagenBlob}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground text-sm font-medium transition-colors"
         >
-          <Printer className="w-4 h-4" /> Imprimir
+          <Download className="w-4 h-4" /> Descargar imagen
         </button>
       </div>
     </Modal>
