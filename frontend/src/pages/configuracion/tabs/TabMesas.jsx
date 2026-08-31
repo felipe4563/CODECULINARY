@@ -376,6 +376,18 @@ function cargarLogo(url) {
   });
 }
 
+// Rectángulo con esquinas redondeadas — más portable que ctx.roundRect
+// (no soportado en todos los navegadores/versiones que puede tener el staff).
+function dibujarRectRedondeado(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
 function ModalCodigoQr({ mesa, onClose }) {
   const [previewUrl, setPreviewUrl] = useState(null);
   const [imagenBlob, setImagenBlob] = useState(null);
@@ -385,11 +397,12 @@ function ModalCodigoQr({ mesa, onClose }) {
     let cancelado = false;
 
     async function componer() {
+      const qrTam = 480;
       const [config, qrImg] = await Promise.all([
         getConfiguracion().catch(() => null),
         // errorCorrectionLevel 'H' tolera hasta ~30% de daño — necesario
         // para poder tapar el centro con el logo sin romper el escaneo.
-        QRCode.toDataURL(url, { width: 640, margin: 1, errorCorrectionLevel: 'H' })
+        QRCode.toDataURL(url, { width: qrTam, margin: 1, errorCorrectionLevel: 'H' })
           .then((dataUrl) => new Promise((resolve) => {
             const img = new Image();
             img.onload = () => resolve(img);
@@ -399,35 +412,104 @@ function ModalCodigoQr({ mesa, onClose }) {
       const logoImg = await cargarLogo(logoSrc(config?.logo));
       if (cancelado) return;
 
-      const padding = 48;
-      const alturaTexto = 72;
-      const ancho = qrImg.width + padding * 2;
-      const alto = qrImg.height + padding * 2 + alturaTexto;
+      const colorPrimario = config?.color_primario || '#245b62';
+      const colorSecundario = config?.color_secundario || '#d97706';
+      const nombreNegocio = config?.nombre_negocio || 'Escaneá y pedí';
+
+      const padding = 40;
+      const headerAlto = 150;
+      const ctaAlto = 56;
+      const gapCtaQr = 24;
+      const gapQrBadge = 28;
+      const badgeAlto = 84;
+      const radioCard = 28;
+      const marco = 10; // grosor del marco de color_secundario, actúa de guía de corte al imprimir
+
+      const ancho = qrTam + padding * 2;
+      const qrY = headerAlto + ctaAlto + gapCtaQr;
+      const badgeY = qrY + qrTam + gapQrBadge;
+      const alto = badgeY + badgeAlto + padding;
 
       const canvas = document.createElement('canvas');
-      canvas.width = ancho;
-      canvas.height = alto;
+      canvas.width = ancho + marco * 2;
+      canvas.height = alto + marco * 2;
       const ctx = canvas.getContext('2d');
+      // Todo el contenido se dibuja con las mismas coordenadas de antes;
+      // el traslado deja lugar para el marco alrededor.
+      ctx.translate(marco, marco);
 
+      // Contenido de la tarjeta, recortado a esquinas redondeadas
+      ctx.save();
+      dibujarRectRedondeado(ctx, 0, 0, ancho, alto, radioCard);
+      ctx.clip();
+
+      // Fondo
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, ancho, alto);
-      ctx.drawImage(qrImg, padding, padding);
+
+      // Franja de marca (logo + nombre del negocio)
+      ctx.fillStyle = colorPrimario;
+      ctx.fillRect(0, 0, ancho, headerAlto);
+
+      const centroHeaderY = headerAlto / 2;
+      ctx.font = 'bold 34px sans-serif';
+      const anchoTexto = ctx.measureText(nombreNegocio).width;
+      const logoDiam = logoImg ? 84 : 0;
+      const gapLogoTexto = logoImg ? 16 : 0;
+      let cursorX = (ancho - (logoDiam + gapLogoTexto + anchoTexto)) / 2;
 
       if (logoImg) {
-        const logoLado = qrImg.width * 0.2;
-        const logoX = padding + (qrImg.width - logoLado) / 2;
-        const logoY = padding + (qrImg.height - logoLado) / 2;
-        const fondoPad = logoLado * 0.12;
+        const cx = cursorX + logoDiam / 2;
+        ctx.beginPath();
+        ctx.arc(cx, centroHeaderY, logoDiam / 2, 0, Math.PI * 2);
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(logoX - fondoPad, logoY - fondoPad, logoLado + fondoPad * 2, logoLado + fondoPad * 2);
-        ctx.drawImage(logoImg, logoX, logoY, logoLado, logoLado);
+        ctx.fill();
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, centroHeaderY, logoDiam / 2 - 6, 0, Math.PI * 2);
+        ctx.clip();
+        const logoInterior = logoDiam - 20;
+        ctx.drawImage(logoImg, cx - logoInterior / 2, centroHeaderY - logoInterior / 2, logoInterior, logoInterior);
+        ctx.restore();
+        cursorX += logoDiam + gapLogoTexto;
       }
 
-      ctx.fillStyle = '#111111';
-      ctx.font = 'bold 36px sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 34px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(nombreNegocio, cursorX, centroHeaderY);
+
+      // Llamado a la acción
+      ctx.fillStyle = '#374151';
+      ctx.font = '28px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(mesa.nombre, ancho / 2, padding + qrImg.height + alturaTexto / 2);
+      ctx.fillText('Escaneá y pedí desde tu celular', ancho / 2, headerAlto + ctaAlto / 2);
+
+      // QR
+      ctx.drawImage(qrImg, padding, qrY, qrTam, qrTam);
+
+      // Badge con el nombre de mesa
+      ctx.font = 'bold 40px sans-serif';
+      const anchoTextoMesa = ctx.measureText(mesa.nombre).width;
+      const badgeAncho = anchoTextoMesa + 80;
+      const badgeX = (ancho - badgeAncho) / 2;
+      ctx.fillStyle = colorSecundario;
+      dibujarRectRedondeado(ctx, badgeX, badgeY, badgeAncho, badgeAlto, badgeAlto / 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(mesa.nombre, ancho / 2, badgeY + badgeAlto / 2);
+
+      ctx.restore(); // fin del recorte a esquinas redondeadas
+
+      // Marco de color_secundario alrededor de toda la tarjeta
+      dibujarRectRedondeado(ctx, 0, 0, ancho, alto, radioCard);
+      ctx.lineWidth = marco;
+      ctx.strokeStyle = colorSecundario;
+      ctx.stroke();
 
       canvas.toBlob((blob) => {
         if (cancelado || !blob) return;
@@ -455,11 +537,10 @@ function ModalCodigoQr({ mesa, onClose }) {
     <Modal titulo={`QR — ${mesa.nombre}`} onClose={onClose}>
       <div className="flex flex-col items-center gap-4">
         {previewUrl ? (
-          <img src={previewUrl} alt={`QR de ${mesa.nombre}`} className="w-64 h-64 rounded-lg bg-white" />
+          <img src={previewUrl} alt={`QR de ${mesa.nombre}`} className="w-full max-w-[280px] rounded-lg shadow-sm" />
         ) : (
-          <div className="w-64 h-64 flex items-center justify-center text-muted-foreground">Generando...</div>
+          <div className="w-full max-w-[280px] aspect-[580/862] flex items-center justify-center text-muted-foreground">Generando...</div>
         )}
-        <p className="text-xs text-muted-foreground break-all text-center">{url}</p>
         <button
           onClick={descargar}
           disabled={!imagenBlob}
