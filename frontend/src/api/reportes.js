@@ -9,3 +9,4 @@ export const getReporteInventarioResumen = (params = {}) => api.get('/reportes/i
 export const getReporteCompras        = (params = {}) => api.get('/reportes/compras',           { params }).then(r => r.data.datos);
 export const getReporteComprasResumen = (params = {}) => api.get('/reportes/compras/resumen',    { params }).then(r => r.data.datos);
 export const getReporteCaja           = (params = {}) => api.get('/reportes/caja',              { params }).then(r => r.data.datos);
+export const getReporteCajaResumen    = (params = {}) => api.get('/reportes/caja/resumen',       { params }).then(r => r.data.datos);
