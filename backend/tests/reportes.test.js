@@ -347,3 +347,37 @@ describe('GET /api/v1/reportes/ventas/variantes', () => {
     expect(conOpciones.monto).toBe(24);
   });
 });
+
+describe('GET /api/v1/reportes/compras — paginación, resumen y filtro estado', () => {
+  let token;
+
+  beforeAll(async () => {
+    const login = await request(app).post('/api/v1/auth/login').send({ email: 'admin@restaurante.com', contrasena: process.env.ADMIN_PASSWORD || 'admin123' });
+    token = login.body.datos.token;
+  });
+
+  test('pagina con limite por defecto', async () => {
+    const res = await request(app)
+      .get('/api/v1/reportes/compras')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.datos).toHaveProperty('filas');
+    expect(res.body.datos).toHaveProperty('total_paginas');
+  });
+
+  test('filtro estado solo devuelve compras con ese estado', async () => {
+    const res = await request(app)
+      .get('/api/v1/reportes/compras?estado=recibido&limite=0')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.body.datos.filas.every(f => f.estado === 'recibido')).toBe(true);
+  });
+
+  test('GET /api/v1/reportes/compras/resumen devuelve totales', async () => {
+    const res = await request(app)
+      .get('/api/v1/reportes/compras/resumen')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(typeof res.body.datos.total_comprado).toBe('number');
+    expect(typeof res.body.datos.cantidad).toBe('number');
+  });
+});

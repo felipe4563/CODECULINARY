@@ -11,6 +11,7 @@ router.get('/ventas/productos', verificarPermiso('reportes', 'ver'), ctrl.getVen
 router.get('/ventas/variantes', verificarPermiso('reportes', 'ver'), ctrl.getVentasVariantes);
 router.get('/ventas',           verificarPermiso('reportes', 'ver'), ctrl.getVentas);
 router.get('/inventario',     verificarPermiso('reportes', 'ver'), ctrl.getInventario);
+router.get('/compras/resumen', verificarPermiso('reportes', 'ver'), ctrl.getComprasResumen);
 router.get('/compras',        verificarPermiso('reportes', 'ver'), ctrl.getCompras);
 router.get('/caja',           verificarPermiso('reportes', 'ver'), ctrl.getCaja);
 

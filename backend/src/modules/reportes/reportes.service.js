@@ -213,12 +213,20 @@ async function inventario(filtros = {}, alcance = {}) {
   });
 }
 
-async function compras(filtros = {}, alcance = {}) {
-  const { desde, hasta } = filtros;
+function _whereCompras(filtros, alcance) {
+  const { desde, hasta, estado } = filtros;
   const where = filtroFecha(desde, hasta);
   if (!alcance.acceso_todas) where.sucursal_id = alcance.sucursal_id;
   else if (filtros.sucursal_id) where.sucursal_id = filtros.sucursal_id;
-  return Compra.findAll({
+  if (estado) where.estado = estado;
+  return where;
+}
+
+async function compras(filtros = {}, alcance) {
+  const where = _whereCompras(filtros, alcance);
+  const { pagina, limite } = _paginaLimite(filtros);
+
+  const { rows, count } = await Compra.findAndCountAll({
     where,
     include: [
       { model: Proveedor, as: 'proveedor', attributes: ['id', 'nombre'] },
@@ -226,7 +234,33 @@ async function compras(filtros = {}, alcance = {}) {
       INCLUDE_SUCURSAL,
     ],
     order: [['creado_en', 'DESC']],
+    distinct: true,
+    ...(limite ? { limit: limite, offset: (pagina - 1) * limite } : {}),
   });
+
+  return { filas: rows, pagina, limite, total: count, total_paginas: limite ? Math.ceil(count / limite) : 1 };
+}
+
+async function comprasResumen(filtros = {}, alcance) {
+  const where = _whereCompras(filtros, alcance);
+
+  const [totalComprado, cantidad] = await Promise.all([
+    Compra.sum('total', { where }),
+    Compra.count({ where }),
+  ]);
+
+  const filtrosResp = {};
+  if (alcance.acceso_todas) {
+    const sucursalesRaw = await Compra.findAll({
+      where, include: [INCLUDE_SUCURSAL], attributes: [],
+      group: ['sucursal.id', 'sucursal.nombre'], raw: true,
+    });
+    filtrosResp.sucursales = sucursalesRaw
+      .map((f) => ({ id: f['sucursal.id'], nombre: f['sucursal.nombre'] }))
+      .filter((s) => s.id != null);
+  }
+
+  return { total_comprado: parseFloat(totalComprado || 0), cantidad: cantidad || 0, filtros: filtrosResp };
 }
 
 async function caja(filtros = {}, alcance = {}) {
@@ -257,4 +291,4 @@ async function caja(filtros = {}, alcance = {}) {
   });
 }
 
-module.exports = { ventas, ventasResumen, ventasProductos, ventasVariantes, inventario, compras, caja };
+module.exports = { ventas, ventasResumen, ventasProductos, ventasVariantes, inventario, compras, comprasResumen, caja };
