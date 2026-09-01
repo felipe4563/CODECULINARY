@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/authStore';
-import { getLibroCaja, crearMovimiento } from '../../api/libroCaja';
+import { getLibroCaja, getResumenLibroCaja, crearMovimiento } from '../../api/libroCaja';
 import { getEstadoCajas, getSesiones } from '../../api/caja';
+import Paginacion from '../../components/ui/Paginacion';
 import {
   Plus, TrendingUp, TrendingDown, DollarSign,
   Search, Filter, X, ChevronDown, ChevronUp,
@@ -272,9 +273,11 @@ export default function LibroCajaPage() {
   const puedoCrear  = tiene(usuario, 'libro_caja', 'crear');
 
   const [buscar,    setBuscar]    = useState('');
+  const [buscarDebounced, setBuscarDebounced] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('todos');   // todos | ingreso | egreso
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
+  const [pagina, setPagina] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [toast,     setToast]     = useState(null);
 
@@ -283,10 +286,43 @@ export default function LibroCajaPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  // Debounce simple del buscador — evita un fetch por tecla.
+  useEffect(() => {
+    const t = setTimeout(() => setBuscarDebounced(buscar), 400);
+    return () => clearTimeout(t);
+  }, [buscar]);
+
+  const filtrosApi = {
+    desde: desde || undefined,
+    hasta: hasta || undefined,
+    tipo: filtroTipo === 'todos' ? undefined : filtroTipo,
+    busqueda: buscarDebounced || undefined,
+  };
+
+  // Cambiar cualquier filtro vuelve a la página 1 — si no, se puede quedar
+  // en "página 8 de 2" tras estrechar el filtro. Se ajusta durante el render
+  // (patrón recomendado por React) en vez de en un efecto, para evitar el
+  // render en cascada de un setState síncrono dentro de useEffect.
+  const filtrosKey = `${filtroTipo}|${desde}|${hasta}|${buscarDebounced}`;
+  const [prevFiltrosKey, setPrevFiltrosKey] = useState(filtrosKey);
+  if (filtrosKey !== prevFiltrosKey) {
+    setPrevFiltrosKey(filtrosKey);
+    setPagina(1);
+  }
+
   /* ─── queries ───────────────────────────────────────────────── */
-  const { data: movimientos = [], isLoading } = useQuery({
-    queryKey: ['libro-caja', desde, hasta],
-    queryFn: () => getLibroCaja({ desde: desde || undefined, hasta: hasta || undefined }),
+  const { data: pagina_datos, isLoading } = useQuery({
+    queryKey: ['libro-caja', filtrosApi, pagina],
+    queryFn: () => getLibroCaja({ ...filtrosApi, pagina }),
+    enabled: puedoVer,
+    staleTime: 30_000,
+  });
+  const movimientos = pagina_datos?.filas ?? [];
+  const totalPaginas = pagina_datos?.total_paginas ?? 1;
+
+  const { data: resumen } = useQuery({
+    queryKey: ['libro-caja-resumen', filtrosApi],
+    queryFn: () => getResumenLibroCaja(filtrosApi),
     enabled: puedoVer,
     staleTime: 30_000,
   });
@@ -313,31 +349,16 @@ export default function LibroCajaPage() {
     mutationFn: crearMovimiento,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['libro-caja'] });
+      qc.invalidateQueries({ queryKey: ['libro-caja-resumen'] });
       setModalOpen(false);
       showToast('Movimiento registrado correctamente');
     },
     onError: (e) => showToast(e?.response?.data?.mensaje ?? 'Error al registrar', false),
   });
 
-  /* ─── filtrado local ────────────────────────────────────────── */
-  const filtrados = useMemo(() => {
-    return movimientos.filter(m => {
-      if (filtroTipo !== 'todos' && m.tipo !== filtroTipo) return false;
-      if (buscar) {
-        const q = buscar.toLowerCase();
-        return (
-          m.concepto?.toLowerCase().includes(q) ||
-          m.usuario?.nombre?.toLowerCase().includes(q) ||
-          m.metodo_pago?.toLowerCase().includes(q)
-        );
-      }
-      return true;
-    });
-  }, [movimientos, filtroTipo, buscar]);
-
   /* ─── métricas ──────────────────────────────────────────────── */
-  const totalIngresos = filtrados.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto ?? 0), 0);
-  const totalEgresos  = filtrados.filter(m => m.tipo === 'egreso').reduce((s, m)  => s + parseFloat(m.monto ?? 0), 0);
+  const totalIngresos = resumen?.total_ingresos ?? 0;
+  const totalEgresos  = resumen?.total_egresos  ?? 0;
   const balance       = totalIngresos - totalEgresos;
 
   if (!puedoVer) {
@@ -472,7 +493,7 @@ export default function LibroCajaPage() {
 
           {/* contador */}
           <p className="text-xs text-muted-foreground mt-2.5">
-            {filtrados.length} registro{filtrados.length !== 1 ? 's' : ''}
+            {movimientos.length} registro{movimientos.length !== 1 ? 's' : ''}
             {(buscar || filtroTipo !== 'todos' || desde || hasta) ? ' encontrados' : ' en total'}
           </p>
         </div>
@@ -487,7 +508,7 @@ export default function LibroCajaPage() {
         )}
 
         {/* ── Sin resultados ───────────────────────────────────── */}
-        {!isLoading && filtrados.length === 0 && (
+        {!isLoading && movimientos.length === 0 && (
           <div className="bg-card rounded-2xl border border-border py-16 flex flex-col items-center gap-3 text-muted-foreground shadow-sm">
             <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
               <BookOpen className="w-7 h-7 opacity-40" />
@@ -503,9 +524,9 @@ export default function LibroCajaPage() {
         )}
 
         {/* ── Mobile: cards ───────────────────────────────────── */}
-        {!isLoading && filtrados.length > 0 && (
+        {!isLoading && movimientos.length > 0 && (
           <div className="sm:hidden space-y-2">
-            {filtrados.map((m, i) => (
+            {movimientos.map((m, i) => (
               <div key={m.id} style={{ animation: 'dashFadeUp 0.4s ease both', animationDelay: `${i * 30}ms` }}>
                 <MovCard mov={m} />
               </div>
@@ -514,7 +535,7 @@ export default function LibroCajaPage() {
         )}
 
         {/* ── Desktop: tabla ───────────────────────────────────── */}
-        {!isLoading && filtrados.length > 0 && (
+        {!isLoading && movimientos.length > 0 && (
           <div className="hidden sm:block bg-card rounded-2xl border border-border shadow-sm overflow-hidden"
             style={{ animation: 'dashFadeUp 0.5s ease both', animationDelay: '280ms' }}
           >
@@ -532,7 +553,7 @@ export default function LibroCajaPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {filtrados.map((m, i) => (
+                  {movimientos.map((m, i) => (
                     <tr
                       key={m.id}
                       className="hover:bg-muted/50 transition-colors"
@@ -567,7 +588,7 @@ export default function LibroCajaPage() {
                 <tfoot>
                   <tr className="bg-muted border-t-2 border-border">
                     <td colSpan={4} className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">
-                      Totales ({filtrados.length} registros)
+                      Totales ({movimientos.length} registros)
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex flex-col items-end gap-0.5">
@@ -584,6 +605,11 @@ export default function LibroCajaPage() {
               </table>
             </div>
           </div>
+        )}
+
+        {/* ── Paginación ────────────────────────────────────────── */}
+        {!isLoading && movimientos.length > 0 && (
+          <Paginacion pagina={pagina} totalPaginas={totalPaginas} onCambiar={setPagina} />
         )}
       </div>
 

@@ -211,13 +211,26 @@ export default function Dashboard() {
     staleTime: 30_000,
   });
 
-  const { data: movimientosCaja = [], isLoading: cvGastos } = useQuery({
-    queryKey: ['libro-caja-dashboard'],
-    queryFn: getLibroCaja,
+  // Rango de fechas ISO que cubre el período elegido en el selector
+  // día/mes/año — mismo criterio que ya usan los reportes.
+  const rangoLibroCaja = useMemo(() => {
+    if (tipo === 'dia') return { desde: diaVal, hasta: diaVal };
+    if (tipo === 'mes') {
+      const [y, m] = mesVal.split('-').map(Number);
+      const ultimoDia = new Date(y, m, 0).getDate();
+      return { desde: `${mesVal}-01`, hasta: `${mesVal}-${String(ultimoDia).padStart(2, '0')}` };
+    }
+    return { desde: `${añoVal}-01-01`, hasta: `${añoVal}-12-31` };
+  }, [tipo, diaVal, mesVal, añoVal]);
+
+  const { data: movimientosCajaResp, isLoading: cvGastos } = useQuery({
+    queryKey: ['libro-caja-dashboard', rangoLibroCaja],
+    queryFn: () => getLibroCaja({ ...rangoLibroCaja, tipo: 'egreso', limite: 0 }),
     enabled: puedeVerGastos,
     refetchInterval: 5 * 60_000,
     staleTime: 30_000,
   });
+  const movimientosCaja = useMemo(() => movimientosCajaResp?.filas ?? [], [movimientosCajaResp]);
 
   const invalidarDashboard = useCallback(() => {
     qc.invalidateQueries({ queryKey: ['ventas-dashboard'] });
