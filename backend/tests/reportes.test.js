@@ -1,7 +1,7 @@
 const request = require('supertest');
 const bcrypt = require('bcryptjs');
 const app = require('../src/app');
-const { Sucursal, Area, Mesa, Categoria, Producto, SesionCaja, LibroCaja, Pedido, DetallePedido, Caja, Rol, Usuario, GrupoOpciones, Opcion, DetallePedidoOpcion, Compra, Proveedor } = require('../src/models');
+const { Sucursal, Area, Mesa, Categoria, Producto, SesionCaja, LibroCaja, Pedido, DetallePedido, Caja, Rol, Usuario, GrupoOpciones, Opcion, DetallePedidoOpcion, Compra, Proveedor, RegistroInventario } = require('../src/models');
 
 describe('Reportes filtrados por sucursal', () => {
   let adminToken, sucursalOtra, pedidoOtraSucursalId, pedidoPropioId, cajaOtra;
@@ -396,6 +396,60 @@ describe('GET /api/v1/reportes/compras — paginación, resumen y filtro estado'
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(typeof res.body.datos.total_comprado).toBe('number');
+    expect(typeof res.body.datos.cantidad).toBe('number');
+  });
+});
+
+describe('GET /api/v1/reportes/inventario — paginación, resumen y filtro tipo', () => {
+  let token, sucursalId, categoria, producto, registroAjuste, registroEntrada;
+
+  beforeAll(async () => {
+    const login = await request(app).post('/api/v1/auth/login').send({ email: 'admin@restaurante.com', contrasena: process.env.ADMIN_PASSWORD || 'admin123' });
+    token = login.body.datos.token;
+    sucursalId = login.body.datos.usuario.sucursal_activa.id;
+
+    categoria = await Categoria.create({ nombre: 'Categoria Inventario Reportes Test' });
+    producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Inventario Reportes Test', precio: 5, stock: 10 });
+
+    registroAjuste = await RegistroInventario.create({
+      producto_id: producto.id, sucursal_id: sucursalId, usuario_id: 1, tipo: 'ajuste', cantidad: 3,
+    });
+    registroEntrada = await RegistroInventario.create({
+      producto_id: producto.id, sucursal_id: sucursalId, usuario_id: 1, tipo: 'entrada', cantidad: 5,
+    });
+  });
+
+  afterAll(async () => {
+    await RegistroInventario.destroy({ where: { id: [registroAjuste.id, registroEntrada.id] } });
+    await Producto.destroy({ where: { id: producto.id } });
+    await Categoria.destroy({ where: { id: categoria.id } });
+  });
+
+  test('pagina con limite por defecto', async () => {
+    const res = await request(app)
+      .get('/api/v1/reportes/inventario')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.datos).toHaveProperty('filas');
+    expect(res.body.datos).toHaveProperty('total_paginas');
+  });
+
+  test('filtro tipo solo devuelve registros de ese tipo', async () => {
+    const res = await request(app)
+      .get('/api/v1/reportes/inventario?tipo=ajuste&limite=0')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    const filas = res.body.datos.filas;
+    expect(filas.every(f => f.tipo === 'ajuste')).toBe(true);
+    expect(filas.some(f => f.id === registroAjuste.id)).toBe(true);
+    expect(filas.some(f => f.id === registroEntrada.id)).toBe(false);
+  });
+
+  test('GET /api/v1/reportes/inventario/resumen devuelve cantidad', async () => {
+    const res = await request(app)
+      .get('/api/v1/reportes/inventario/resumen')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
     expect(typeof res.body.datos.cantidad).toBe('number');
   });
 });

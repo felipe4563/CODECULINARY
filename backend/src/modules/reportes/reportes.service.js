@@ -197,12 +197,20 @@ async function ventasVariantes(filtros = {}, alcance) {
   return Array.from(mapa.values()).sort((a, b) => b.cantidad - a.cantidad);
 }
 
-async function inventario(filtros = {}, alcance = {}) {
-  const { desde, hasta } = filtros;
+function _whereInventario(filtros, alcance) {
+  const { desde, hasta, tipo } = filtros;
   const where = filtroFecha(desde, hasta);
   if (!alcance.acceso_todas) where.sucursal_id = alcance.sucursal_id;
   else if (filtros.sucursal_id) where.sucursal_id = filtros.sucursal_id;
-  return RegistroInventario.findAll({
+  if (tipo) where.tipo = tipo;
+  return where;
+}
+
+async function inventario(filtros = {}, alcance) {
+  const where = _whereInventario(filtros, alcance);
+  const { pagina, limite } = _paginaLimite(filtros);
+
+  const { rows, count } = await RegistroInventario.findAndCountAll({
     where,
     include: [
       { model: Producto, as: 'producto', attributes: ['id', 'nombre', 'stock'] },
@@ -210,7 +218,29 @@ async function inventario(filtros = {}, alcance = {}) {
       INCLUDE_SUCURSAL,
     ],
     order: [['creado_en', 'DESC']],
+    distinct: true,
+    ...(limite ? { limit: limite, offset: (pagina - 1) * limite } : {}),
   });
+
+  return { filas: rows, pagina, limite, total: count, total_paginas: limite ? Math.ceil(count / limite) : 1 };
+}
+
+async function inventarioResumen(filtros = {}, alcance) {
+  const where = _whereInventario(filtros, alcance);
+  const cantidad = await RegistroInventario.count({ where });
+
+  const filtrosResp = {};
+  if (alcance.acceso_todas) {
+    const sucursalesRaw = await RegistroInventario.findAll({
+      where, include: [INCLUDE_SUCURSAL], attributes: [],
+      group: ['sucursal.id', 'sucursal.nombre'], raw: true,
+    });
+    filtrosResp.sucursales = sucursalesRaw
+      .map((f) => ({ id: f['sucursal.id'], nombre: f['sucursal.nombre'] }))
+      .filter((s) => s.id != null);
+  }
+
+  return { cantidad: cantidad || 0, filtros: filtrosResp };
 }
 
 function _whereCompras(filtros, alcance) {
@@ -291,4 +321,4 @@ async function caja(filtros = {}, alcance = {}) {
   });
 }
 
-module.exports = { ventas, ventasResumen, ventasProductos, ventasVariantes, inventario, compras, comprasResumen, caja };
+module.exports = { ventas, ventasResumen, ventasProductos, ventasVariantes, inventario, inventarioResumen, compras, comprasResumen, caja };
