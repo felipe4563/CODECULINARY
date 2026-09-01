@@ -1,7 +1,7 @@
 const request = require('supertest');
 const bcrypt = require('bcryptjs');
 const app = require('../src/app');
-const { Sucursal, Area, Mesa, Categoria, Producto, SesionCaja, LibroCaja, Pedido, DetallePedido, Caja, Rol, Usuario } = require('../src/models');
+const { Sucursal, Area, Mesa, Categoria, Producto, SesionCaja, LibroCaja, Pedido, DetallePedido, Caja, Rol, Usuario, GrupoOpciones, Opcion, DetallePedidoOpcion } = require('../src/models');
 
 describe('Reportes filtrados por sucursal', () => {
   let adminToken, sucursalOtra, pedidoOtraSucursalId, pedidoPropioId, cajaOtra;
@@ -270,5 +270,80 @@ describe('GET /api/v1/reportes/ventas/productos', () => {
     expect(fila.cantidad).toBe(5);
     // monto: (2 * 8) + (3 * 5) = 16 + 15 = 31
     expect(fila.monto).toBe(31);
+  });
+});
+
+describe('GET /api/v1/reportes/ventas/variantes', () => {
+  let token, categoria, producto, grupo, opcion, pedido, pedido2, pedido3, detalleSinOpciones, detalleConOpciones, detalleConOpciones2;
+
+  beforeAll(async () => {
+    const login = await request(app).post('/api/v1/auth/login').send({ email: 'admin@restaurante.com', contrasena: process.env.ADMIN_PASSWORD || 'admin123' });
+    token = login.body.datos.token;
+    const sucursalId = login.body.datos.usuario.sucursal_activa.id;
+
+    categoria = await Categoria.create({ nombre: 'Categoria Variantes Test' });
+    producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Variantes Test', precio: 10, stock: null });
+    grupo = await GrupoOpciones.create({ nombre: 'Grupo Variantes Test', tipo_seleccion: 'multiple' });
+    opcion = await Opcion.create({ grupo_opciones_id: grupo.id, nombre: 'Extra queso' });
+
+    // Pedido 1: mismo producto, SIN opciones.
+    pedido = await Pedido.create({ sucursal_id: sucursalId, usuario_id: 1, tipo: 'llevar', estado: 'completado', total: 10 });
+    detalleSinOpciones = await DetallePedido.create({ pedido_id: pedido.id, producto_id: producto.id, cantidad: 1, precio: 10 });
+
+    // Pedido 2 y 3: mismo producto, CON la misma opción elegida — deben agruparse
+    // juntos en una fila distinta de la del producto sin opciones (2 ventas, cantidad 2).
+    pedido2 = await Pedido.create({ sucursal_id: sucursalId, usuario_id: 1, tipo: 'llevar', estado: 'completado', total: 12 });
+    detalleConOpciones = await DetallePedido.create({ pedido_id: pedido2.id, producto_id: producto.id, cantidad: 1, precio: 12 });
+    await DetallePedidoOpcion.create({ detalle_pedido_id: detalleConOpciones.id, opcion_id: opcion.id });
+
+    pedido3 = await Pedido.create({ sucursal_id: sucursalId, usuario_id: 1, tipo: 'llevar', estado: 'completado', total: 12 });
+    detalleConOpciones2 = await DetallePedido.create({ pedido_id: pedido3.id, producto_id: producto.id, cantidad: 1, precio: 12 });
+    await DetallePedidoOpcion.create({ detalle_pedido_id: detalleConOpciones2.id, opcion_id: opcion.id });
+  });
+
+  afterAll(async () => {
+    await DetallePedidoOpcion.destroy({ where: { detalle_pedido_id: [detalleConOpciones.id, detalleConOpciones2.id] } });
+    await DetallePedido.destroy({ where: { id: [detalleSinOpciones.id, detalleConOpciones.id, detalleConOpciones2.id] } });
+    await Pedido.destroy({ where: { id: [pedido.id, pedido2.id, pedido3.id] } });
+    await Opcion.destroy({ where: { id: opcion.id } });
+    await GrupoOpciones.destroy({ where: { id: grupo.id } });
+    await Producto.destroy({ where: { id: producto.id } });
+    await Categoria.destroy({ where: { id: categoria.id } });
+  });
+
+  test('devuelve el ranking agrupado por variante (producto + combinación de opciones)', async () => {
+    const res = await request(app)
+      .get('/api/v1/reportes/ventas/variantes')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.datos)).toBe(true);
+    res.body.datos.forEach(v => {
+      expect(typeof v.clave).toBe('string');
+      expect(typeof v.nombre).toBe('string');
+      expect(['kg', 'un']).toContain(v.unidad);
+      expect(typeof v.conOpciones).toBe('boolean');
+      expect(typeof v.cantidad).toBe('number');
+      expect(typeof v.monto).toBe('number');
+      expect(typeof v.ventas).toBe('number');
+    });
+
+    // La variante SIN opciones y la variante CON opciones del mismo producto
+    // deben quedar en filas separadas, no fusionadas en una sola.
+    const filasProducto = res.body.datos.filter(v => v.nombre.startsWith('Producto Variantes Test'));
+    expect(filasProducto.length).toBe(2);
+
+    const sinOpciones = filasProducto.find(v => v.conOpciones === false);
+    const conOpciones = filasProducto.find(v => v.conOpciones === true);
+    expect(sinOpciones).toBeTruthy();
+    expect(conOpciones).toBeTruthy();
+    expect(sinOpciones.nombre).toBe('Producto Variantes Test');
+    expect(sinOpciones.cantidad).toBe(1);
+    expect(sinOpciones.ventas).toBe(1);
+
+    // Las dos ventas con la misma opción elegida se agrupan en una sola fila (SUM).
+    expect(conOpciones.nombre).toBe('Producto Variantes Test — Extra queso');
+    expect(conOpciones.cantidad).toBe(2);
+    expect(conOpciones.ventas).toBe(2);
+    expect(conOpciones.monto).toBe(24);
   });
 });

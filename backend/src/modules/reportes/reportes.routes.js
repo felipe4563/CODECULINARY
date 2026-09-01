@@ -8,6 +8,7 @@ router.use(auth);
 
 router.get('/ventas/resumen',   verificarPermiso('reportes', 'ver'), ctrl.getVentasResumen);
 router.get('/ventas/productos', verificarPermiso('reportes', 'ver'), ctrl.getVentasProductos);
+router.get('/ventas/variantes', verificarPermiso('reportes', 'ver'), ctrl.getVentasVariantes);
 router.get('/ventas',           verificarPermiso('reportes', 'ver'), ctrl.getVentas);
 router.get('/inventario',     verificarPermiso('reportes', 'ver'), ctrl.getInventario);
 router.get('/compras',        verificarPermiso('reportes', 'ver'), ctrl.getCompras);

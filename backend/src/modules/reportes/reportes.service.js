@@ -140,6 +140,63 @@ async function ventasProductos(filtros = {}, alcance) {
   }));
 }
 
+// Replica exacta de claveVariante/nombreVariante en
+// frontend/src/pages/reportes/tabs/TabVariantes.jsx (líneas 16-31): agrupa por
+// producto + combinación exacta de opciones elegidas (ordenadas por id para
+// que el orden de selección no genere filas distintas). Los combos no tienen
+// opciones — quedan como su propia fila por combo_id.
+function _esLineaCombo(detalle) {
+  return detalle.producto_id == null && detalle.combo_id != null;
+}
+
+function _claveVariante(detalle) {
+  if (_esLineaCombo(detalle)) return `combo-${detalle.combo_id}`;
+  const opcionIds = (detalle.opciones || []).map((o) => o.id).sort((a, b) => a - b);
+  return `${detalle.producto_id}::${opcionIds.join(',')}`;
+}
+
+function _nombreVariante(detalle) {
+  if (_esLineaCombo(detalle)) return `${detalle.combo?.nombre || 'Combo eliminado'} (Combo)`;
+  const opciones = [...(detalle.opciones || [])].sort((a, b) => a.id - b.id);
+  const base = detalle.producto?.nombre || 'Producto eliminado';
+  return opciones.length ? `${base} — ${opciones.map((o) => o.nombre).join(', ')}` : base;
+}
+
+async function ventasVariantes(filtros = {}, alcance) {
+  const where = _whereVentas(filtros, alcance);
+
+  const detalles = await DetallePedido.findAll({
+    include: [
+      { model: Pedido, attributes: [], where, required: true },
+      { model: Producto, as: 'producto', attributes: ['id', 'nombre'], required: false },
+      { model: Combo, as: 'combo', attributes: ['id', 'nombre'], required: false },
+      { model: Opcion, as: 'opciones', attributes: ['id', 'nombre'], through: { attributes: [] } },
+    ],
+    attributes: ['producto_id', 'combo_id', 'cantidad', 'peso', 'precio'],
+  });
+
+  const mapa = new Map();
+  detalles.forEach((d) => {
+    if (d.producto_id == null && d.combo_id == null) return;
+    const clave = _claveVariante(d);
+    const esPesable = d.peso != null;
+    const cantidad = esPesable ? parseFloat(d.peso || 0) : (d.cantidad || 0);
+    const monto = (d.cantidad || 0) * parseFloat(d.precio || 0);
+    if (!mapa.has(clave)) {
+      mapa.set(clave, {
+        clave, nombre: _nombreVariante(d), unidad: esPesable ? 'kg' : 'un',
+        conOpciones: (d.opciones || []).length > 0, cantidad: 0, monto: 0, ventas: 0,
+      });
+    }
+    const variante = mapa.get(clave);
+    variante.cantidad += cantidad;
+    variante.monto += monto;
+    variante.ventas += 1;
+  });
+
+  return Array.from(mapa.values()).sort((a, b) => b.cantidad - a.cantidad);
+}
+
 async function inventario(filtros = {}, alcance = {}) {
   const { desde, hasta } = filtros;
   const where = filtroFecha(desde, hasta);
@@ -200,4 +257,4 @@ async function caja(filtros = {}, alcance = {}) {
   });
 }
 
-module.exports = { ventas, ventasResumen, ventasProductos, inventario, compras, caja };
+module.exports = { ventas, ventasResumen, ventasProductos, ventasVariantes, inventario, compras, caja };
