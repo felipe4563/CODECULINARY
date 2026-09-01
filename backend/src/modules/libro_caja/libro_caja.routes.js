@@ -6,6 +6,7 @@ const { verificarPermiso } = require('../../middlewares/permisos');
 const router = Router();
 router.use(auth);
 
+router.get('/resumen', verificarPermiso('libro_caja', 'ver'), ctrl.resumen);
 router.get('/', verificarPermiso('libro_caja', 'ver'), ctrl.listar);
 router.post('/', verificarPermiso('libro_caja', 'crear'), ctrl.crear);
 

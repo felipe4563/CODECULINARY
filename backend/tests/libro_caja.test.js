@@ -70,7 +70,7 @@ describe('Libro Caja — aislamiento entre sucursales', () => {
       .set('Authorization', `Bearer ${tokenB}`);
 
     expect(res.status).toBe(200);
-    const ids = res.body.datos.map((m) => m.id);
+    const ids = res.body.datos.filas.map((m) => m.id);
     expect(ids).not.toContain(movimientoAId);
   });
 
@@ -80,7 +80,7 @@ describe('Libro Caja — aislamiento entre sucursales', () => {
       .set('Authorization', `Bearer ${tokenA}`);
 
     expect(res.status).toBe(200);
-    const ids = res.body.datos.map((m) => m.id);
+    const ids = res.body.datos.filas.map((m) => m.id);
     expect(ids).toContain(movimientoAId);
   });
 
@@ -158,5 +158,88 @@ describe('Libro Caja — aislamiento entre sucursales', () => {
 
     const despues = await SesionCaja.findByPk(sesionAId);
     expect(parseFloat(despues.total_gastos)).toBe(gastosAntes);
+  });
+});
+
+describe('paginación y resumen de libro-caja', () => {
+  let token;
+  let idsCreados = [];
+
+  beforeAll(async () => {
+    const login = await request(app).post('/api/v1/auth/login').send({ email: 'admin@restaurante.com', contrasena: process.env.ADMIN_PASSWORD || 'admin123' });
+    token = login.body.datos.token;
+
+    const sufijo = Date.now();
+    for (let i = 0; i < 25; i++) {
+      const res = await request(app)
+        .post('/api/v1/libro-caja')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ tipo: i % 2 === 0 ? 'ingreso' : 'egreso', concepto: `Movimiento paginación ${sufijo}-${i}`, monto: 10 + i });
+      idsCreados.push(res.body.datos.id);
+    }
+  });
+
+  afterAll(async () => {
+    const { LibroCaja } = require('../src/models');
+    await LibroCaja.destroy({ where: { id: idsCreados } });
+  });
+
+  test('GET /api/v1/libro-caja pagina con limite por defecto 20', async () => {
+    const res = await request(app)
+      .get('/api/v1/libro-caja')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.datos.limite).toBe(20);
+    expect(res.body.datos.filas.length).toBeLessThanOrEqual(20);
+    expect(res.body.datos.total).toBeGreaterThanOrEqual(25);
+    expect(res.body.datos.total_paginas).toBe(Math.ceil(res.body.datos.total / 20));
+  });
+
+  test('GET /api/v1/libro-caja respeta pagina y limite explícitos', async () => {
+    const pagina1 = await request(app)
+      .get('/api/v1/libro-caja?limite=5&pagina=1')
+      .set('Authorization', `Bearer ${token}`);
+    const pagina2 = await request(app)
+      .get('/api/v1/libro-caja?limite=5&pagina=2')
+      .set('Authorization', `Bearer ${token}`);
+    expect(pagina1.body.datos.filas.length).toBe(5);
+    expect(pagina2.body.datos.filas.length).toBe(5);
+    expect(pagina1.body.datos.filas[0].id).not.toBe(pagina2.body.datos.filas[0].id);
+  });
+
+  test('GET /api/v1/libro-caja?limite=0 devuelve todo sin paginar', async () => {
+    const res = await request(app)
+      .get('/api/v1/libro-caja?limite=0')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.body.datos.filas.length).toBe(res.body.datos.total);
+    expect(res.body.datos.total_paginas).toBe(1);
+  });
+
+  test('GET /api/v1/libro-caja?tipo=ingreso filtra por tipo', async () => {
+    const res = await request(app)
+      .get('/api/v1/libro-caja?tipo=ingreso&limite=0')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.body.datos.filas.every(f => f.tipo === 'ingreso')).toBe(true);
+  });
+
+  test('GET /api/v1/libro-caja?busqueda= filtra por concepto', async () => {
+    const sufijo = idsCreados.length; // no se usa el valor, solo confirma que hay fixtures
+    const res = await request(app)
+      .get(`/api/v1/libro-caja?busqueda=paginación&limite=0`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.body.datos.filas.length).toBeGreaterThanOrEqual(25);
+    expect(res.body.datos.filas.every(f => f.concepto.includes('paginación'))).toBe(true);
+  });
+
+  test('GET /api/v1/libro-caja/resumen devuelve totales y cajeros', async () => {
+    const res = await request(app)
+      .get('/api/v1/libro-caja/resumen?busqueda=paginación')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(typeof res.body.datos.total_ingresos).toBe('number');
+    expect(typeof res.body.datos.total_egresos).toBe('number');
+    expect(res.body.datos.cantidad).toBeGreaterThanOrEqual(25);
+    expect(Array.isArray(res.body.datos.filtros.cajeros)).toBe(true);
+    expect(res.body.datos.filtros.cajeros.some(c => c.id != null)).toBe(true);
   });
 });

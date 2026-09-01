@@ -9,6 +9,11 @@ async function listar(req, res, next) {
   catch (err) { next(err); }
 }
 
+async function resumen(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.resumen(req.query, _alcance(req)) }); }
+  catch (err) { next(err); }
+}
+
 async function crear(req, res, next) {
   try {
     const { tipo, concepto, monto } = req.body;
@@ -19,4 +24,4 @@ async function crear(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { listar, crear };
+module.exports = { listar, resumen, crear };
