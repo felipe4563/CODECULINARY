@@ -493,7 +493,7 @@ export default function LibroCajaPage() {
 
           {/* contador */}
           <p className="text-xs text-muted-foreground mt-2.5">
-            {movimientos.length} registro{movimientos.length !== 1 ? 's' : ''}
+            {pagina_datos?.total ?? 0} registro{(pagina_datos?.total ?? 0) !== 1 ? 's' : ''}
             {(buscar || filtroTipo !== 'todos' || desde || hasta) ? ' encontrados' : ' en total'}
           </p>
         </div>
@@ -588,7 +588,7 @@ export default function LibroCajaPage() {
                 <tfoot>
                   <tr className="bg-muted border-t-2 border-border">
                     <td colSpan={4} className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">
-                      Totales ({movimientos.length} registros)
+                      Totales ({pagina_datos?.total ?? 0} registros)
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex flex-col items-end gap-0.5">
