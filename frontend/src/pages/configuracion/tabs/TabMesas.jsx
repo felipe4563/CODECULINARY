@@ -485,7 +485,7 @@ function ModalCodigoQr({ mesa, onClose }) {
       ctx.font = '28px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('Escaneá y pedí desde tu celular', ancho / 2, headerAlto + ctaAlto / 2);
+      ctx.fillText('Escanee y pida desde su celular', ancho / 2, headerAlto + ctaAlto / 2);
 
       // QR
       ctx.drawImage(qrImg, padding, qrY, qrTam, qrTam);
