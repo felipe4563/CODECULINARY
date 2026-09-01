@@ -1,34 +1,11 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download, Layers, ShoppingCart, DollarSign, Trophy } from 'lucide-react';
-import { getReporteVentas } from '../../../api/reportes';
+import { getReporteVentasVariantes, getReporteVentasResumen } from '../../../api/reportes';
 import { useAuth } from '../../../hooks/useAuth';
 import { useAuthStore } from '../../../store/authStore';
 import { exportarPDF } from '../utils/exportarPDF';
 import { FiltroFechas, StatCard, Skeleton, bs, fecha, hoy, inicioMes } from '../shared';
-
-// Clave de la variante: producto + combinación exacta de opciones elegidas
-// (ordenadas por id para que "Papaya, Grande" y "Grande, Papaya" caigan en la
-// misma fila). Un producto sin opciones elegidas queda como su propia fila.
-// Los combos no tienen opciones — quedan como su propia fila por combo_id
-// (si no se cuentan, la suma de este reporte queda por debajo del total real
-// del pedido, ver reporte de Ventas).
-function esLineaCombo(detalle) {
-  return detalle.producto?.id == null && detalle.combo?.id != null;
-}
-
-function claveVariante(detalle) {
-  if (esLineaCombo(detalle)) return `combo-${detalle.combo.id}`;
-  const opciones = [...(detalle.opciones || [])].sort((a, b) => a.id - b.id);
-  return `${detalle.producto?.id}::${opciones.map(o => o.id).join(',')}`;
-}
-
-function nombreVariante(detalle) {
-  if (esLineaCombo(detalle)) return `${detalle.combo?.nombre || 'Combo eliminado'} (Combo)`;
-  const opciones = [...(detalle.opciones || [])].sort((a, b) => a.id - b.id);
-  const base = detalle.producto?.nombre || 'Producto eliminado';
-  return opciones.length ? `${base} — ${opciones.map(o => o.nombre).join(', ')}` : base;
-}
 
 const puestoClase = (i) =>
   i === 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400'
@@ -67,55 +44,31 @@ export default function TabVariantes({ empresa, logo, direccion, telefono }) {
   const [hasta, setHasta] = useState(hoy());
   const [params, setParams] = useState({ desde: inicioMes(), hasta: hoy() });
 
-  const { data = [], isLoading } = useQuery({
-    queryKey: ['reporte-ventas-variantes', params],
-    queryFn: () => getReporteVentas(params),
+  const filtrosApi = {
+    ...params,
+    sucursal_id: accesoTodas && filtroSucursal !== 'todas' ? filtroSucursal : undefined,
+  };
+
+  const { data: variantes = [], isLoading } = useQuery({
+    queryKey: ['reporte-ventas-variantes', filtrosApi],
+    queryFn: () => getReporteVentasVariantes(filtrosApi),
   });
 
-  const sucursales = useMemo(() => {
-    const unicos = new Map();
-    data.forEach(v => { if (v.sucursal?.id) unicos.set(v.sucursal.id, v.sucursal.nombre); });
-    return Array.from(unicos.entries()).map(([id, nombre]) => ({ id, nombre }));
-  }, [data]);
-
-  const filtrado = useMemo(() => {
-    if (!accesoTodas || filtroSucursal === 'todas') return data;
-    return data.filter(v => String(v.sucursal?.id) === filtroSucursal);
-  }, [data, filtroSucursal, accesoTodas]);
-
-  const variantes = useMemo(() => {
-    const mapa = new Map();
-    filtrado.forEach(v => {
-      (v.detalles || []).forEach(d => {
-        if (d.producto?.id == null && d.combo?.id == null) return;
-        const clave = claveVariante(d);
-        const esPesable = d.peso != null;
-        const cantidad = esPesable ? parseFloat(d.peso || 0) : (d.cantidad || 0);
-        const monto = (d.cantidad || 0) * parseFloat(d.precio || 0);
-        if (!mapa.has(clave)) {
-          mapa.set(clave, {
-            clave, nombre: nombreVariante(d), unidad: esPesable ? 'kg' : 'un',
-            conOpciones: (d.opciones || []).length > 0, cantidad: 0, monto: 0, ventas: 0,
-          });
-        }
-        const variante = mapa.get(clave);
-        variante.cantidad += cantidad;
-        variante.monto += monto;
-        variante.ventas += 1;
-      });
-    });
-    return Array.from(mapa.values()).sort((a, b) => b.cantidad - a.cantidad);
-  }, [filtrado]);
+  const { data: resumen } = useQuery({
+    queryKey: ['reporte-ventas-resumen', filtrosApi],
+    queryFn: () => getReporteVentasResumen(filtrosApi),
+  });
+  const sucursales = resumen?.filtros?.sucursales ?? [];
 
   const stats = useMemo(() => {
     const ingresoTotal = variantes.reduce((s, v) => s + v.monto, 0);
     return {
       distintas: variantes.length,
-      ventas: filtrado.length,
+      ventas: resumen?.cantidad ?? 0,
       ingresoTotal,
       top: variantes[0] || null,
     };
-  }, [variantes, filtrado]);
+  }, [variantes, resumen]);
 
   const maxCantidad = variantes[0]?.cantidad || 1;
 
