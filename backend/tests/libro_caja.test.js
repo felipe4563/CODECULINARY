@@ -93,6 +93,15 @@ describe('Libro Caja — aislamiento entre sucursales', () => {
     expect(res.status).toBe(404);
   });
 
+  it('un usuario de otra sucursal NO puede ver el resumen filtrando por un sesion_caja_id ajeno (404)', async () => {
+    const res = await request(app)
+      .get('/api/v1/libro-caja/resumen')
+      .query({ sesion_caja_id: sesionAId })
+      .set('Authorization', `Bearer ${tokenB}`);
+
+    expect(res.status).toBe(404);
+  });
+
   it('un usuario de otra sucursal NO puede crear un movimiento en una sesión de caja ajena (404)', async () => {
     const res = await request(app)
       .post('/api/v1/libro-caja')
@@ -241,5 +250,23 @@ describe('paginación y resumen de libro-caja', () => {
     expect(res.body.datos.cantidad).toBeGreaterThanOrEqual(25);
     expect(Array.isArray(res.body.datos.filtros.cajeros)).toBe(true);
     expect(res.body.datos.filtros.cajeros.some(c => c.id != null)).toBe(true);
+  });
+
+  test('GET /api/v1/libro-caja/resumen?tipo=ingreso deja total_egresos en 0 (no el total sin filtrar)', async () => {
+    const res = await request(app)
+      .get('/api/v1/libro-caja/resumen?busqueda=paginación&tipo=ingreso')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.datos.total_egresos).toBe(0);
+    expect(res.body.datos.total_ingresos).toBeGreaterThan(0);
+  });
+
+  test('GET /api/v1/libro-caja/resumen?tipo=egreso deja total_ingresos en 0 (no el total sin filtrar)', async () => {
+    const res = await request(app)
+      .get('/api/v1/libro-caja/resumen?busqueda=paginación&tipo=egreso')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.datos.total_ingresos).toBe(0);
+    expect(res.body.datos.total_egresos).toBeGreaterThan(0);
   });
 });
