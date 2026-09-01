@@ -47,7 +47,7 @@ describe('Reportes filtrados por sucursal', () => {
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.datos.find(p => p.id === pedidoOtraSucursalId)).toBeUndefined();
+    expect(res.body.datos.filas.find(p => p.id === pedidoOtraSucursalId)).toBeUndefined();
   });
 
   it('el reporte de ventas incluye el objeto sucursal en cada fila', async () => {
@@ -56,9 +56,9 @@ describe('Reportes filtrados por sucursal', () => {
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.datos.length).toBeGreaterThan(0);
-    expect(res.body.datos[0].sucursal).toHaveProperty('id');
-    expect(res.body.datos[0].sucursal).toHaveProperty('nombre');
+    expect(res.body.datos.filas.length).toBeGreaterThan(0);
+    expect(res.body.datos.filas[0].sucursal).toHaveProperty('id');
+    expect(res.body.datos.filas[0].sucursal).toHaveProperty('nombre');
   });
 
   it('el reporte de caja filtra por sucursal e incluye el objeto sucursal en cada fila', async () => {
@@ -160,5 +160,50 @@ describe('alcance por sucursal en /api/v1/reportes/*', () => {
     expect(res.status).toBe(200);
     const filas = Array.isArray(res.body.datos) ? res.body.datos : res.body.datos.filas;
     expect(filas.every(f => (f.sucursal_id ?? f.sucursal?.id) === sucursalAId)).toBe(true);
+  });
+});
+
+describe('GET /api/v1/reportes/ventas — paginación, resumen y filtros', () => {
+  let token;
+
+  beforeAll(async () => {
+    const login = await request(app).post('/api/v1/auth/login').send({ email: 'admin@restaurante.com', contrasena: process.env.ADMIN_PASSWORD || 'admin123' });
+    token = login.body.datos.token;
+  });
+
+  test('pagina con limite por defecto y trae total_paginas', async () => {
+    const res = await request(app)
+      .get('/api/v1/reportes/ventas')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.datos).toHaveProperty('filas');
+    expect(res.body.datos).toHaveProperty('total');
+    expect(res.body.datos).toHaveProperty('total_paginas');
+    expect(res.body.datos.filas.length).toBeLessThanOrEqual(res.body.datos.limite);
+  });
+
+  test('limite=0 devuelve todo sin paginar', async () => {
+    const res = await request(app)
+      .get('/api/v1/reportes/ventas?limite=0')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.body.datos.filas.length).toBe(res.body.datos.total);
+  });
+
+  test('filtro metodo_pago solo devuelve ventas con ese método', async () => {
+    const res = await request(app)
+      .get('/api/v1/reportes/ventas?metodo_pago=efectivo&limite=0')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.body.datos.filas.every(f => f.metodo_pago === 'efectivo')).toBe(true);
+  });
+
+  test('GET /api/v1/reportes/ventas/resumen devuelve totales y filtros', async () => {
+    const res = await request(app)
+      .get('/api/v1/reportes/ventas/resumen')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(typeof res.body.datos.total_ventas).toBe('number');
+    expect(typeof res.body.datos.ventas_efectivo).toBe('number');
+    expect(typeof res.body.datos.ventas_qr).toBe('number');
+    expect(Array.isArray(res.body.datos.filtros.cajeros)).toBe(true);
   });
 });

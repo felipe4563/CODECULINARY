@@ -17,12 +17,33 @@ function filtroFecha(desde, hasta) {
 
 const INCLUDE_SUCURSAL = { model: Sucursal, as: 'sucursal', attributes: ['id', 'nombre'] };
 
-async function ventas(filtros = {}, alcance = {}) {
-  const { desde, hasta } = filtros;
+const LIMITE_DEFAULT = 20;
+const LIMITE_MAX = 100;
+
+function _paginaLimite(filtros = {}) {
+  const pagina = Math.max(parseInt(filtros.pagina, 10) || 1, 1);
+  const limiteReq = filtros.limite === undefined ? LIMITE_DEFAULT : parseInt(filtros.limite, 10);
+  const limite = limiteReq === 0 ? 0 : Math.min(Math.max(limiteReq || LIMITE_DEFAULT, 1), LIMITE_MAX);
+  return { pagina, limite };
+}
+
+function _whereVentas(filtros, alcance) {
+  const { desde, hasta, usuario_id, metodo_pago, tipo, origen } = filtros;
   const where = { estado: 'completado', ...filtroFecha(desde, hasta) };
   if (!alcance.acceso_todas) where.sucursal_id = alcance.sucursal_id;
   else if (filtros.sucursal_id) where.sucursal_id = filtros.sucursal_id;
-  return Pedido.findAll({
+  if (usuario_id) where.usuario_id = usuario_id;
+  if (metodo_pago) where.metodo_pago = metodo_pago;
+  if (tipo) where.tipo = tipo;
+  if (origen) where.origen = origen;
+  return where;
+}
+
+async function ventas(filtros = {}, alcance) {
+  const where = _whereVentas(filtros, alcance);
+  const { pagina, limite } = _paginaLimite(filtros);
+
+  const { rows, count } = await Pedido.findAndCountAll({
     where,
     include: [
       { model: Mesa,    as: 'mesa',    attributes: ['id', 'nombre'] },
@@ -42,7 +63,52 @@ async function ventas(filtros = {}, alcance = {}) {
       },
     ],
     order: [['creado_en', 'DESC']],
+    distinct: true,
+    ...(limite ? { limit: limite, offset: (pagina - 1) * limite } : {}),
   });
+
+  return { filas: rows, pagina, limite, total: count, total_paginas: limite ? Math.ceil(count / limite) : 1 };
+}
+
+async function ventasResumen(filtros = {}, alcance) {
+  const where = _whereVentas(filtros, alcance);
+
+  const [totalVentas, ventasEfectivo, ventasQR, cantidad, cajerosRaw] = await Promise.all([
+    Pedido.sum('total', { where }),
+    Pedido.sum('total', { where: { ...where, metodo_pago: 'efectivo' } }),
+    Pedido.sum('total', { where: { ...where, metodo_pago: 'qr' } }),
+    Pedido.count({ where }),
+    Pedido.findAll({
+      where,
+      include: [{ model: Usuario, as: 'usuario', attributes: ['id', 'nombre'] }],
+      attributes: [],
+      group: ['usuario.id', 'usuario.nombre'],
+      raw: true,
+    }),
+  ]);
+
+  const cajeros = cajerosRaw
+    .map((f) => ({ id: f['usuario.id'], nombre: f['usuario.nombre'] }))
+    .filter((c) => c.id != null);
+
+  const filtrosResp = { cajeros };
+  if (alcance.acceso_todas) {
+    const sucursalesRaw = await Pedido.findAll({
+      where, include: [INCLUDE_SUCURSAL], attributes: [],
+      group: ['sucursal.id', 'sucursal.nombre'], raw: true,
+    });
+    filtrosResp.sucursales = sucursalesRaw
+      .map((f) => ({ id: f['sucursal.id'], nombre: f['sucursal.nombre'] }))
+      .filter((s) => s.id != null);
+  }
+
+  return {
+    total_ventas: parseFloat(totalVentas || 0),
+    ventas_efectivo: parseFloat(ventasEfectivo || 0),
+    ventas_qr: parseFloat(ventasQR || 0),
+    cantidad: cantidad || 0,
+    filtros: filtrosResp,
+  };
 }
 
 async function inventario(filtros = {}, alcance = {}) {
@@ -105,4 +171,4 @@ async function caja(filtros = {}, alcance = {}) {
   });
 }
 
-module.exports = { ventas, inventario, compras, caja };
+module.exports = { ventas, ventasResumen, inventario, compras, caja };
