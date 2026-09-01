@@ -1,7 +1,7 @@
 const request = require('supertest');
 const bcrypt = require('bcryptjs');
 const app = require('../src/app');
-const { Sucursal, Area, Mesa, Categoria, Producto, SesionCaja, LibroCaja, Pedido, Caja, Rol, Usuario } = require('../src/models');
+const { Sucursal, Area, Mesa, Categoria, Producto, SesionCaja, LibroCaja, Pedido, DetallePedido, Caja, Rol, Usuario } = require('../src/models');
 
 describe('Reportes filtrados por sucursal', () => {
   let adminToken, sucursalOtra, pedidoOtraSucursalId, pedidoPropioId, cajaOtra;
@@ -205,5 +205,44 @@ describe('GET /api/v1/reportes/ventas — paginación, resumen y filtros', () =>
     expect(typeof res.body.datos.ventas_efectivo).toBe('number');
     expect(typeof res.body.datos.ventas_qr).toBe('number');
     expect(Array.isArray(res.body.datos.filtros.cajeros)).toBe(true);
+  });
+});
+
+describe('GET /api/v1/reportes/ventas/productos', () => {
+  let token, categoria, producto, pedido, detalle;
+
+  beforeAll(async () => {
+    const login = await request(app).post('/api/v1/auth/login').send({ email: 'admin@restaurante.com', contrasena: process.env.ADMIN_PASSWORD || 'admin123' });
+    token = login.body.datos.token;
+
+    categoria = await Categoria.create({ nombre: 'Categoria Ranking Test' });
+    producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Ranking Test', precio: 8, stock: null });
+    pedido = await Pedido.create({
+      sucursal_id: login.body.datos.usuario.sucursal_activa.id, usuario_id: 1, tipo: 'llevar', estado: 'completado', total: 16,
+    });
+    detalle = await DetallePedido.create({ pedido_id: pedido.id, producto_id: producto.id, cantidad: 2, precio: 8 });
+  });
+
+  afterAll(async () => {
+    await DetallePedido.destroy({ where: { id: detalle.id } });
+    await Pedido.destroy({ where: { id: pedido.id } });
+    await Producto.destroy({ where: { id: producto.id } });
+    await Categoria.destroy({ where: { id: categoria.id } });
+  });
+
+  test('devuelve el ranking agrupado por producto, ordenado por cantidad', async () => {
+    const res = await request(app)
+      .get('/api/v1/reportes/ventas/productos')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.datos)).toBe(true);
+    if (res.body.datos.length > 1) {
+      expect(res.body.datos[0].cantidad).toBeGreaterThanOrEqual(res.body.datos[1].cantidad);
+    }
+    res.body.datos.forEach(p => {
+      expect(['producto', 'combo']).toContain(p.tipo);
+      expect(typeof p.cantidad).toBe('number');
+      expect(typeof p.monto).toBe('number');
+    });
   });
 });

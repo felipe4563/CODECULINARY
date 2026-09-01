@@ -6,8 +6,9 @@ const { verificarPermiso } = require('../../middlewares/permisos');
 const router = Router();
 router.use(auth);
 
-router.get('/ventas/resumen', verificarPermiso('reportes', 'ver'), ctrl.getVentasResumen);
-router.get('/ventas',         verificarPermiso('reportes', 'ver'), ctrl.getVentas);
+router.get('/ventas/resumen',   verificarPermiso('reportes', 'ver'), ctrl.getVentasResumen);
+router.get('/ventas/productos', verificarPermiso('reportes', 'ver'), ctrl.getVentasProductos);
+router.get('/ventas',           verificarPermiso('reportes', 'ver'), ctrl.getVentas);
 router.get('/inventario',     verificarPermiso('reportes', 'ver'), ctrl.getInventario);
 router.get('/compras',        verificarPermiso('reportes', 'ver'), ctrl.getCompras);
 router.get('/caja',           verificarPermiso('reportes', 'ver'), ctrl.getCaja);

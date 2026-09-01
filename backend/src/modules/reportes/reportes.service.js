@@ -1,4 +1,4 @@
-const { Op } = require('sequelize');
+const { Op, fn, col, literal } = require('sequelize');
 const {
   Pedido, DetallePedido, Mesa, Cliente, Producto, Combo, Usuario,
   RegistroInventario, Compra, Proveedor, LibroCaja, SesionCaja, Sucursal,
@@ -111,6 +111,35 @@ async function ventasResumen(filtros = {}, alcance) {
   };
 }
 
+async function ventasProductos(filtros = {}, alcance) {
+  const where = _whereVentas(filtros, alcance);
+
+  const filas = await DetallePedido.findAll({
+    include: [
+      { model: Pedido, attributes: [], where, required: true },
+      { model: Producto, as: 'producto', attributes: ['nombre'], required: false },
+      { model: Combo, as: 'combo', attributes: ['nombre'], required: false },
+    ],
+    attributes: [
+      'producto_id',
+      'combo_id',
+      [fn('SUM', col('DetallePedido.cantidad')), 'cantidad'],
+      [fn('SUM', literal('`DetallePedido`.`cantidad` * `DetallePedido`.`precio`')), 'monto'],
+    ],
+    group: ['DetallePedido.producto_id', 'DetallePedido.combo_id', 'producto.nombre', 'combo.nombre'],
+    order: [[literal('cantidad'), 'DESC']],
+    raw: true,
+  });
+
+  return filas.map((f) => ({
+    id: f.producto_id ?? f.combo_id,
+    tipo: f.producto_id ? 'producto' : 'combo',
+    nombre: f['producto.nombre'] ?? f['combo.nombre'] ?? '(eliminado)',
+    cantidad: parseFloat(f.cantidad || 0),
+    monto: parseFloat(f.monto || 0),
+  }));
+}
+
 async function inventario(filtros = {}, alcance = {}) {
   const { desde, hasta } = filtros;
   const where = filtroFecha(desde, hasta);
@@ -171,4 +200,4 @@ async function caja(filtros = {}, alcance = {}) {
   });
 }
 
-module.exports = { ventas, ventasResumen, inventario, compras, caja };
+module.exports = { ventas, ventasResumen, ventasProductos, inventario, compras, caja };
