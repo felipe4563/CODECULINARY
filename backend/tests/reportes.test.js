@@ -1,7 +1,7 @@
 const request = require('supertest');
 const bcrypt = require('bcryptjs');
 const app = require('../src/app');
-const { Sucursal, Area, Mesa, Categoria, Producto, SesionCaja, LibroCaja, Pedido, DetallePedido, Caja, Rol, Usuario, GrupoOpciones, Opcion, DetallePedidoOpcion } = require('../src/models');
+const { Sucursal, Area, Mesa, Categoria, Producto, SesionCaja, LibroCaja, Pedido, DetallePedido, Caja, Rol, Usuario, GrupoOpciones, Opcion, DetallePedidoOpcion, Compra, Proveedor } = require('../src/models');
 
 describe('Reportes filtrados por sucursal', () => {
   let adminToken, sucursalOtra, pedidoOtraSucursalId, pedidoPropioId, cajaOtra;
@@ -349,11 +349,25 @@ describe('GET /api/v1/reportes/ventas/variantes', () => {
 });
 
 describe('GET /api/v1/reportes/compras — paginación, resumen y filtro estado', () => {
-  let token;
+  let token, sucursalId, proveedor, compraRecibida, compraPendiente;
 
   beforeAll(async () => {
     const login = await request(app).post('/api/v1/auth/login').send({ email: 'admin@restaurante.com', contrasena: process.env.ADMIN_PASSWORD || 'admin123' });
     token = login.body.datos.token;
+    sucursalId = login.body.datos.usuario.sucursal_activa.id;
+
+    proveedor = await Proveedor.create({ nombre: 'Proveedor Reportes Estado Test' });
+    compraRecibida = await Compra.create({
+      sucursal_id: sucursalId, proveedor_id: proveedor.id, usuario_id: 1, total: 10, estado: 'recibido',
+    });
+    compraPendiente = await Compra.create({
+      sucursal_id: sucursalId, proveedor_id: proveedor.id, usuario_id: 1, total: 20, estado: 'pendiente',
+    });
+  });
+
+  afterAll(async () => {
+    await Compra.destroy({ where: { id: [compraRecibida.id, compraPendiente.id] } });
+    await Proveedor.destroy({ where: { id: proveedor.id } });
   });
 
   test('pagina con limite por defecto', async () => {
@@ -369,7 +383,11 @@ describe('GET /api/v1/reportes/compras — paginación, resumen y filtro estado'
     const res = await request(app)
       .get('/api/v1/reportes/compras?estado=recibido&limite=0')
       .set('Authorization', `Bearer ${token}`);
-    expect(res.body.datos.filas.every(f => f.estado === 'recibido')).toBe(true);
+    expect(res.status).toBe(200);
+    const filas = res.body.datos.filas;
+    expect(filas.every(f => f.estado === 'recibido')).toBe(true);
+    expect(filas.some(f => f.id === compraRecibida.id)).toBe(true);
+    expect(filas.some(f => f.id === compraPendiente.id)).toBe(false);
   });
 
   test('GET /api/v1/reportes/compras/resumen devuelve totales', async () => {
