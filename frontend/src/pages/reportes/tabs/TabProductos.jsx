@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download, Layers, ShoppingCart, DollarSign, Trophy } from 'lucide-react';
-import { getReporteVentas } from '../../../api/reportes';
+import { getReporteVentasProductos, getReporteVentasResumen } from '../../../api/reportes';
 import { useAuth } from '../../../hooks/useAuth';
 import { useAuthStore } from '../../../store/authStore';
 import { exportarPDF } from '../utils/exportarPDF';
@@ -21,7 +21,7 @@ function ProductoCard({ producto, i, maxCantidad, pct }) {
         <p className="font-medium text-foreground truncate">{producto.nombre}</p>
         <div className="flex items-center gap-2 mt-0.5">
           <span className="text-xs text-muted-foreground whitespace-nowrap">
-            {producto.cantidad.toLocaleString('es-BO', { maximumFractionDigits: 2 })} {producto.unidad} · {pct.toFixed(1)}%
+            {producto.cantidad.toLocaleString('es-BO', { maximumFractionDigits: 2 })} · {pct.toFixed(1)}%
           </span>
           <div className="flex-1 min-w-[2.5rem] h-1.5 rounded-full bg-muted overflow-hidden">
             <div className="h-full bg-primary rounded-full" style={{ width: `${Math.max((producto.cantidad / maxCantidad) * 100, 4)}%` }} />
@@ -41,57 +41,33 @@ export default function TabProductos({ empresa, logo, direccion, telefono }) {
   const [hasta, setHasta] = useState(hoy());
   const [params, setParams] = useState({ desde: inicioMes(), hasta: hoy() });
 
+  const filtrosApi = {
+    ...params,
+    sucursal_id: accesoTodas && filtroSucursal !== 'todas' ? filtroSucursal : undefined,
+  };
+
   const { data = [], isLoading } = useQuery({
-    queryKey: ['reporte-ventas-productos', params],
-    queryFn: () => getReporteVentas(params),
+    queryKey: ['reporte-ventas-productos', filtrosApi],
+    queryFn: () => getReporteVentasProductos(filtrosApi),
   });
 
-  const sucursales = useMemo(() => {
-    const unicos = new Map();
-    data.forEach(v => { if (v.sucursal?.id) unicos.set(v.sucursal.id, v.sucursal.nombre); });
-    return Array.from(unicos.entries()).map(([id, nombre]) => ({ id, nombre }));
-  }, [data]);
+  const { data: resumen } = useQuery({
+    queryKey: ['reporte-ventas-resumen', filtrosApi],
+    queryFn: () => getReporteVentasResumen(filtrosApi),
+  });
+  const sucursales = resumen?.filtros?.sucursales ?? [];
 
-  const filtrado = useMemo(() => {
-    if (!accesoTodas || filtroSucursal === 'todas') return data;
-    return data.filter(v => String(v.sucursal?.id) === filtroSucursal);
-  }, [data, filtroSucursal, accesoTodas]);
-
-  const productos = useMemo(() => {
-    const mapa = new Map();
-    filtrado.forEach(v => {
-      (v.detalles || []).forEach(d => {
-        // Una línea es de producto (d.producto) o de combo (d.combo) — nunca
-        // ambas. Si se ignoran las de combo, la suma de este reporte queda
-        // por debajo del total real del pedido (ver reporte de Ventas).
-        const esCombo = d.producto?.id == null && d.combo?.id != null;
-        const id = esCombo ? `combo-${d.combo.id}` : d.producto?.id;
-        if (id == null) return;
-        const esPesable = d.peso != null;
-        const cantidad = esPesable ? parseFloat(d.peso || 0) : (d.cantidad || 0);
-        const monto = (d.cantidad || 0) * parseFloat(d.precio || 0);
-        if (!mapa.has(id)) {
-          const nombre = esCombo ? `${d.combo?.nombre || 'Combo eliminado'} (Combo)` : (d.producto?.nombre || 'Producto eliminado');
-          mapa.set(id, { id, nombre, unidad: esPesable ? 'kg' : 'un', cantidad: 0, monto: 0, ventas: 0 });
-        }
-        const p = mapa.get(id);
-        p.cantidad += cantidad;
-        p.monto += monto;
-        p.ventas += 1;
-      });
-    });
-    return Array.from(mapa.values()).sort((a, b) => b.cantidad - a.cantidad);
-  }, [filtrado]);
+  const productos = data;
 
   const stats = useMemo(() => {
     const ingresoTotal = productos.reduce((s, p) => s + p.monto, 0);
     return {
       distintos: productos.length,
-      ventas: filtrado.length,
+      ventas: resumen?.cantidad ?? 0,
       ingresoTotal,
       top: productos[0] || null,
     };
-  }, [productos, filtrado]);
+  }, [productos, resumen]);
 
   const maxCantidad = productos[0]?.cantidad || 1;
 
@@ -100,12 +76,11 @@ export default function TabProductos({ empresa, logo, direccion, telefono }) {
     subtitulo:     `${fecha(params.desde)} — ${fecha(params.hasta)}`,
     empresa, logo, direccion, telefono,
     generadoPor:   usuario?.nombre,
-    columnas:      ['#', 'Producto', 'Cantidad', 'Unidad', 'Monto generado', '% del ingreso'],
+    columnas:      ['#', 'Producto', 'Cantidad', 'Monto generado', '% del ingreso'],
     filas:         productos.map((p, i) => [
       i + 1,
       p.nombre,
       p.cantidad.toLocaleString('es-BO', { maximumFractionDigits: 2 }),
-      p.unidad,
       bs(p.monto),
       stats.ingresoTotal > 0 ? `${((p.monto / stats.ingresoTotal) * 100).toFixed(1)}%` : '0%',
     ]),
@@ -190,7 +165,7 @@ export default function TabProductos({ empresa, logo, direccion, telefono }) {
                       <td className="px-3 py-2.5 sm:px-4 sm:py-3">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-foreground whitespace-nowrap">
-                            {p.cantidad.toLocaleString('es-BO', { maximumFractionDigits: 2 })} {p.unidad}
+                            {p.cantidad.toLocaleString('es-BO', { maximumFractionDigits: 2 })}
                           </span>
                           <div className="hidden sm:block flex-1 min-w-[3rem] max-w-[6rem] h-1.5 rounded-full bg-muted overflow-hidden">
                             <div className="h-full bg-primary rounded-full" style={{ width: `${Math.max((p.cantidad / maxCantidad) * 100, 4)}%` }} />
