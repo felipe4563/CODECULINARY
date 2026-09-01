@@ -45,12 +45,11 @@ export default function TabCaja({ empresa, logo, direccion, telefono }) {
   const [desde, setDesde] = useState(inicioMes());
   const [hasta, setHasta] = useState(hoy());
   const [filtroTipo, setFiltroTipo] = useState('todos');
-  const [params, setParams] = useState({ desde: inicioMes(), hasta: hoy() });
   const [pagina, setPagina] = useState(1);
   const [exportando, setExportando] = useState(false);
 
   const filtrosApi = {
-    ...params,
+    desde, hasta,
     sucursal_id: accesoTodas && filtroSucursal !== 'todas' ? filtroSucursal : undefined,
     tipo: filtroTipo !== 'todos' ? filtroTipo : undefined,
   };
@@ -59,7 +58,7 @@ export default function TabCaja({ empresa, logo, direccion, telefono }) {
   // página que ya no existe). Se ajusta el estado durante el render en vez
   // de un useEffect para no disparar el lint react-hooks/set-state-in-effect
   // (mismo patrón usado en LibroCajaPage.jsx / TabVentas.jsx / TabCompras.jsx).
-  const filtrosKey = `${params.desde}|${params.hasta}|${filtroSucursal}|${filtroTipo}`;
+  const filtrosKey = `${desde}|${hasta}|${filtroSucursal}|${filtroTipo}`;
   const [prevFiltrosKey, setPrevFiltrosKey] = useState(filtrosKey);
   if (filtrosKey !== prevFiltrosKey) {
     setPrevFiltrosKey(filtrosKey);
@@ -115,7 +114,7 @@ export default function TabCaja({ empresa, logo, direccion, telefono }) {
       const { filas: todas } = await getReporteCaja({ ...filtrosApi, limite: 0 });
       exportarPDF({
         titulo:        'Reporte de Caja / Libro Caja',
-        subtitulo:     `${fecha(params.desde)} — ${fecha(params.hasta)}`,
+        subtitulo:     `${fecha(desde)} — ${fecha(hasta)}`,
         empresa, logo, direccion, telefono,
         generadoPor:   usuario?.nombre,
         columnas:      ['Fecha', 'Tipo', 'Concepto', 'Método de pago', 'Usuario', 'Monto'],
@@ -133,7 +132,7 @@ export default function TabCaja({ empresa, logo, direccion, telefono }) {
           { label: 'Total egresos',   valor: bs(stats.egresos) },
           { label: 'Balance',         valor: bs(stats.balance) },
         ],
-        nombreArchivo: `reporte-caja-${params.desde}-${params.hasta}.pdf`,
+        nombreArchivo: `reporte-caja-${desde}-${hasta}.pdf`,
       });
     } finally {
       setExportando(false);
@@ -144,8 +143,7 @@ export default function TabCaja({ empresa, logo, direccion, telefono }) {
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end sm:justify-between gap-3">
         <div className="flex flex-wrap items-end gap-3">
-          <FiltroFechas desde={desde} hasta={hasta} setDesde={setDesde} setHasta={setHasta}
-            onBuscar={() => setParams({ desde, hasta })} cargando={isLoading} />
+          <FiltroFechas desde={desde} hasta={hasta} setDesde={setDesde} setHasta={setHasta} />
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-muted-foreground">Tipo</label>
             <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}

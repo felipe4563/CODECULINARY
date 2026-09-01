@@ -1,7 +1,10 @@
 // frontend/src/pages/cocina/PantallaCocinaImpresion.jsx
 import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Printer, AlertCircle } from 'lucide-react';
 import { usePermisos } from '../../hooks/usePermisos';
+import { useAuth } from '../../hooks/useAuth';
+import { getCajasPublico } from '../../api/cajas';
 import { imprimirBluetoothCocina } from '../../utils/rawbt';
 import socket from '../../socket';
 
@@ -32,6 +35,13 @@ function useWakeLock() {
 export default function PantallaCocinaImpresion() {
   const { tienePermiso } = usePermisos();
   const puedeVer = tienePermiso('cocina', 'ver');
+  const { usuario } = useAuth();
+  const sucursalId = usuario?.sucursal_activa?.id ?? null;
+  const { data: cajas = [] } = useQuery({
+    queryKey: ['cajas-publico', sucursalId],
+    queryFn: () => getCajasPublico(sucursalId),
+    enabled: !!sucursalId,
+  });
   const [cajaVinculada, setCajaVinculada] = useState(() => localStorage.getItem(CLAVE_CAJA_LOCALSTORAGE) || '');
   const [impresos, setImpresos] = useState([]); // [{ pedidoId, etiqueta, hora }], más reciente primero
   const dedupRef = useRef(new Map()); // pedidoId -> timestamp
@@ -105,10 +115,8 @@ export default function PantallaCocinaImpresion() {
         <label htmlFor="caja-vinculada" className="text-xs font-medium text-muted-foreground">
           Vincular a una caja específica (opcional — solo si tu negocio usa "cocina por caja")
         </label>
-        <input
+        <select
           id="caja-vinculada"
-          type="number"
-          min="1"
           value={cajaVinculada}
           onChange={(e) => {
             const valor = e.target.value;
@@ -116,9 +124,13 @@ export default function PantallaCocinaImpresion() {
             if (valor) localStorage.setItem(CLAVE_CAJA_LOCALSTORAGE, valor);
             else localStorage.removeItem(CLAVE_CAJA_LOCALSTORAGE);
           }}
-          placeholder="ID de la caja"
           className="w-full bg-background border border-input rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        />
+        >
+          <option value="">Sin vincular (cocina centralizada)</option>
+          {cajas.map((c) => (
+            <option key={c.id} value={c.id}>{c.nombre}</option>
+          ))}
+        </select>
       </div>
 
       <div className="bg-card rounded-2xl border border-border p-4">

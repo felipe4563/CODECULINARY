@@ -156,7 +156,7 @@ export default function CajaPage() {
   // vista de detalle de una sesión (abierta) seleccionada de la grilla
   if (sesionSeleccionadaId && sesion) {
     return (
-      <div className="space-y-6 max-w-5xl">
+      <div className="space-y-6">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setSesionSeleccionadaId(null)}
@@ -289,7 +289,7 @@ export default function CajaPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6">
       <h1 className="text-xl font-bold text-foreground">Caja</h1>
       {selectorSucursal}
 

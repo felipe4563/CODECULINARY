@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 
 export const bs       = (n) => `Bs ${parseFloat(n || 0).toLocaleString('es-BO', { minimumFractionDigits: 2 })}`;
 export const fecha    = (d) => d ? new Date(d).toLocaleDateString('es-BO') : '-';
@@ -35,7 +35,9 @@ export function BadgeTipo({ tipo }) {
 }
 
 // ── Filtro de fechas ─────────────────────────────────────────
-export function FiltroFechas({ desde, hasta, setDesde, setHasta, onBuscar, cargando }) {
+// Busca automáticamente al cambiar cualquiera de las dos fechas — sin botón,
+// mismo comportamiento que LibroCajaPage.jsx.
+export function FiltroFechas({ desde, hasta, setDesde, setHasta }) {
   return (
     <div className="flex flex-wrap gap-3 items-end">
       <div className="flex flex-col gap-1 flex-1 min-w-[8.5rem] sm:flex-none">
@@ -48,9 +50,12 @@ export function FiltroFechas({ desde, hasta, setDesde, setHasta, onBuscar, carga
         <input type="date" value={hasta} onChange={e => setHasta(e.target.value)}
           className="w-full px-3 py-2 text-sm rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
       </div>
-      <button onClick={onBuscar} disabled={cargando}
-        className="flex items-center justify-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-sm font-medium transition-colors disabled:opacity-50 w-full sm:w-auto">
-        <Search className="w-4 h-4" /> Buscar
+      <button
+        type="button"
+        onClick={() => { setDesde(inicioMes()); setHasta(hoy()); }}
+        title="Volver al mes actual"
+        className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-input bg-background text-foreground text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors">
+        <CalendarDays className="w-4 h-4" /> Mes actual
       </button>
     </div>
   );

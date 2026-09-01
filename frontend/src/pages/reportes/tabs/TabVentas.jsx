@@ -49,12 +49,11 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
   const [filtroMetodoPago, setFiltroMetodoPago] = useState('todos');
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [filtroOrigen, setFiltroOrigen] = useState('todos');
-  const [params, setParams] = useState({ desde: inicioMes(), hasta: hoy() });
   const [pagina, setPagina] = useState(1);
   const [exportando, setExportando] = useState(false);
 
   const filtrosApi = {
-    ...params,
+    desde, hasta,
     sucursal_id: accesoTodas && filtroSucursal !== 'todas' ? filtroSucursal : undefined,
     usuario_id: filtroCajero !== 'todos' ? filtroCajero : undefined,
     metodo_pago: filtroMetodoPago !== 'todos' ? filtroMetodoPago : undefined,
@@ -66,7 +65,7 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
   // página que ya no existe). Se ajusta el estado durante el render en vez
   // de un useEffect para no disparar el lint react-hooks/set-state-in-effect
   // (mismo patrón usado en LibroCajaPage.jsx, Task 3 de este plan).
-  const filtrosKey = `${params.desde}|${params.hasta}|${filtroSucursal}|${filtroCajero}|${filtroMetodoPago}|${filtroTipo}|${filtroOrigen}`;
+  const filtrosKey = `${desde}|${hasta}|${filtroSucursal}|${filtroCajero}|${filtroMetodoPago}|${filtroTipo}|${filtroOrigen}`;
   const [prevFiltrosKey, setPrevFiltrosKey] = useState(filtrosKey);
   if (filtrosKey !== prevFiltrosKey) {
     setPrevFiltrosKey(filtrosKey);
@@ -131,7 +130,7 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
       const { filas: todas } = await getReporteVentas({ ...filtrosApi, limite: 0 });
       exportarPDF({
         titulo:        'Reporte de Ventas',
-        subtitulo:     `${fecha(params.desde)} — ${fecha(params.hasta)} · ${cajeroLabel} · ${metodoPagoLabel} · ${tipoVentaLabel} · ${origenLabel}`,
+        subtitulo:     `${fecha(desde)} — ${fecha(hasta)} · ${cajeroLabel} · ${metodoPagoLabel} · ${tipoVentaLabel} · ${origenLabel}`,
         empresa, logo, direccion, telefono,
         generadoPor:   usuario?.nombre,
         columnas:      ['Fecha', 'Tipo', 'Mesa', 'Cliente', 'Cajero', 'Método de pago', 'Origen', 'Total'],
@@ -151,7 +150,7 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
           { label: 'Efectivo',           valor: bs(stats.efectivo) },
           { label: 'QR / Transferencia', valor: bs(stats.qr) },
         ],
-        nombreArchivo: `reporte-ventas-${params.desde}-${params.hasta}${filtroCajero !== 'todos' ? `-${cajeroLabel}` : ''}${filtroMetodoPago !== 'todos' ? `-${filtroMetodoPago}` : ''}${filtroTipo !== 'todos' ? `-${filtroTipo}` : ''}.pdf`,
+        nombreArchivo: `reporte-ventas-${desde}-${hasta}${filtroCajero !== 'todos' ? `-${cajeroLabel}` : ''}${filtroMetodoPago !== 'todos' ? `-${filtroMetodoPago}` : ''}${filtroTipo !== 'todos' ? `-${filtroTipo}` : ''}.pdf`,
       });
     } finally {
       setExportando(false);
@@ -162,8 +161,7 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end sm:justify-between gap-3">
         <div className="flex flex-wrap items-end gap-3">
-          <FiltroFechas desde={desde} hasta={hasta} setDesde={setDesde} setHasta={setHasta}
-            onBuscar={() => setParams({ desde, hasta })} cargando={isLoading} />
+          <FiltroFechas desde={desde} hasta={hasta} setDesde={setDesde} setHasta={setHasta} />
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-muted-foreground">Cajero</label>
             <select value={filtroCajero} onChange={e => setFiltroCajero(e.target.value)}

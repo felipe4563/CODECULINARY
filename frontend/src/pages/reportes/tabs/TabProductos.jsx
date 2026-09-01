@@ -39,10 +39,9 @@ export default function TabProductos({ empresa, logo, direccion, telefono }) {
   const [filtroSucursal, setFiltroSucursal] = useState('todas');
   const [desde, setDesde] = useState(inicioMes());
   const [hasta, setHasta] = useState(hoy());
-  const [params, setParams] = useState({ desde: inicioMes(), hasta: hoy() });
 
   const filtrosApi = {
-    ...params,
+    desde, hasta,
     sucursal_id: accesoTodas && filtroSucursal !== 'todas' ? filtroSucursal : undefined,
   };
 
@@ -73,7 +72,7 @@ export default function TabProductos({ empresa, logo, direccion, telefono }) {
 
   const exportar = () => exportarPDF({
     titulo:        'Productos Más Vendidos',
-    subtitulo:     `${fecha(params.desde)} — ${fecha(params.hasta)}`,
+    subtitulo:     `${fecha(desde)} — ${fecha(hasta)}`,
     empresa, logo, direccion, telefono,
     generadoPor:   usuario?.nombre,
     columnas:      ['#', 'Producto', 'Cantidad', 'Monto generado', '% del ingreso'],
@@ -90,15 +89,14 @@ export default function TabProductos({ empresa, logo, direccion, telefono }) {
       { label: 'Ingreso generado',    valor: bs(stats.ingresoTotal) },
       { label: 'Más vendido',         valor: stats.top?.nombre || '-' },
     ],
-    nombreArchivo: `productos-mas-vendidos-${params.desde}-${params.hasta}.pdf`,
+    nombreArchivo: `productos-mas-vendidos-${desde}-${hasta}.pdf`,
   });
 
   return (
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end sm:justify-between gap-3">
         <div className="flex flex-wrap items-end gap-3">
-          <FiltroFechas desde={desde} hasta={hasta} setDesde={setDesde} setHasta={setHasta}
-            onBuscar={() => setParams({ desde, hasta })} cargando={isLoading} />
+          <FiltroFechas desde={desde} hasta={hasta} setDesde={setDesde} setHasta={setHasta} />
           {accesoTodas && (
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-muted-foreground">Sucursal</label>
