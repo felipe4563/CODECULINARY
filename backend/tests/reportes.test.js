@@ -507,4 +507,22 @@ describe('GET /api/v1/reportes/caja — paginación, resumen y filtro tipo', () 
     expect(typeof res.body.datos.total_ingresos).toBe('number');
     expect(typeof res.body.datos.total_egresos).toBe('number');
   });
+
+  test('GET /api/v1/reportes/caja/resumen con tipo=egreso devuelve total_ingresos en 0', async () => {
+    const res = await request(app)
+      .get('/api/v1/reportes/caja/resumen?tipo=egreso')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.datos.total_ingresos).toBe(0);
+    expect(res.body.datos.total_egresos).toBeGreaterThanOrEqual(15);
+  });
+
+  test('GET /api/v1/reportes/caja/resumen con tipo=ingreso devuelve total_egresos en 0', async () => {
+    const res = await request(app)
+      .get('/api/v1/reportes/caja/resumen?tipo=ingreso')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.datos.total_egresos).toBe(0);
+    expect(res.body.datos.total_ingresos).toBeGreaterThanOrEqual(30);
+  });
 });

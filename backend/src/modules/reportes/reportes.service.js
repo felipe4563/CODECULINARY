@@ -343,9 +343,16 @@ async function cajaResumen(filtros = {}, alcance) {
   if (tipo) where.tipo = tipo;
   const includeSesion = _includeSesionCaja(filtros, alcance);
 
+  // Si `tipo` está filtrado a un solo lado, el otro lado es 0 sin consultar
+  // la BD — sumar con `{ ...where, tipo: 'egreso' }` cuando el caller pidió
+  // solo ingresos ignoraría ese filtro y devolvería el total sin filtrar.
   const [totalIngresos, totalEgresos] = await Promise.all([
-    LibroCaja.sum('monto', { where: { ...where, tipo: 'ingreso' }, include: [includeSesion] }),
-    LibroCaja.sum('monto', { where: { ...where, tipo: 'egreso' }, include: [includeSesion] }),
+    (!filtros.tipo || filtros.tipo === 'ingreso')
+      ? LibroCaja.sum('monto', { where: { ...where, tipo: 'ingreso' }, include: [includeSesion] })
+      : Promise.resolve(0),
+    (!filtros.tipo || filtros.tipo === 'egreso')
+      ? LibroCaja.sum('monto', { where: { ...where, tipo: 'egreso' }, include: [includeSesion] })
+      : Promise.resolve(0),
   ]);
 
   const filtrosResp = {};
