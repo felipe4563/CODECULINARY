@@ -209,7 +209,7 @@ describe('GET /api/v1/reportes/ventas — paginación, resumen y filtros', () =>
 });
 
 describe('GET /api/v1/reportes/ventas/productos', () => {
-  let token, categoria, producto, pedido, detalle;
+  let token, categoria, producto, pedido, pedido2, detalle, detalle2;
 
   beforeAll(async () => {
     const login = await request(app).post('/api/v1/auth/login').send({ email: 'admin@restaurante.com', contrasena: process.env.ADMIN_PASSWORD || 'admin123' });
@@ -217,15 +217,23 @@ describe('GET /api/v1/reportes/ventas/productos', () => {
 
     categoria = await Categoria.create({ nombre: 'Categoria Ranking Test' });
     producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Ranking Test', precio: 8, stock: null });
+
+    // Dos pedidos completados distintos con el MISMO producto, para probar que el
+    // ranking se agrupa por producto_id (SUM entre filas) y no una fila por pedido.
     pedido = await Pedido.create({
       sucursal_id: login.body.datos.usuario.sucursal_activa.id, usuario_id: 1, tipo: 'llevar', estado: 'completado', total: 16,
     });
     detalle = await DetallePedido.create({ pedido_id: pedido.id, producto_id: producto.id, cantidad: 2, precio: 8 });
+
+    pedido2 = await Pedido.create({
+      sucursal_id: login.body.datos.usuario.sucursal_activa.id, usuario_id: 1, tipo: 'llevar', estado: 'completado', total: 15,
+    });
+    detalle2 = await DetallePedido.create({ pedido_id: pedido2.id, producto_id: producto.id, cantidad: 3, precio: 5 });
   });
 
   afterAll(async () => {
-    await DetallePedido.destroy({ where: { id: detalle.id } });
-    await Pedido.destroy({ where: { id: pedido.id } });
+    await DetallePedido.destroy({ where: { id: [detalle.id, detalle2.id] } });
+    await Pedido.destroy({ where: { id: [pedido.id, pedido2.id] } });
     await Producto.destroy({ where: { id: producto.id } });
     await Categoria.destroy({ where: { id: categoria.id } });
   });
@@ -244,5 +252,23 @@ describe('GET /api/v1/reportes/ventas/productos', () => {
       expect(typeof p.cantidad).toBe('number');
       expect(typeof p.monto).toBe('number');
     });
+  });
+
+  test('suma cantidad y monto de un mismo producto entre varios pedidos en una unica fila', async () => {
+    const res = await request(app)
+      .get('/api/v1/reportes/ventas/productos')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+
+    const filasProducto = res.body.datos.filter(p => p.id === producto.id);
+    // Una sola fila para el producto: prueba que el GROUP BY es por producto_id
+    // y no por fila de DetallePedido (que produciria dos filas aqui).
+    expect(filasProducto.length).toBe(1);
+
+    const fila = filasProducto[0];
+    // cantidad: 2 (pedido 1) + 3 (pedido 2) = 5
+    expect(fila.cantidad).toBe(5);
+    // monto: (2 * 8) + (3 * 5) = 16 + 15 = 31
+    expect(fila.monto).toBe(31);
   });
 });
