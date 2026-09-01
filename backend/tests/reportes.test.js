@@ -1,6 +1,7 @@
 const request = require('supertest');
+const bcrypt = require('bcryptjs');
 const app = require('../src/app');
-const { Sucursal, Area, Mesa, Categoria, Producto, SesionCaja, LibroCaja, Pedido, Caja } = require('../src/models');
+const { Sucursal, Area, Mesa, Categoria, Producto, SesionCaja, LibroCaja, Pedido, Caja, Rol, Usuario } = require('../src/models');
 
 describe('Reportes filtrados por sucursal', () => {
   let adminToken, sucursalOtra, pedidoOtraSucursalId, pedidoPropioId, cajaOtra;
@@ -80,5 +81,84 @@ describe('Reportes filtrados por sucursal', () => {
 
     await LibroCaja.destroy({ where: { id: registroOtra.id } });
     await SesionCaja.destroy({ where: { id: sesionOtra.id } });
+  });
+});
+
+describe('alcance por sucursal en /api/v1/reportes/*', () => {
+  const timestamp = Date.now();
+  let sucursalAId, sucursalBId, usuarioAdminId, usuarioAId;
+  let tokenAdmin, tokenUsuarioSucursalA, pedidoAId, pedidoBId;
+
+  beforeAll(async () => {
+    const sucursalA = await Sucursal.create({ nombre: `Sucursal Reportes Alcance A ${timestamp}` });
+    const sucursalB = await Sucursal.create({ nombre: `Sucursal Reportes Alcance B ${timestamp}` });
+    sucursalAId = sucursalA.id;
+    sucursalBId = sucursalB.id;
+
+    const rol = await Rol.findOne({ where: { nombre: 'Administrador' } });
+    const hash = await bcrypt.hash('clave123', 10);
+
+    const usuarioAdmin = await Usuario.create({
+      rol_id: rol.id, nombre: `Reportes Alcance Admin ${timestamp}`,
+      email: `reportes-alcance-admin-${timestamp}@restaurante.com`, contrasena: hash,
+      acceso_todas_sucursales: 1,
+    });
+    usuarioAdminId = usuarioAdmin.id;
+
+    const usuarioA = await Usuario.create({
+      rol_id: rol.id, nombre: `Reportes Alcance Usuario A ${timestamp}`,
+      email: `reportes-alcance-usuario-a-${timestamp}@restaurante.com`, contrasena: hash,
+      acceso_todas_sucursales: 0,
+    });
+    await usuarioA.addSucursal(sucursalA);
+    usuarioAId = usuarioA.id;
+
+    const pedidoA = await Pedido.create({
+      sucursal_id: sucursalA.id, usuario_id: 1, tipo: 'llevar', estado: 'completado', total: 10,
+    });
+    pedidoAId = pedidoA.id;
+    const pedidoB = await Pedido.create({
+      sucursal_id: sucursalB.id, usuario_id: 1, tipo: 'llevar', estado: 'completado', total: 10,
+    });
+    pedidoBId = pedidoB.id;
+
+    const loginAdmin = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: `reportes-alcance-admin-${timestamp}@restaurante.com`, contrasena: 'clave123' });
+    const sucursalTodas = loginAdmin.body.datos.sucursales.find(s => s.id === null);
+    const loginAdminSucursal = await request(app)
+      .post('/api/v1/auth/login/sucursal')
+      .send({ pre_token: loginAdmin.body.datos.pre_token, sucursal_id: sucursalTodas.id });
+    tokenAdmin = loginAdminSucursal.body.datos.token;
+
+    const loginUsuarioA = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: `reportes-alcance-usuario-a-${timestamp}@restaurante.com`, contrasena: 'clave123' });
+    tokenUsuarioSucursalA = loginUsuarioA.body.datos.token;
+  });
+
+  afterAll(async () => {
+    await Pedido.destroy({ where: { id: [pedidoAId, pedidoBId] } });
+    await Usuario.destroy({ where: { id: [usuarioAdminId, usuarioAId] } });
+    await Sucursal.destroy({ where: { id: [sucursalAId, sucursalBId] } });
+  });
+
+  test('un admin filtrando por sucursal_id en ventas recibe solo esa sucursal', async () => {
+    const res = await request(app)
+      .get(`/api/v1/reportes/ventas?sucursal_id=${sucursalBId}`)
+      .set('Authorization', `Bearer ${tokenAdmin}`);
+    expect(res.status).toBe(200);
+    const filas = Array.isArray(res.body.datos) ? res.body.datos : res.body.datos.filas;
+    expect(filas.every(f => f.sucursal_id === sucursalBId || f.sucursal?.id === sucursalBId)).toBe(true);
+    expect(filas.some(f => f.id === pedidoBId)).toBe(true);
+  });
+
+  test('un usuario no-admin no puede ver otra sucursal aunque la pida por query', async () => {
+    const res = await request(app)
+      .get(`/api/v1/reportes/ventas?sucursal_id=${sucursalBId}`)
+      .set('Authorization', `Bearer ${tokenUsuarioSucursalA}`);
+    expect(res.status).toBe(200);
+    const filas = Array.isArray(res.body.datos) ? res.body.datos : res.body.datos.filas;
+    expect(filas.every(f => (f.sucursal_id ?? f.sucursal?.id) === sucursalAId)).toBe(true);
   });
 });

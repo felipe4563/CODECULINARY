@@ -5,19 +5,48 @@ function _alcance(req) {
 }
 
 async function getVentas(req, res, next) {
-  try { res.json({ ok: true, datos: await svc.ventas({ ...req.query, ..._alcance(req) }) }); } catch (e) { next(e); }
+  try { res.json({ ok: true, datos: await svc.ventas(req.query, _alcance(req)) }); } catch (e) { next(e); }
+}
+
+async function getVentasResumen(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.ventasResumen(req.query, _alcance(req)) }); } catch (e) { next(e); }
+}
+
+async function getVentasProductos(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.ventasProductos(req.query, _alcance(req)) }); } catch (e) { next(e); }
+}
+
+async function getVentasVariantes(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.ventasVariantes(req.query, _alcance(req)) }); } catch (e) { next(e); }
 }
 
 async function getInventario(req, res, next) {
-  try { res.json({ ok: true, datos: await svc.inventario({ ...req.query, ..._alcance(req) }) }); } catch (e) { next(e); }
+  try { res.json({ ok: true, datos: await svc.inventario(req.query, _alcance(req)) }); } catch (e) { next(e); }
+}
+
+async function getInventarioResumen(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.inventarioResumen(req.query, _alcance(req)) }); } catch (e) { next(e); }
 }
 
 async function getCompras(req, res, next) {
-  try { res.json({ ok: true, datos: await svc.compras({ ...req.query, ..._alcance(req) }) }); } catch (e) { next(e); }
+  try { res.json({ ok: true, datos: await svc.compras(req.query, _alcance(req)) }); } catch (e) { next(e); }
+}
+
+async function getComprasResumen(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.comprasResumen(req.query, _alcance(req)) }); } catch (e) { next(e); }
 }
 
 async function getCaja(req, res, next) {
-  try { res.json({ ok: true, datos: await svc.caja({ ...req.query, ..._alcance(req) }) }); } catch (e) { next(e); }
+  try { res.json({ ok: true, datos: await svc.caja(req.query, _alcance(req)) }); } catch (e) { next(e); }
 }
 
-module.exports = { getVentas, getInventario, getCompras, getCaja };
+async function getCajaResumen(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.cajaResumen(req.query, _alcance(req)) }); } catch (e) { next(e); }
+}
+
+module.exports = {
+  getVentas, getVentasResumen, getVentasProductos, getVentasVariantes,
+  getInventario, getInventarioResumen,
+  getCompras, getComprasResumen,
+  getCaja, getCajaResumen,
+};

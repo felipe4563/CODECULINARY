@@ -17,9 +17,11 @@ function filtroFecha(desde, hasta) {
 
 const INCLUDE_SUCURSAL = { model: Sucursal, as: 'sucursal', attributes: ['id', 'nombre'] };
 
-async function ventas({ desde, hasta, sucursal_id, acceso_todas } = {}) {
+async function ventas(filtros = {}, alcance = {}) {
+  const { desde, hasta } = filtros;
   const where = { estado: 'completado', ...filtroFecha(desde, hasta) };
-  if (!acceso_todas) where.sucursal_id = sucursal_id;
+  if (!alcance.acceso_todas) where.sucursal_id = alcance.sucursal_id;
+  else if (filtros.sucursal_id) where.sucursal_id = filtros.sucursal_id;
   return Pedido.findAll({
     where,
     include: [
@@ -43,9 +45,11 @@ async function ventas({ desde, hasta, sucursal_id, acceso_todas } = {}) {
   });
 }
 
-async function inventario({ desde, hasta, sucursal_id, acceso_todas } = {}) {
+async function inventario(filtros = {}, alcance = {}) {
+  const { desde, hasta } = filtros;
   const where = filtroFecha(desde, hasta);
-  if (!acceso_todas) where.sucursal_id = sucursal_id;
+  if (!alcance.acceso_todas) where.sucursal_id = alcance.sucursal_id;
+  else if (filtros.sucursal_id) where.sucursal_id = filtros.sucursal_id;
   return RegistroInventario.findAll({
     where,
     include: [
@@ -57,9 +61,11 @@ async function inventario({ desde, hasta, sucursal_id, acceso_todas } = {}) {
   });
 }
 
-async function compras({ desde, hasta, sucursal_id, acceso_todas } = {}) {
+async function compras(filtros = {}, alcance = {}) {
+  const { desde, hasta } = filtros;
   const where = filtroFecha(desde, hasta);
-  if (!acceso_todas) where.sucursal_id = sucursal_id;
+  if (!alcance.acceso_todas) where.sucursal_id = alcance.sucursal_id;
+  else if (filtros.sucursal_id) where.sucursal_id = filtros.sucursal_id;
   return Compra.findAll({
     where,
     include: [
@@ -71,14 +77,16 @@ async function compras({ desde, hasta, sucursal_id, acceso_todas } = {}) {
   });
 }
 
-async function caja({ desde, hasta, sucursal_id, acceso_todas } = {}) {
+async function caja(filtros = {}, alcance = {}) {
+  const { desde, hasta } = filtros;
   const includeSesion = {
     model: SesionCaja,
     as: 'sesion_caja',
     attributes: ['id'],
     include: [INCLUDE_SUCURSAL],
   };
-  if (!acceso_todas) includeSesion.where = { sucursal_id };
+  if (!alcance.acceso_todas) includeSesion.where = { sucursal_id: alcance.sucursal_id };
+  else if (filtros.sucursal_id) includeSesion.where = { sucursal_id: filtros.sucursal_id };
 
   const registros = await LibroCaja.findAll({
     where: filtroFecha(desde, hasta),
