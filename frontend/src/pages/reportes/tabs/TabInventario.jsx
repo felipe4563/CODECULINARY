@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Download, Package, ArrowUpCircle, ArrowDownCircle, BarChart2 } from 'lucide-react';
-import { getReporteInventario } from '../../../api/reportes';
+import { Download, Package } from 'lucide-react';
+import { getReporteInventario, getReporteInventarioResumen } from '../../../api/reportes';
 import { useAuth } from '../../../hooks/useAuth';
 import { useAuthStore } from '../../../store/authStore';
 import { exportarPDF } from '../utils/exportarPDF';
 import { FiltroFechas, StatCard, BadgeTipo, Skeleton, fecha, fechaHora, hoy, inicioMes } from '../shared';
+import Paginacion from '../../../components/ui/Paginacion';
 
 const TIPOS = ['todos', 'entrada', 'salida', 'venta', 'compra', 'ajuste'];
 
@@ -46,73 +47,80 @@ export default function TabInventario({ empresa, logo, direccion, telefono }) {
   const [hasta, setHasta] = useState(hoy());
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [params, setParams] = useState({ desde: inicioMes(), hasta: hoy() });
+  const [pagina, setPagina] = useState(1);
+  const [exportando, setExportando] = useState(false);
 
-  const { data = [], isLoading } = useQuery({
-    queryKey: ['reporte-inventario', params],
-    queryFn: () => getReporteInventario(params),
+  const filtrosApi = {
+    ...params,
+    sucursal_id: accesoTodas && filtroSucursal !== 'todas' ? filtroSucursal : undefined,
+    tipo: filtroTipo !== 'todos' ? filtroTipo : undefined,
+  };
+
+  // Vuelve a página 1 cuando cambia cualquier filtro (evita quedar en una
+  // página que ya no existe). Se ajusta el estado durante el render en vez
+  // de un useEffect para no disparar el lint react-hooks/set-state-in-effect
+  // (mismo patrón usado en LibroCajaPage.jsx / TabVentas.jsx / TabCompras.jsx,
+  // Tasks 3, 8 y 9 de este plan).
+  const filtrosKey = `${params.desde}|${params.hasta}|${filtroSucursal}|${filtroTipo}`;
+  const [prevFiltrosKey, setPrevFiltrosKey] = useState(filtrosKey);
+  if (filtrosKey !== prevFiltrosKey) {
+    setPrevFiltrosKey(filtrosKey);
+    setPagina(1);
+  }
+
+  const { data: paginaDatos, isLoading } = useQuery({
+    queryKey: ['reporte-inventario', filtrosApi, pagina],
+    queryFn: () => getReporteInventario({ ...filtrosApi, pagina }),
   });
+  const data = useMemo(() => paginaDatos?.filas ?? [], [paginaDatos]);
+  const totalPaginas = paginaDatos?.total_paginas ?? 1;
 
-  const sucursales = useMemo(() => {
-    const unicos = new Map();
-    data.forEach(r => { if (r.sucursal?.id) unicos.set(r.sucursal.id, r.sucursal.nombre); });
-    return Array.from(unicos.entries()).map(([id, nombre]) => ({ id, nombre }));
-  }, [data]);
+  const { data: resumen } = useQuery({
+    queryKey: ['reporte-inventario-resumen', filtrosApi],
+    queryFn: () => getReporteInventarioResumen(filtrosApi),
+  });
+  const sucursales = resumen?.filtros?.sucursales ?? [];
 
-  const filtrado = useMemo(() => {
-    let base = filtroTipo === 'todos' ? data : data.filter(r => r.tipo === filtroTipo);
-    if (accesoTodas && filtroSucursal !== 'todas') {
-      base = base.filter(r => String(r.sucursal?.id) === filtroSucursal);
+  // Total del rango filtrado completo (no solo la página visible) — viene
+  // del endpoint de resumen. El backend (`inventarioResumen`) sólo expone
+  // `{ cantidad, filtros: { sucursales } }`, sin desglose por tipo de
+  // movimiento ni por sucursal, así que las tarjetas de "Unidades
+  // ingresadas/egresadas" y "Ajustes", además de la tabla de resumen por
+  // sucursal que existían antes de esta tarea, se eliminaron: calcularlas
+  // a partir de `data` (que sólo trae la página visible) mostraría números
+  // incorrectos en cuanto la paginación esté activa. Ver nota en el reporte
+  // de esta tarea — es una brecha de producto, no algo para inventar aquí.
+  const stats = { total: resumen?.cantidad ?? 0 };
+
+  const exportar = async () => {
+    setExportando(true);
+    try {
+      const { filas: todas } = await getReporteInventario({ ...filtrosApi, limite: 0 });
+      exportarPDF({
+        titulo:        'Reporte de Inventario',
+        subtitulo:     `${fecha(params.desde)} — ${fecha(params.hasta)}${filtroTipo !== 'todos' ? ` · ${filtroTipo}` : ''}`,
+        empresa, logo, direccion, telefono,
+        generadoPor:   usuario?.nombre,
+        columnas:      ['Fecha', 'Producto', 'Tipo', 'Cantidad', 'Stock Ant.', 'Stock Nuevo', 'Usuario', 'Nota'],
+        filas:         todas.map(r => [
+          fechaHora(r.creado_en),
+          r.producto?.nombre || '-',
+          r.tipo,
+          r.cantidad,
+          r.stock_anterior ?? '-',
+          r.stock_nuevo ?? '-',
+          r.usuario?.nombre || '-',
+          r.nota || '-',
+        ]),
+        totales: [
+          { label: 'Total movimientos', valor: stats.total },
+        ],
+        nombreArchivo: `reporte-inventario-${params.desde}-${params.hasta}.pdf`,
+      });
+    } finally {
+      setExportando(false);
     }
-    return base;
-  }, [data, filtroTipo, filtroSucursal, accesoTodas]);
-
-  const resumenSucursales = useMemo(() => {
-    if (!accesoTodas) return [];
-    const mapa = new Map();
-    filtrado.forEach(r => {
-      const id = r.sucursal?.id;
-      if (id == null) return;
-      if (!mapa.has(id)) mapa.set(id, { id, nombre: r.sucursal.nombre, total: 0, entradas: 0, salidas: 0, ajustes: 0 });
-      const s = mapa.get(id);
-      s.total += 1;
-      if (['entrada', 'compra'].includes(r.tipo)) s.entradas += r.cantidad;
-      else if (['salida', 'venta'].includes(r.tipo)) s.salidas += r.cantidad;
-      else if (r.tipo === 'ajuste') s.ajustes += 1;
-    });
-    return Array.from(mapa.values()).sort((a, b) => b.total - a.total);
-  }, [filtrado, accesoTodas]);
-
-  const stats = useMemo(() => {
-    const entradas = data.filter(r => ['entrada', 'compra'].includes(r.tipo)).reduce((s, r) => s + r.cantidad, 0);
-    const salidas  = data.filter(r => ['salida', 'venta'].includes(r.tipo)).reduce((s, r) => s + r.cantidad, 0);
-    const ajustes  = data.filter(r => r.tipo === 'ajuste').length;
-    return { total: data.length, entradas, salidas, ajustes };
-  }, [data]);
-
-  const exportar = () => exportarPDF({
-    titulo:        'Reporte de Inventario',
-    subtitulo:     `${fecha(params.desde)} — ${fecha(params.hasta)}${filtroTipo !== 'todos' ? ` · ${filtroTipo}` : ''}`,
-    empresa, logo, direccion, telefono,
-    generadoPor:   usuario?.nombre,
-    columnas:      ['Fecha', 'Producto', 'Tipo', 'Cantidad', 'Stock Ant.', 'Stock Nuevo', 'Usuario', 'Nota'],
-    filas:         filtrado.map(r => [
-      fechaHora(r.creado_en),
-      r.producto?.nombre || '-',
-      r.tipo,
-      r.cantidad,
-      r.stock_anterior ?? '-',
-      r.stock_nuevo ?? '-',
-      r.usuario?.nombre || '-',
-      r.nota || '-',
-    ]),
-    totales: [
-      { label: 'Total movimientos',   valor: stats.total },
-      { label: 'Unidades ingresadas', valor: stats.entradas },
-      { label: 'Unidades egresadas',  valor: stats.salidas },
-      { label: 'Ajustes',            valor: stats.ajustes },
-    ],
-    nombreArchivo: `reporte-inventario-${params.desde}-${params.hasta}.pdf`,
-  });
+  };
 
   return (
     <div className="space-y-5">
@@ -140,51 +148,23 @@ export default function TabInventario({ empresa, logo, direccion, telefono }) {
             </div>
           )}
         </div>
-        <button onClick={exportar} disabled={!filtrado.length}
+        <button onClick={exportar} disabled={!data.length || exportando}
           className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-40 w-full sm:w-auto">
-          <Download className="w-4 h-4" /> Exportar PDF
+          <Download className="w-4 h-4" /> {exportando ? 'Exportando…' : 'Exportar PDF'}
         </button>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard label="Total movimientos"   valor={stats.total}    color="primary" Icono={Package}        idx={0} />
-        <StatCard label="Unidades ingresadas" valor={stats.entradas} color="emerald" Icono={ArrowUpCircle}  idx={1} />
-        <StatCard label="Unidades egresadas"  valor={stats.salidas}  color="rose"    Icono={ArrowDownCircle} idx={2} />
-        <StatCard label="Ajustes"             valor={stats.ajustes}  color="amber"   Icono={BarChart2}      idx={3} />
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard label="Total movimientos" valor={stats.total} color="primary" Icono={Package} idx={0} />
       </div>
 
-      {accesoTodas && resumenSucursales.length > 0 && (
-        <div className="overflow-x-auto rounded-2xl border border-border">
-          <table className="w-full text-xs sm:text-sm">
-            <thead>
-              <tr className="bg-primary/10 border-b border-border">
-                {['Sucursal', 'N° Movimientos', 'Entradas', 'Salidas', 'Ajustes'].map(h => (
-                  <th key={h} className="text-left px-3 py-2.5 sm:px-4 sm:py-3 text-xs font-semibold text-primary uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {resumenSucursales.map(s => (
-                <tr key={s.id} className="bg-card">
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-medium text-foreground">{s.nombre}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-foreground">{s.total}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-semibold text-emerald-600 dark:text-emerald-400">{s.entradas}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-semibold text-rose-600 dark:text-rose-400">{s.salidas}</td>
-                  <td className="px-3 py-2.5 sm:px-4 sm:py-3 text-amber-600 dark:text-amber-400">{s.ajustes}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {isLoading ? <Skeleton /> : filtrado.length === 0 ? (
+      {isLoading ? <Skeleton /> : data.length === 0 ? (
         <div className="text-center py-10 text-muted-foreground text-sm rounded-2xl border border-border">Sin resultados</div>
       ) : (
         <>
           {/* Móvil y tablet: tarjetas */}
           <div className="lg:hidden space-y-2">
-            {filtrado.map((r) => (
+            {data.map((r) => (
               <MovimientoCard key={r.id} mov={r} mostrarSucursal={accesoTodas} />
             ))}
           </div>
@@ -200,7 +180,7 @@ export default function TabInventario({ empresa, logo, direccion, telefono }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtrado.map((r, i) => (
+                {data.map((r, i) => (
                   <tr key={r.id}
                     className="bg-card hover:bg-primary/5 transition-colors animate-[rpFadeUp_0.3s_ease_forwards] opacity-0"
                     style={{ animationDelay: `${i * 20}ms` }}>
@@ -222,6 +202,8 @@ export default function TabInventario({ empresa, logo, direccion, telefono }) {
           </div>
         </>
       )}
+
+      <Paginacion pagina={pagina} totalPaginas={totalPaginas} onCambiar={setPagina} />
     </div>
   );
 }
