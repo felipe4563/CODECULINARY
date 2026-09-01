@@ -1,4 +1,4 @@
-const { Op, fn, col, literal } = require('sequelize');
+const { Op, fn, literal } = require('sequelize');
 const {
   Pedido, DetallePedido, Mesa, Cliente, Producto, Combo, Usuario,
   RegistroInventario, Compra, Proveedor, LibroCaja, SesionCaja, Sucursal,
@@ -73,10 +73,19 @@ async function ventas(filtros = {}, alcance) {
 async function ventasResumen(filtros = {}, alcance) {
   const where = _whereVentas(filtros, alcance);
 
+  // Si `metodo_pago` está filtrado a un solo valor, el otro lado es 0 sin
+  // consultar la BD — sumar con `{ ...where, metodo_pago: 'qr' }` cuando el
+  // caller pidió solo efectivo ignoraría ese filtro y devolvería el total sin
+  // filtrar (mismo patrón que cajaResumen para `tipo` y libro_caja.service.js
+  // resumen() para `tipo`).
   const [totalVentas, ventasEfectivo, ventasQR, cantidad, cajerosRaw] = await Promise.all([
     Pedido.sum('total', { where }),
-    Pedido.sum('total', { where: { ...where, metodo_pago: 'efectivo' } }),
-    Pedido.sum('total', { where: { ...where, metodo_pago: 'qr' } }),
+    (!filtros.metodo_pago || filtros.metodo_pago === 'efectivo')
+      ? Pedido.sum('total', { where: { ...where, metodo_pago: 'efectivo' } })
+      : Promise.resolve(0),
+    (!filtros.metodo_pago || filtros.metodo_pago === 'qr')
+      ? Pedido.sum('total', { where: { ...where, metodo_pago: 'qr' } })
+      : Promise.resolve(0),
     Pedido.count({ where }),
     Pedido.findAll({
       where,
@@ -93,8 +102,15 @@ async function ventasResumen(filtros = {}, alcance) {
 
   const filtrosResp = { cajeros };
   if (alcance.acceso_todas) {
+    // El listado de sucursales para el <select> del admin debe reflejar TODAS
+    // las sucursales que calzan con los demás filtros, sin restringirse a la
+    // que el propio admin ya eligió — si no, al elegir una sucursal el
+    // dropdown colapsa a una sola opción y no se puede cambiar directamente
+    // de una sucursal a otra sin pasar antes por "Todas".
+    const whereSucursales = { ...where };
+    delete whereSucursales.sucursal_id;
     const sucursalesRaw = await Pedido.findAll({
-      where, include: [INCLUDE_SUCURSAL], attributes: [],
+      where: whereSucursales, include: [INCLUDE_SUCURSAL], attributes: [],
       group: ['sucursal.id', 'sucursal.nombre'], raw: true,
     });
     filtrosResp.sucursales = sucursalesRaw
@@ -123,8 +139,13 @@ async function ventasProductos(filtros = {}, alcance) {
     attributes: [
       'producto_id',
       'combo_id',
-      [fn('SUM', col('DetallePedido.cantidad')), 'cantidad'],
+      // Para productos vendidos por peso, la cantidad real es `peso` (kg), no
+      // el conteo `cantidad` de la línea — igual que ventasVariantes() más
+      // abajo. Sumar solo `cantidad` (como antes) subestimaba/distorsionaba
+      // el ranking de "Más vendidos" para cualquier producto pesable.
+      [literal('SUM(COALESCE(`DetallePedido`.`peso`, `DetallePedido`.`cantidad`))'), 'cantidad'],
       [fn('SUM', literal('`DetallePedido`.`cantidad` * `DetallePedido`.`precio`')), 'monto'],
+      [literal("MAX(CASE WHEN `DetallePedido`.`peso` IS NOT NULL THEN 'kg' ELSE 'un' END)"), 'unidad'],
     ],
     group: ['DetallePedido.producto_id', 'DetallePedido.combo_id', 'producto.nombre', 'combo.nombre'],
     order: [[literal('cantidad'), 'DESC']],
@@ -137,6 +158,7 @@ async function ventasProductos(filtros = {}, alcance) {
     nombre: f['producto.nombre'] ?? f['combo.nombre'] ?? '(eliminado)',
     cantidad: parseFloat(f.cantidad || 0),
     monto: parseFloat(f.monto || 0),
+    unidad: f.unidad || 'un',
   }));
 }
 
@@ -231,8 +253,12 @@ async function inventarioResumen(filtros = {}, alcance) {
 
   const filtrosResp = {};
   if (alcance.acceso_todas) {
+    // Ver comentario equivalente en ventasResumen: el listado de sucursales
+    // no debe restringirse a la que el propio admin ya eligió.
+    const whereSucursales = { ...where };
+    delete whereSucursales.sucursal_id;
     const sucursalesRaw = await RegistroInventario.findAll({
-      where, include: [INCLUDE_SUCURSAL], attributes: [],
+      where: whereSucursales, include: [INCLUDE_SUCURSAL], attributes: [],
       group: ['sucursal.id', 'sucursal.nombre'], raw: true,
     });
     filtrosResp.sucursales = sucursalesRaw
@@ -281,8 +307,12 @@ async function comprasResumen(filtros = {}, alcance) {
 
   const filtrosResp = {};
   if (alcance.acceso_todas) {
+    // Ver comentario equivalente en ventasResumen: el listado de sucursales
+    // no debe restringirse a la que el propio admin ya eligió.
+    const whereSucursales = { ...where };
+    delete whereSucursales.sucursal_id;
     const sucursalesRaw = await Compra.findAll({
-      where, include: [INCLUDE_SUCURSAL], attributes: [],
+      where: whereSucursales, include: [INCLUDE_SUCURSAL], attributes: [],
       group: ['sucursal.id', 'sucursal.nombre'], raw: true,
     });
     filtrosResp.sucursales = sucursalesRaw

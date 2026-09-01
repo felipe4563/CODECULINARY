@@ -88,25 +88,8 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
   const cajeros = resumen?.filtros?.cajeros ?? [];
   const sucursales = resumen?.filtros?.sucursales ?? [];
 
-  const filtrado = useMemo(() => {
-    let base = filtroCajero === 'todos' ? data : data.filter(v => String(v.usuario?.id) === filtroCajero);
-    if (accesoTodas && filtroSucursal !== 'todas') {
-      base = base.filter(v => String(v.sucursal?.id) === filtroSucursal);
-    }
-    if (filtroMetodoPago !== 'todos') {
-      base = base.filter(v => (v.metodo_pago || 'efectivo') === filtroMetodoPago);
-    }
-    if (filtroTipo !== 'todos') {
-      base = base.filter(v => (v.tipo || 'mesa') === filtroTipo);
-    }
-    if (filtroOrigen !== 'todos') {
-      base = base.filter(v => (v.origen || 'staff') === filtroOrigen);
-    }
-    return base;
-  }, [data, filtroCajero, filtroSucursal, filtroMetodoPago, filtroTipo, filtroOrigen, accesoTodas]);
-
   // Totales del rango filtrado completo (no solo la página visible) —
-  // vienen del endpoint de resumen, no se derivan de `data`/`filtrado`.
+  // vienen del endpoint de resumen, no se derivan de `data`.
   const stats = {
     count: resumen?.cantidad ?? 0,
     total: resumen?.total_ventas ?? 0,
@@ -117,7 +100,7 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
   const resumenSucursales = useMemo(() => {
     if (!accesoTodas) return [];
     const mapa = new Map();
-    filtrado.forEach(v => {
+    data.forEach(v => {
       const id = v.sucursal?.id;
       if (id == null) return;
       if (!mapa.has(id)) mapa.set(id, { id, nombre: v.sucursal.nombre, count: 0, total: 0, efectivo: 0, qr: 0 });
@@ -128,7 +111,7 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
       else s.qr += parseFloat(v.total || 0);
     });
     return Array.from(mapa.values()).sort((a, b) => b.total - a.total);
-  }, [filtrado, accesoTodas]);
+  }, [data, accesoTodas]);
 
   const cajeroLabel = filtroCajero === 'todos'
     ? 'Todos los cajeros'
@@ -231,7 +214,7 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
             </div>
           )}
         </div>
-        <button onClick={exportar} disabled={!filtrado.length || exportando}
+        <button onClick={exportar} disabled={!data.length || exportando}
           className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-40 w-full sm:w-auto">
           <Download className="w-4 h-4" /> {exportando ? 'Exportando…' : 'Exportar PDF'}
         </button>
@@ -269,7 +252,7 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
         </div>
       )}
 
-      {isLoading ? <Skeleton /> : filtrado.length === 0 ? (
+      {isLoading ? <Skeleton /> : data.length === 0 ? (
         <div className="text-center py-10 text-muted-foreground text-sm rounded-2xl border border-border">
           Sin resultados para el período
         </div>
@@ -277,7 +260,7 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
         <>
           {/* Móvil y tablet: tarjetas */}
           <div className="lg:hidden space-y-2">
-            {filtrado.map((v) => (
+            {data.map((v) => (
               <VentaCard key={v.id} venta={v} mostrarSucursal={accesoTodas} />
             ))}
             <div className="flex items-center justify-between px-1 pt-1 text-xs font-semibold text-muted-foreground">
@@ -297,7 +280,7 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtrado.map((v, i) => (
+                {data.map((v, i) => (
                   <tr key={v.id}
                     className="bg-card hover:bg-primary/5 transition-colors animate-[rpFadeUp_0.3s_ease_forwards] opacity-0"
                     style={{ animationDelay: `${i * 20}ms` }}>

@@ -161,6 +161,29 @@ describe('alcance por sucursal en /api/v1/reportes/*', () => {
     const filas = Array.isArray(res.body.datos) ? res.body.datos : res.body.datos.filas;
     expect(filas.every(f => (f.sucursal_id ?? f.sucursal?.id) === sucursalAId)).toBe(true);
   });
+
+  // Los endpoints resumen() devuelven totales agregados (SQL SUM/COUNT) en
+  // vez de filas — una fuga de sucursal ahí es tan grave como una fuga de
+  // filas, pero ningún test la probaba antes. sucursalA/sucursalB son
+  // creadas exclusivamente para este describe y cada una tiene un único
+  // pedido completado de total 10, así que el total del admin filtrado a
+  // sucursalA por sí solo debe coincidir exactamente con el total que ve
+  // un usuario restringido a sucursalA — y no con 20 (A+B), que probaría
+  // que el resumen de ese usuario incluye montos de sucursalB.
+  test('un usuario no-admin no ve en /reportes/ventas/resumen montos de otra sucursal', async () => {
+    const resSucursalA = await request(app)
+      .get(`/api/v1/reportes/ventas/resumen?sucursal_id=${sucursalAId}`)
+      .set('Authorization', `Bearer ${tokenAdmin}`);
+    expect(resSucursalA.status).toBe(200);
+    expect(resSucursalA.body.datos.total_ventas).toBe(10);
+
+    const resUsuarioA = await request(app)
+      .get('/api/v1/reportes/ventas/resumen')
+      .set('Authorization', `Bearer ${tokenUsuarioSucursalA}`);
+    expect(resUsuarioA.status).toBe(200);
+    expect(resUsuarioA.body.datos.total_ventas).toBe(resSucursalA.body.datos.total_ventas);
+    expect(resUsuarioA.body.datos.total_ventas).toBe(10);
+  });
 });
 
 describe('GET /api/v1/reportes/ventas — paginación, resumen y filtros', () => {
