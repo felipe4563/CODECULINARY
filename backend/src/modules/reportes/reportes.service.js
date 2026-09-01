@@ -146,13 +146,13 @@ async function ventasProductos(filtros = {}, alcance) {
 // que el orden de selección no genere filas distintas). Los combos no tienen
 // opciones — quedan como su propia fila por combo_id.
 function _esLineaCombo(detalle) {
-  return detalle.producto_id == null && detalle.combo_id != null;
+  return detalle.producto?.id == null && detalle.combo?.id != null;
 }
 
 function _claveVariante(detalle) {
-  if (_esLineaCombo(detalle)) return `combo-${detalle.combo_id}`;
+  if (_esLineaCombo(detalle)) return `combo-${detalle.combo.id}`;
   const opcionIds = (detalle.opciones || []).map((o) => o.id).sort((a, b) => a - b);
-  return `${detalle.producto_id}::${opcionIds.join(',')}`;
+  return `${detalle.producto?.id}::${opcionIds.join(',')}`;
 }
 
 function _nombreVariante(detalle) {
@@ -177,7 +177,7 @@ async function ventasVariantes(filtros = {}, alcance) {
 
   const mapa = new Map();
   detalles.forEach((d) => {
-    if (d.producto_id == null && d.combo_id == null) return;
+    if (d.producto?.id == null && d.combo?.id == null) return;
     const clave = _claveVariante(d);
     const esPesable = d.peso != null;
     const cantidad = esPesable ? parseFloat(d.peso || 0) : (d.cantidad || 0);
