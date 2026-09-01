@@ -293,32 +293,82 @@ async function comprasResumen(filtros = {}, alcance) {
   return { total_comprado: parseFloat(totalComprado || 0), cantidad: cantidad || 0, filtros: filtrosResp };
 }
 
-async function caja(filtros = {}, alcance = {}) {
-  const { desde, hasta } = filtros;
+function _includeSesionCaja(filtros, alcance) {
   const includeSesion = {
-    model: SesionCaja,
-    as: 'sesion_caja',
-    attributes: ['id'],
+    model: SesionCaja, as: 'sesion_caja', attributes: ['id'],
     include: [INCLUDE_SUCURSAL],
   };
-  if (!alcance.acceso_todas) includeSesion.where = { sucursal_id: alcance.sucursal_id };
-  else if (filtros.sucursal_id) includeSesion.where = { sucursal_id: filtros.sucursal_id };
-
-  const registros = await LibroCaja.findAll({
-    where: filtroFecha(desde, hasta),
-    include: [
-      { model: Usuario, as: 'usuario', attributes: ['id', 'nombre'] },
-      includeSesion,
-    ],
-    order: [['creado_en', 'DESC']],
-  });
-
-  return registros.map(r => {
-    const plano = r.toJSON();
-    plano.sucursal = plano.sesion_caja?.sucursal ?? null;
-    delete plano.sesion_caja;
-    return plano;
-  });
+  if (!alcance.acceso_todas) {
+    includeSesion.where = { sucursal_id: alcance.sucursal_id };
+  } else if (filtros.sucursal_id) {
+    includeSesion.where = { sucursal_id: filtros.sucursal_id };
+  }
+  return includeSesion;
 }
 
-module.exports = { ventas, ventasResumen, ventasProductos, ventasVariantes, inventario, inventarioResumen, compras, comprasResumen, caja };
+function _aplanarSucursal(registro) {
+  const plano = registro.toJSON();
+  plano.sucursal = plano.sesion_caja?.sucursal ?? null;
+  delete plano.sesion_caja;
+  return plano;
+}
+
+async function caja(filtros = {}, alcance) {
+  const { desde, hasta, tipo } = filtros;
+  const where = { ...filtroFecha(desde, hasta) };
+  if (tipo) where.tipo = tipo;
+  const { pagina, limite } = _paginaLimite(filtros);
+
+  const { rows, count } = await LibroCaja.findAndCountAll({
+    where,
+    include: [
+      { model: Usuario, as: 'usuario', attributes: ['id', 'nombre'] },
+      _includeSesionCaja(filtros, alcance),
+    ],
+    order: [['creado_en', 'DESC']],
+    distinct: true,
+    ...(limite ? { limit: limite, offset: (pagina - 1) * limite } : {}),
+  });
+
+  return {
+    filas: rows.map(_aplanarSucursal),
+    pagina, limite, total: count,
+    total_paginas: limite ? Math.ceil(count / limite) : 1,
+  };
+}
+
+async function cajaResumen(filtros = {}, alcance) {
+  const { desde, hasta, tipo } = filtros;
+  const where = { ...filtroFecha(desde, hasta) };
+  if (tipo) where.tipo = tipo;
+  const includeSesion = _includeSesionCaja(filtros, alcance);
+
+  const [totalIngresos, totalEgresos] = await Promise.all([
+    LibroCaja.sum('monto', { where: { ...where, tipo: 'ingreso' }, include: [includeSesion] }),
+    LibroCaja.sum('monto', { where: { ...where, tipo: 'egreso' }, include: [includeSesion] }),
+  ]);
+
+  const filtrosResp = {};
+  if (alcance.acceso_todas) {
+    const sucursalesRaw = await LibroCaja.findAll({
+      where,
+      include: [{
+        model: SesionCaja, as: 'sesion_caja', attributes: [], required: true,
+        include: [{ model: Sucursal, as: 'sucursal', attributes: ['id', 'nombre'] }],
+      }],
+      attributes: [], group: ['sesion_caja.sucursal.id', 'sesion_caja.sucursal.nombre'], raw: true,
+    });
+    filtrosResp.sucursales = sucursalesRaw
+      .map((f) => ({ id: f['sesion_caja.sucursal.id'], nombre: f['sesion_caja.sucursal.nombre'] }))
+      .filter((s) => s.id != null);
+  }
+
+  return { total_ingresos: parseFloat(totalIngresos || 0), total_egresos: parseFloat(totalEgresos || 0), filtros: filtrosResp };
+}
+
+module.exports = {
+  ventas, ventasResumen, ventasProductos, ventasVariantes,
+  inventario, inventarioResumen,
+  compras, comprasResumen,
+  caja, cajaResumen,
+};

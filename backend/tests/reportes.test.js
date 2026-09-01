@@ -68,15 +68,15 @@ describe('Reportes filtrados por sucursal', () => {
     });
 
     const res = await request(app)
-      .get('/api/v1/reportes/caja')
+      .get('/api/v1/reportes/caja?limite=0')
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.datos.find(r => r.id === registroOtra.id)).toBeUndefined();
+    expect(res.body.datos.filas.find(r => r.id === registroOtra.id)).toBeUndefined();
 
-    if (res.body.datos.length > 0) {
-      expect(res.body.datos[0].sucursal).toHaveProperty('id');
-      expect(res.body.datos[0].sucursal).toHaveProperty('nombre');
+    if (res.body.datos.filas.length > 0) {
+      expect(res.body.datos.filas[0].sucursal).toHaveProperty('id');
+      expect(res.body.datos.filas[0].sucursal).toHaveProperty('nombre');
     }
 
     await LibroCaja.destroy({ where: { id: registroOtra.id } });
@@ -451,5 +451,60 @@ describe('GET /api/v1/reportes/inventario — paginación, resumen y filtro tipo
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(typeof res.body.datos.cantidad).toBe('number');
+  });
+});
+
+describe('GET /api/v1/reportes/caja — paginación, resumen y filtro tipo', () => {
+  let token, sucursalId, caja, sesion, registroIngreso, registroEgreso;
+
+  beforeAll(async () => {
+    const login = await request(app).post('/api/v1/auth/login').send({ email: 'admin@restaurante.com', contrasena: process.env.ADMIN_PASSWORD || 'admin123' });
+    token = login.body.datos.token;
+    sucursalId = login.body.datos.usuario.sucursal_activa.id;
+
+    caja = await Caja.create({ sucursal_id: sucursalId, nombre: 'Caja Reportes Tipo Test' });
+    sesion = await SesionCaja.create({ usuario_id: 1, sucursal_id: sucursalId, caja_id: caja.id, monto_apertura: 0 });
+
+    registroIngreso = await LibroCaja.create({
+      sesion_caja_id: sesion.id, usuario_id: 1, tipo: 'ingreso', concepto: 'Ingreso Reportes Tipo Test', monto: 30, metodo_pago: 'efectivo',
+    });
+    registroEgreso = await LibroCaja.create({
+      sesion_caja_id: sesion.id, usuario_id: 1, tipo: 'egreso', concepto: 'Egreso Reportes Tipo Test', monto: 15, metodo_pago: 'efectivo',
+    });
+  });
+
+  afterAll(async () => {
+    await LibroCaja.destroy({ where: { id: [registroIngreso.id, registroEgreso.id] } });
+    await SesionCaja.destroy({ where: { id: sesion.id } });
+    await Caja.destroy({ where: { id: caja.id } });
+  });
+
+  test('pagina con limite por defecto', async () => {
+    const res = await request(app)
+      .get('/api/v1/reportes/caja')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.datos).toHaveProperty('filas');
+    expect(res.body.datos).toHaveProperty('total_paginas');
+  });
+
+  test('filtro tipo solo devuelve movimientos de ese tipo', async () => {
+    const res = await request(app)
+      .get('/api/v1/reportes/caja?tipo=ingreso&limite=0')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    const filas = res.body.datos.filas;
+    expect(filas.every(f => f.tipo === 'ingreso')).toBe(true);
+    expect(filas.some(f => f.id === registroIngreso.id)).toBe(true);
+    expect(filas.some(f => f.id === registroEgreso.id)).toBe(false);
+  });
+
+  test('GET /api/v1/reportes/caja/resumen devuelve totales', async () => {
+    const res = await request(app)
+      .get('/api/v1/reportes/caja/resumen')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(typeof res.body.datos.total_ingresos).toBe('number');
+    expect(typeof res.body.datos.total_egresos).toBe('number');
   });
 });
