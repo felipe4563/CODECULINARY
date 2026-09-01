@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download, ShoppingCart, TrendingUp, DollarSign, BarChart2 } from 'lucide-react';
-import { getReporteVentas } from '../../../api/reportes';
+import { getReporteVentas, getReporteVentasResumen } from '../../../api/reportes';
 import { useAuth } from '../../../hooks/useAuth';
 import { useAuthStore } from '../../../store/authStore';
 import { exportarPDF } from '../utils/exportarPDF';
 import { FiltroFechas, StatCard, BadgeTipo, Skeleton, bs, fecha, fechaHora, hoy, inicioMes } from '../shared';
+import Paginacion from '../../../components/ui/Paginacion';
 
 const tipoLabel = (tipo) => tipo === 'llevar' ? 'Para llevar' : 'En mesa';
 
@@ -49,25 +50,43 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [filtroOrigen, setFiltroOrigen] = useState('todos');
   const [params, setParams] = useState({ desde: inicioMes(), hasta: hoy() });
+  const [pagina, setPagina] = useState(1);
+  const [exportando, setExportando] = useState(false);
 
-  const { data = [], isLoading } = useQuery({
-    queryKey: ['reporte-ventas', params],
-    queryFn: () => getReporteVentas(params),
+  const filtrosApi = {
+    ...params,
+    sucursal_id: accesoTodas && filtroSucursal !== 'todas' ? filtroSucursal : undefined,
+    usuario_id: filtroCajero !== 'todos' ? filtroCajero : undefined,
+    metodo_pago: filtroMetodoPago !== 'todos' ? filtroMetodoPago : undefined,
+    tipo: filtroTipo !== 'todos' ? filtroTipo : undefined,
+    origen: filtroOrigen !== 'todos' ? filtroOrigen : undefined,
+  };
+
+  // Vuelve a página 1 cuando cambia cualquier filtro (evita quedar en una
+  // página que ya no existe). Se ajusta el estado durante el render en vez
+  // de un useEffect para no disparar el lint react-hooks/set-state-in-effect
+  // (mismo patrón usado en LibroCajaPage.jsx, Task 3 de este plan).
+  const filtrosKey = `${params.desde}|${params.hasta}|${filtroSucursal}|${filtroCajero}|${filtroMetodoPago}|${filtroTipo}|${filtroOrigen}`;
+  const [prevFiltrosKey, setPrevFiltrosKey] = useState(filtrosKey);
+  if (filtrosKey !== prevFiltrosKey) {
+    setPrevFiltrosKey(filtrosKey);
+    setPagina(1);
+  }
+
+  const { data: paginaDatos, isLoading } = useQuery({
+    queryKey: ['reporte-ventas', filtrosApi, pagina],
+    queryFn: () => getReporteVentas({ ...filtrosApi, pagina }),
+  });
+  const data = useMemo(() => paginaDatos?.filas ?? [], [paginaDatos]);
+  const totalPaginas = paginaDatos?.total_paginas ?? 1;
+
+  const { data: resumen } = useQuery({
+    queryKey: ['reporte-ventas-resumen', filtrosApi],
+    queryFn: () => getReporteVentasResumen(filtrosApi),
   });
 
-  const cajeros = useMemo(() => {
-    const unicos = new Map();
-    data.forEach(v => {
-      if (v.usuario?.id) unicos.set(v.usuario.id, v.usuario.nombre);
-    });
-    return Array.from(unicos.entries()).map(([id, nombre]) => ({ id, nombre }));
-  }, [data]);
-
-  const sucursales = useMemo(() => {
-    const unicos = new Map();
-    data.forEach(v => { if (v.sucursal?.id) unicos.set(v.sucursal.id, v.sucursal.nombre); });
-    return Array.from(unicos.entries()).map(([id, nombre]) => ({ id, nombre }));
-  }, [data]);
+  const cajeros = resumen?.filtros?.cajeros ?? [];
+  const sucursales = resumen?.filtros?.sucursales ?? [];
 
   const filtrado = useMemo(() => {
     let base = filtroCajero === 'todos' ? data : data.filter(v => String(v.usuario?.id) === filtroCajero);
@@ -86,12 +105,14 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
     return base;
   }, [data, filtroCajero, filtroSucursal, filtroMetodoPago, filtroTipo, filtroOrigen, accesoTodas]);
 
-  const stats = useMemo(() => {
-    const total    = filtrado.reduce((s, v) => s + parseFloat(v.total || 0), 0);
-    const efectivo = filtrado.filter(v => v.metodo_pago === 'efectivo').reduce((s, v) => s + parseFloat(v.total || 0), 0);
-    const qr       = filtrado.filter(v => v.metodo_pago !== 'efectivo').reduce((s, v) => s + parseFloat(v.total || 0), 0);
-    return { count: filtrado.length, total, efectivo, qr };
-  }, [filtrado]);
+  // Totales del rango filtrado completo (no solo la página visible) —
+  // vienen del endpoint de resumen, no se derivan de `data`/`filtrado`.
+  const stats = {
+    count: resumen?.cantidad ?? 0,
+    total: resumen?.total_ventas ?? 0,
+    efectivo: resumen?.ventas_efectivo ?? 0,
+    qr: resumen?.ventas_qr ?? 0,
+  };
 
   const resumenSucursales = useMemo(() => {
     if (!accesoTodas) return [];
@@ -121,30 +142,38 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
 
   const origenLabel = filtroOrigen === 'todos' ? 'Staff y autoservicio' : (filtroOrigen === 'autoservicio' ? 'Autoservicio' : 'Tomado por staff');
 
-  const exportar = () => exportarPDF({
-    titulo:        'Reporte de Ventas',
-    subtitulo:     `${fecha(params.desde)} — ${fecha(params.hasta)} · ${cajeroLabel} · ${metodoPagoLabel} · ${tipoVentaLabel} · ${origenLabel}`,
-    empresa, logo, direccion, telefono,
-    generadoPor:   usuario?.nombre,
-    columnas:      ['Fecha', 'Tipo', 'Mesa', 'Cliente', 'Cajero', 'Método de pago', 'Origen', 'Total'],
-    filas:         filtrado.map(v => [
-      fechaHora(v.creado_en),
-      tipoLabel(v.tipo || 'mesa'),
-      v.tipo === 'llevar' ? (v.numero_llevar ? `#${v.numero_llevar}` : '-') : (v.mesa?.nombre || '-'),
-      v.nombre_cliente || v.cliente?.nombre || 'Público General',
-      v.usuario?.nombre || '-',
-      v.metodo_pago || '-',
-      v.origen === 'autoservicio' ? 'Autoservicio' : 'Staff',
-      bs(v.total),
-    ]),
-    totales: [
-      { label: 'N° Ventas',          valor: stats.count },
-      { label: 'Total Ingresos',     valor: bs(stats.total) },
-      { label: 'Efectivo',           valor: bs(stats.efectivo) },
-      { label: 'QR / Transferencia', valor: bs(stats.qr) },
-    ],
-    nombreArchivo: `reporte-ventas-${params.desde}-${params.hasta}${filtroCajero !== 'todos' ? `-${cajeroLabel}` : ''}${filtroMetodoPago !== 'todos' ? `-${filtroMetodoPago}` : ''}${filtroTipo !== 'todos' ? `-${filtroTipo}` : ''}.pdf`,
-  });
+  const exportar = async () => {
+    setExportando(true);
+    try {
+      const { filas: todas } = await getReporteVentas({ ...filtrosApi, limite: 0 });
+      exportarPDF({
+        titulo:        'Reporte de Ventas',
+        subtitulo:     `${fecha(params.desde)} — ${fecha(params.hasta)} · ${cajeroLabel} · ${metodoPagoLabel} · ${tipoVentaLabel} · ${origenLabel}`,
+        empresa, logo, direccion, telefono,
+        generadoPor:   usuario?.nombre,
+        columnas:      ['Fecha', 'Tipo', 'Mesa', 'Cliente', 'Cajero', 'Método de pago', 'Origen', 'Total'],
+        filas:         todas.map(v => [
+          fechaHora(v.creado_en),
+          tipoLabel(v.tipo || 'mesa'),
+          v.tipo === 'llevar' ? (v.numero_llevar ? `#${v.numero_llevar}` : '-') : (v.mesa?.nombre || '-'),
+          v.nombre_cliente || v.cliente?.nombre || 'Público General',
+          v.usuario?.nombre || '-',
+          v.metodo_pago || '-',
+          v.origen === 'autoservicio' ? 'Autoservicio' : 'Staff',
+          bs(v.total),
+        ]),
+        totales: [
+          { label: 'N° Ventas',          valor: stats.count },
+          { label: 'Total Ingresos',     valor: bs(stats.total) },
+          { label: 'Efectivo',           valor: bs(stats.efectivo) },
+          { label: 'QR / Transferencia', valor: bs(stats.qr) },
+        ],
+        nombreArchivo: `reporte-ventas-${params.desde}-${params.hasta}${filtroCajero !== 'todos' ? `-${cajeroLabel}` : ''}${filtroMetodoPago !== 'todos' ? `-${filtroMetodoPago}` : ''}${filtroTipo !== 'todos' ? `-${filtroTipo}` : ''}.pdf`,
+      });
+    } finally {
+      setExportando(false);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -202,9 +231,9 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
             </div>
           )}
         </div>
-        <button onClick={exportar} disabled={!filtrado.length}
+        <button onClick={exportar} disabled={!filtrado.length || exportando}
           className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-40 w-full sm:w-auto">
-          <Download className="w-4 h-4" /> Exportar PDF
+          <Download className="w-4 h-4" /> {exportando ? 'Exportando…' : 'Exportar PDF'}
         </button>
       </div>
 
@@ -252,7 +281,7 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
               <VentaCard key={v.id} venta={v} mostrarSucursal={accesoTodas} />
             ))}
             <div className="flex items-center justify-between px-1 pt-1 text-xs font-semibold text-muted-foreground">
-              <span>TOTAL ({filtrado.length})</span>
+              <span>TOTAL ({stats.count})</span>
               <span className="text-emerald-600 dark:text-emerald-400">{bs(stats.total)}</span>
             </div>
           </div>
@@ -297,6 +326,8 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
           </div>
         </>
       )}
+
+      <Paginacion pagina={pagina} totalPaginas={totalPaginas} onCambiar={setPagina} />
     </div>
   );
 }
