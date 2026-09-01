@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Download, Truck, DollarSign, ShoppingCart, TrendingUp } from 'lucide-react';
-import { getReporteCompras } from '../../../api/reportes';
+import { Download, Truck, DollarSign } from 'lucide-react';
+import { getReporteCompras, getReporteComprasResumen } from '../../../api/reportes';
 import { useAuth } from '../../../hooks/useAuth';
 import { useAuthStore } from '../../../store/authStore';
 import { exportarPDF } from '../utils/exportarPDF';
 import { FiltroFechas, StatCard, BadgeTipo, Skeleton, bs, fecha, fechaHora, hoy, inicioMes } from '../shared';
+import Paginacion from '../../../components/ui/Paginacion';
 
 function CompraCard({ compra, mostrarSucursal }) {
   return (
@@ -41,30 +42,50 @@ export default function TabCompras({ empresa, logo, direccion, telefono }) {
   const [hasta, setHasta] = useState(hoy());
   const [filtroEstado, setFiltroEstado] = useState('todos');
   const [params, setParams] = useState({ desde: inicioMes(), hasta: hoy() });
+  const [pagina, setPagina] = useState(1);
+  const [exportando, setExportando] = useState(false);
 
-  const { data = [], isLoading } = useQuery({
-    queryKey: ['reporte-compras', params],
-    queryFn: () => getReporteCompras(params),
+  const filtrosApi = {
+    ...params,
+    sucursal_id: accesoTodas && filtroSucursal !== 'todas' ? filtroSucursal : undefined,
+    estado: filtroEstado !== 'todos' ? filtroEstado : undefined,
+  };
+
+  // Vuelve a página 1 cuando cambia cualquier filtro (evita quedar en una
+  // página que ya no existe). Se ajusta el estado durante el render en vez
+  // de un useEffect para no disparar el lint react-hooks/set-state-in-effect
+  // (mismo patrón usado en LibroCajaPage.jsx / TabVentas.jsx, Tasks 3 y 8).
+  const filtrosKey = `${params.desde}|${params.hasta}|${filtroSucursal}|${filtroEstado}`;
+  const [prevFiltrosKey, setPrevFiltrosKey] = useState(filtrosKey);
+  if (filtrosKey !== prevFiltrosKey) {
+    setPrevFiltrosKey(filtrosKey);
+    setPagina(1);
+  }
+
+  const { data: paginaDatos, isLoading } = useQuery({
+    queryKey: ['reporte-compras', filtrosApi, pagina],
+    queryFn: () => getReporteCompras({ ...filtrosApi, pagina }),
   });
+  const data = useMemo(() => paginaDatos?.filas ?? [], [paginaDatos]);
+  const totalPaginas = paginaDatos?.total_paginas ?? 1;
 
-  const sucursales = useMemo(() => {
-    const unicos = new Map();
-    data.forEach(c => { if (c.sucursal?.id) unicos.set(c.sucursal.id, c.sucursal.nombre); });
-    return Array.from(unicos.entries()).map(([id, nombre]) => ({ id, nombre }));
-  }, [data]);
+  const { data: resumen } = useQuery({
+    queryKey: ['reporte-compras-resumen', filtrosApi],
+    queryFn: () => getReporteComprasResumen(filtrosApi),
+  });
+  const sucursales = resumen?.filtros?.sucursales ?? [];
 
-  const filtrado = useMemo(() => {
-    let base = filtroEstado === 'todos' ? data : data.filter(c => c.estado === filtroEstado);
-    if (accesoTodas && filtroSucursal !== 'todas') {
-      base = base.filter(c => String(c.sucursal?.id) === filtroSucursal);
-    }
-    return base;
-  }, [data, filtroEstado, filtroSucursal, accesoTodas]);
+  // Totales del rango filtrado completo (no solo la página visible) —
+  // vienen del endpoint de resumen, no se derivan de `data`.
+  const stats = {
+    count: resumen?.cantidad ?? 0,
+    total: resumen?.total_comprado ?? 0,
+  };
 
   const resumenSucursales = useMemo(() => {
     if (!accesoTodas) return [];
     const mapa = new Map();
-    filtrado.forEach(c => {
+    data.forEach(c => {
       const id = c.sucursal?.id;
       if (id == null) return;
       if (!mapa.has(id)) mapa.set(id, { id, nombre: c.sucursal.nombre, count: 0, total: 0 });
@@ -73,37 +94,36 @@ export default function TabCompras({ empresa, logo, direccion, telefono }) {
       s.total += parseFloat(c.total || 0);
     });
     return Array.from(mapa.values()).sort((a, b) => b.total - a.total);
-  }, [filtrado, accesoTodas]);
+  }, [data, accesoTodas]);
 
-  const stats = useMemo(() => {
-    const total     = data.reduce((s, c) => s + parseFloat(c.total || 0), 0);
-    const pendiente = data.filter(c => c.estado === 'pendiente').reduce((s, c) => s + parseFloat(c.total || 0), 0);
-    const recibido  = data.filter(c => c.estado === 'recibido').reduce((s, c) => s + parseFloat(c.total || 0), 0);
-    return { count: data.length, total, pendiente, recibido };
-  }, [data]);
-
-  const exportar = () => exportarPDF({
-    titulo:        'Reporte de Compras',
-    subtitulo:     `${fecha(params.desde)} — ${fecha(params.hasta)}`,
-    empresa, logo, direccion, telefono,
-    generadoPor:   usuario?.nombre,
-    columnas:      ['Fecha', 'Proveedor', 'Estado', 'Registrado por', 'Total', 'Notas'],
-    filas:         filtrado.map(c => [
-      fechaHora(c.creado_en),
-      c.proveedor?.nombre || '-',
-      c.estado,
-      c.usuario?.nombre || '-',
-      bs(c.total),
-      c.notas || '-',
-    ]),
-    totales: [
-      { label: 'N° Compras',  valor: stats.count },
-      { label: 'Total',       valor: bs(stats.total) },
-      { label: 'Pendiente',   valor: bs(stats.pendiente) },
-      { label: 'Recibido',    valor: bs(stats.recibido) },
-    ],
-    nombreArchivo: `reporte-compras-${params.desde}-${params.hasta}.pdf`,
-  });
+  const exportar = async () => {
+    setExportando(true);
+    try {
+      const { filas: todas } = await getReporteCompras({ ...filtrosApi, limite: 0 });
+      exportarPDF({
+        titulo:        'Reporte de Compras',
+        subtitulo:     `${fecha(params.desde)} — ${fecha(params.hasta)}`,
+        empresa, logo, direccion, telefono,
+        generadoPor:   usuario?.nombre,
+        columnas:      ['Fecha', 'Proveedor', 'Estado', 'Registrado por', 'Total', 'Notas'],
+        filas:         todas.map(c => [
+          fechaHora(c.creado_en),
+          c.proveedor?.nombre || '-',
+          c.estado,
+          c.usuario?.nombre || '-',
+          bs(c.total),
+          c.notas || '-',
+        ]),
+        totales: [
+          { label: 'N° Compras',  valor: stats.count },
+          { label: 'Total',       valor: bs(stats.total) },
+        ],
+        nombreArchivo: `reporte-compras-${params.desde}-${params.hasta}.pdf`,
+      });
+    } finally {
+      setExportando(false);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -133,17 +153,15 @@ export default function TabCompras({ empresa, logo, direccion, telefono }) {
             </div>
           )}
         </div>
-        <button onClick={exportar} disabled={!filtrado.length}
+        <button onClick={exportar} disabled={!data.length || exportando}
           className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-40 w-full sm:w-auto">
-          <Download className="w-4 h-4" /> Exportar PDF
+          <Download className="w-4 h-4" /> {exportando ? 'Exportando…' : 'Exportar PDF'}
         </button>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <StatCard label="N° Compras"  valor={stats.count}            color="primary" Icono={Truck}       idx={0} />
         <StatCard label="Total"       valor={bs(stats.total)}        color="blue"    Icono={DollarSign}  idx={1} />
-        <StatCard label="Pendiente"   valor={bs(stats.pendiente)}    color="amber"   Icono={ShoppingCart} idx={2} />
-        <StatCard label="Recibido"    valor={bs(stats.recibido)}     color="emerald" Icono={TrendingUp}  idx={3} />
       </div>
 
       {accesoTodas && resumenSucursales.length > 0 && (
@@ -169,18 +187,18 @@ export default function TabCompras({ empresa, logo, direccion, telefono }) {
         </div>
       )}
 
-      {isLoading ? <Skeleton /> : filtrado.length === 0 ? (
+      {isLoading ? <Skeleton /> : data.length === 0 ? (
         <div className="text-center py-10 text-muted-foreground text-sm rounded-2xl border border-border">Sin resultados</div>
       ) : (
         <>
           {/* Móvil y tablet: tarjetas */}
           <div className="lg:hidden space-y-2">
-            {filtrado.map((c) => (
+            {data.map((c) => (
               <CompraCard key={c.id} compra={c} mostrarSucursal={accesoTodas} />
             ))}
             <div className="flex items-center justify-between px-1 pt-1 text-xs font-semibold text-muted-foreground">
-              <span>TOTAL ({filtrado.length})</span>
-              <span className="text-blue-600 dark:text-blue-400">{bs(filtrado.reduce((s, c) => s + parseFloat(c.total || 0), 0))}</span>
+              <span>TOTAL ({stats.count})</span>
+              <span className="text-blue-600 dark:text-blue-400">{bs(stats.total)}</span>
             </div>
           </div>
 
@@ -195,7 +213,7 @@ export default function TabCompras({ empresa, logo, direccion, telefono }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtrado.map((c, i) => (
+                {data.map((c, i) => (
                   <tr key={c.id}
                     className="bg-card hover:bg-primary/5 transition-colors animate-[rpFadeUp_0.3s_ease_forwards] opacity-0"
                     style={{ animationDelay: `${i * 20}ms` }}>
@@ -215,7 +233,7 @@ export default function TabCompras({ empresa, logo, direccion, telefono }) {
                 <tr className="bg-muted border-t-2 border-primary/30">
                   <td colSpan={accesoTodas ? 5 : 4} className="px-3 py-2.5 sm:px-4 sm:py-3 text-right font-semibold text-muted-foreground text-sm">TOTAL</td>
                   <td className="px-3 py-2.5 sm:px-4 sm:py-3 font-bold text-blue-600 dark:text-blue-400">
-                    {bs(filtrado.reduce((s, c) => s + parseFloat(c.total || 0), 0))}
+                    {bs(stats.total)}
                   </td>
                   <td />
                 </tr>
@@ -224,6 +242,8 @@ export default function TabCompras({ empresa, logo, direccion, telefono }) {
           </div>
         </>
       )}
+
+      <Paginacion pagina={pagina} totalPaginas={totalPaginas} onCambiar={setPagina} />
     </div>
   );
 }
