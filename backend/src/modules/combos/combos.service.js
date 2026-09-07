@@ -1,24 +1,42 @@
-const { Combo, ComboProducto, Producto, DetallePedido, sequelize } = require('../../models');
+const { Combo, ComboProducto, Producto, DetallePedido, GrupoOpciones, Opcion, sequelize } = require('../../models');
 const { estaActivoHoy } = require('../../utils/disponibilidad');
+const { _normalizarGruposOpciones } = require('../productos/productos.service');
 
 const INCLUDE_PRODUCTOS = [
-  { model: Producto, as: 'productos', attributes: ['id', 'nombre', 'precio'], through: { attributes: ['cantidad'] } },
+  {
+    model: Producto, as: 'productos', attributes: ['id', 'nombre', 'precio'], through: { attributes: ['cantidad'] },
+    include: [
+      { model: GrupoOpciones, as: 'grupos_opciones', attributes: ['id', 'nombre', 'tipo_seleccion'],
+        through: { attributes: ['orden', 'obligatorio'] },
+        include: [{ model: Opcion, as: 'opciones', attributes: ['id', 'nombre', 'precio_adicional', 'orden'] }] },
+    ],
+  },
 ];
 
+// Reusa la misma normalización que productos.service.js aplica a un producto
+// suelto (aplana ProductoGrupoOpciones.orden/obligatorio, ordena opciones) —
+// sin esto, SelectorOpcionModal no puede leer `grupo.obligatorio` porque
+// vendría anidado bajo `ProductoGrupoOpciones` en vez de plano.
+function _normalizarCombo(combo) {
+  (combo.productos || []).forEach(_normalizarGruposOpciones);
+  return combo;
+}
+
 async function listar() {
-  return Combo.findAll({ include: INCLUDE_PRODUCTOS, order: [['nombre', 'ASC']] });
+  const combos = await Combo.findAll({ include: INCLUDE_PRODUCTOS, order: [['nombre', 'ASC']] });
+  return combos.map((c) => _normalizarCombo(c.toJSON()));
 }
 
 // Combos vendibles ahora mismo (activos y dentro de su ventana de fechas/días) — para el POS.
 async function listarActivos() {
   const combos = await Combo.findAll({ where: { activo: 1 }, include: INCLUDE_PRODUCTOS, order: [['nombre', 'ASC']] });
-  return combos.filter((c) => estaActivoHoy(c));
+  return combos.filter((c) => estaActivoHoy(c)).map((c) => _normalizarCombo(c.toJSON()));
 }
 
 async function obtener(id, transaction) {
   const combo = await Combo.findByPk(id, { include: INCLUDE_PRODUCTOS, transaction });
   if (!combo) throw Object.assign(new Error('Combo no encontrado'), { status: 404 });
-  return combo;
+  return _normalizarCombo(combo.toJSON());
 }
 
 async function _sincronizarProductos(combo_id, productos, transaction) {
