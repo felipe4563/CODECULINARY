@@ -31,6 +31,7 @@ export default function AutoservicioPage() {
   const [puntosACanjear, setPuntosACanjear] = useState(0);
   const [categoriaActiva, setCategoriaActiva] = useState(null); // null = todas
   const [selectorOpcion, setSelectorOpcion] = useState(null); // producto con grupos_opciones, mientras se elige
+  const [colaOpcionesCombo, setColaOpcionesCombo] = useState(null); // { combo, pendientes: [producto...], resueltas: [{producto_id, opcion_ids}] } | null
   const { token } = useClienteAutoservicioStore();
 
   const { data: config } = useQuery({ queryKey: ['configuracion-publica'], queryFn: getConfiguracionPublica });
@@ -84,7 +85,7 @@ export default function AutoservicioPage() {
 
   const cantidadPorCombo = useMemo(() => {
     const map = {};
-    carrito.forEach((l) => { if (l.tipo === 'combo') map[l.combo.id] = l.cantidad; });
+    carrito.forEach((l) => { if (l.tipo === 'combo') map[l.combo.id] = (map[l.combo.id] ?? 0) + l.cantidad; });
     return map;
   }, [carrito]);
 
@@ -145,26 +146,46 @@ export default function AutoservicioPage() {
     });
   };
 
-  const agregarComboAlCarrito = (combo) => {
+  // Clave para distinguir variantes del mismo combo en el carrito (ej. combo
+  // con "Papas: Grande" vs. mismo combo con "Papas: Chico") — mismo criterio
+  // que agregarAlCarrito ya usa con `nota` para productos sueltos.
+  const _claveOpcionesCombo = (opcionesPorProducto) => JSON.stringify(
+    [...(opcionesPorProducto || [])]
+      .map((o) => ({ producto_id: o.producto_id, opcion_ids: [...(o.opcion_ids || [])].sort((a, b) => a - b) }))
+      .sort((a, b) => a.producto_id - b.producto_id)
+  );
+
+  const agregarComboAlCarrito = (combo, opcionesPorProducto = []) => {
+    const clave = _claveOpcionesCombo(opcionesPorProducto);
     setCarrito((c) => {
-      const idx = c.findIndex((l) => l.tipo === 'combo' && l.combo.id === combo.id);
+      const idx = c.findIndex((l) => l.tipo === 'combo' && l.combo.id === combo.id && l.combo_opciones_key === clave);
       if (idx >= 0) {
         const copia = [...c];
         copia[idx] = { ...copia[idx], cantidad: copia[idx].cantidad + 1 };
         return copia;
       }
-      return [...c, { tipo: 'combo', combo, cantidad: 1 }];
+      return [...c, { tipo: 'combo', combo, cantidad: 1, opciones_por_producto: opcionesPorProducto, combo_opciones_key: clave }];
     });
   };
 
-  const restarComboDelCarrito = (combo) => {
-    setCarrito((c) => {
-      const idx = c.findIndex((l) => l.tipo === 'combo' && l.combo.id === combo.id);
-      if (idx < 0) return c;
-      if (c[idx].cantidad <= 1) return c.filter((_, i) => i !== idx);
-      const copia = [...c];
-      copia[idx] = { ...copia[idx], cantidad: copia[idx].cantidad - 1 };
-      return copia;
+  const handleAgregarCombo = (combo) => {
+    const productosConOpciones = (combo.productos || []).filter((p) => p.grupos_opciones?.length > 0);
+    if (productosConOpciones.length === 0) {
+      agregarComboAlCarrito(combo, []);
+      return;
+    }
+    setColaOpcionesCombo({ combo, pendientes: productosConOpciones, resueltas: [] });
+  };
+
+  const elegirOpcionCombo = (seleccion) => {
+    setColaOpcionesCombo((cola) => {
+      const [actual, ...resto] = cola.pendientes;
+      const resueltas = [...cola.resueltas, { producto_id: actual.id, opcion_ids: seleccion.opcionIds }];
+      if (resto.length === 0) {
+        agregarComboAlCarrito(cola.combo, resueltas);
+        return null;
+      }
+      return { ...cola, pendientes: resto, resueltas };
     });
   };
 
@@ -172,7 +193,7 @@ export default function AutoservicioPage() {
 
   const itemsParaBackend = () => carrito.map(l => (
     l.tipo === 'combo'
-      ? { combo_id: l.combo.id, cantidad: l.cantidad }
+      ? { combo_id: l.combo.id, cantidad: l.cantidad, opciones_por_producto: l.opciones_por_producto }
       : { producto_id: l.producto.id, cantidad: l.cantidad, opcion_ids: l.opcion_ids }
   ));
 
@@ -281,7 +302,7 @@ export default function AutoservicioPage() {
               return (
                 <button
                   key={combo.id}
-                  onClick={() => agregarComboAlCarrito(combo)}
+                  onClick={() => handleAgregarCombo(combo)}
                   className={`shrink-0 flex flex-col items-start gap-0.5 px-3.5 py-2.5 rounded-xl border transition-colors text-left ${cantidad ? 'border-primary bg-primary/10' : 'border-border bg-card hover:bg-accent'}`}
                 >
                   <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
@@ -389,14 +410,13 @@ export default function AutoservicioPage() {
               const nombre = esCombo ? l.combo.nombre : l.producto.nombre;
               const imagen = esCombo ? null : l.producto.imagen;
               const precioUnitario = esCombo ? parseFloat(l.combo.precio) : precioConPromo(l.producto) + l.extra;
-              // Los combos se identifican por combo.id (una sola variante
-              // posible), así que siguen sumando/restando por esa función;
-              // los productos con opciones pueden tener varias líneas del
-              // mismo producto_id, así que acá se opera por índice.
-              const onSumar = () => (esCombo ? agregarComboAlCarrito(l.combo) : incrementarLinea(idx));
-              const onRestar = () => (esCombo ? restarComboDelCarrito(l.combo) : decrementarLinea(idx));
+              // Un combo puede tener varias líneas (una por combinación de
+              // opciones elegidas), igual que ya pasa con productos con
+              // opciones — por eso acá se opera siempre por índice.
+              const onSumar = () => incrementarLinea(idx);
+              const onRestar = () => decrementarLinea(idx);
               return (
-                <div key={esCombo ? `combo-${l.combo.id}` : `producto-${l.producto.id}-${l.nota ?? 'base'}`} className="flex items-center gap-3 text-sm">
+                <div key={esCombo ? `combo-${l.combo.id}-${l.combo_opciones_key ?? 'base'}` : `producto-${l.producto.id}-${l.nota ?? 'base'}`} className="flex items-center gap-3 text-sm">
                   <div className="w-11 h-11 rounded-lg bg-muted overflow-hidden shrink-0 flex items-center justify-center">
                     {imagen ? (
                       <img src={imagen} alt="" className="w-full h-full object-cover" />
@@ -503,6 +523,16 @@ export default function AutoservicioPage() {
           producto={selectorOpcion}
           onElegir={elegirOpcionProducto}
           onClose={() => setSelectorOpcion(null)}
+        />
+      )}
+
+      {colaOpcionesCombo && (
+        <SelectorOpcionModal
+          key={colaOpcionesCombo.pendientes[0]?.id}
+          producto={colaOpcionesCombo.pendientes[0]}
+          subtitulo={`Combo: ${colaOpcionesCombo.combo.nombre} — Producto ${colaOpcionesCombo.resueltas.length + 1} de ${colaOpcionesCombo.pendientes.length + colaOpcionesCombo.resueltas.length}`}
+          onElegir={elegirOpcionCombo}
+          onClose={() => setColaOpcionesCombo(null)}
         />
       )}
     </div>
