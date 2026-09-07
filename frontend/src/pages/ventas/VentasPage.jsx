@@ -53,6 +53,7 @@ export default function VentasPage() {
   const [modalCobrar, setModalCobrar] = useState(false);
   const [tabMobile, setTabMobile] = useState('productos'); // 'productos' | 'orden'
   const [selectorOpcion, setSelectorOpcion] = useState(null); // producto con grupo_opciones, o null
+  const [colaOpcionesCombo, setColaOpcionesCombo] = useState(null); // { combo, pendientes: [producto...], resueltas: [{producto_id, opcion_ids}] } | null
   const [modalPeso, setModalPeso] = useState(null); // producto pesable pendiente de peso, o null
 
   const { data: mesas = [], isLoading: cargandoMesas } = useQuery({
@@ -168,17 +169,62 @@ export default function VentasPage() {
     return (combo.productos || []).map((p) => `${p.ComboProducto?.cantidad ?? 1}x ${p.nombre}`).join(', ');
   }
 
-  function agregarCombo(combo) {
+  // Clave para distinguir variantes del mismo combo en el carrito (ej. combo
+  // con "Papas: Grande" vs. mismo combo con "Papas: Chico") — mismo criterio
+  // que ya usa agregarAlCarrito con `nota` para productos sueltos.
+  function _claveOpcionesCombo(opcionesPorProducto) {
+    return JSON.stringify(
+      [...(opcionesPorProducto || [])]
+        .map((o) => ({ producto_id: o.producto_id, opcion_ids: [...(o.opcion_ids || [])].sort((a, b) => a - b) }))
+        .sort((a, b) => a.producto_id - b.producto_id)
+    );
+  }
+
+  function _extraOpcionesCombo(combo, opcionesPorProducto) {
+    const opcionesPorId = new Map();
+    (combo.productos || []).forEach((p) => (p.grupos_opciones || []).forEach((g) => (g.opciones || []).forEach((o) => opcionesPorId.set(o.id, o))));
+    return (opcionesPorProducto || []).reduce(
+      (sum, entrada) => sum + (entrada.opcion_ids || []).reduce((s, id) => s + parseFloat(opcionesPorId.get(id)?.precio_adicional || 0), 0),
+      0
+    );
+  }
+
+  function agregarComboAlCarrito(combo, opcionesPorProducto) {
+    const clave = _claveOpcionesCombo(opcionesPorProducto);
     setCarrito((prev) => {
-      const existente = prev.find((it) => it.combo_id === combo.id);
+      const existente = prev.find((it) => it.combo_id === combo.id && it.combo_opciones_key === clave);
       if (existente) {
         return prev.map((it) => it === existente ? { ...it, cantidad: it.cantidad + 1 } : it);
       }
       return [...prev, {
         linea_id: nuevoLineaId(), combo_id: combo.id, nombre: `Combo: ${combo.nombre}`,
-        precio: parseFloat(combo.precio), cantidad: 1, nota: null,
+        precio: parseFloat(combo.precio) + _extraOpcionesCombo(combo, opcionesPorProducto), cantidad: 1, nota: null,
         combo_contenido: comboContenido(combo),
+        opciones_por_producto: opcionesPorProducto,
+        combo_opciones_key: clave,
       }];
+    });
+  }
+
+  function agregarCombo(combo) {
+    if (!puedeCrear) return;
+    const productosConOpciones = (combo.productos || []).filter((p) => p.grupos_opciones?.length > 0);
+    if (productosConOpciones.length === 0) {
+      agregarComboAlCarrito(combo, []);
+      return;
+    }
+    setColaOpcionesCombo({ combo, pendientes: productosConOpciones, resueltas: [] });
+  }
+
+  function elegirOpcionCombo(seleccion) {
+    setColaOpcionesCombo((cola) => {
+      const [actual, ...resto] = cola.pendientes;
+      const resueltas = [...cola.resueltas, { producto_id: actual.id, opcion_ids: seleccion.opcionIds }];
+      if (resto.length === 0) {
+        agregarComboAlCarrito(cola.combo, resueltas);
+        return null;
+      }
+      return { ...cola, pendientes: resto, resueltas };
     });
   }
 
@@ -557,6 +603,15 @@ export default function VentasPage() {
         />
       )}
 
+      {colaOpcionesCombo && (
+        <SelectorOpcionModal
+          producto={colaOpcionesCombo.pendientes[0]}
+          subtitulo={`Combo: ${colaOpcionesCombo.combo.nombre} — Producto ${colaOpcionesCombo.resueltas.length + 1} de ${colaOpcionesCombo.pendientes.length + colaOpcionesCombo.resueltas.length}`}
+          onElegir={elegirOpcionCombo}
+          onClose={() => setColaOpcionesCombo(null)}
+        />
+      )}
+
       {modalPeso && (
         <ModalPeso
           producto={modalPeso}
@@ -601,7 +656,7 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
       mesa_id: tipo === 'mesa' ? mesaId : undefined,
       nombre_cliente: nombreCliente ?? undefined,
       notas: notas.trim() || undefined,
-      items: carrito.map((it) => ({ producto_id: it.producto_id, combo_id: it.combo_id, cantidad: it.cantidad, nota: it.nota, peso: it.peso, opcion_ids: it.opcion_ids })),
+      items: carrito.map((it) => ({ producto_id: it.producto_id, combo_id: it.combo_id, cantidad: it.cantidad, nota: it.nota, peso: it.peso, opcion_ids: it.opcion_ids, opciones_por_producto: it.opciones_por_producto })),
       metodo_pago: metodo,
       monto_recibido: totalFinal,
       sesion_caja_id: sesionCajaId,
