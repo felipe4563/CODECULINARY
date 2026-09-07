@@ -831,4 +831,39 @@ describe('Ventas — opciones por producto dentro de un combo', () => {
     expect(res.status).toBe(400);
     await Producto.destroy({ where: { id: productoAjeno.id } });
   });
+
+  it('agregarItem con combo + opciones calcula el extra y persiste las filas', async () => {
+    const pedidoBase = await request(app)
+      .post('/api/v1/ventas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ tipo: 'llevar', sesion_caja_id: sesionId });
+    const pedidoId = pedidoBase.body.datos.id;
+
+    const res = await request(app)
+      .post(`/api/v1/ventas/${pedidoId}/items`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ combo_id: comboId, cantidad: 1, opciones_por_producto: [{ producto_id: productoId, opcion_ids: [opcionId] }] });
+    expect(res.status).toBe(201);
+    expect(parseFloat(res.body.datos.precio)).toBe(23);
+
+    const filas = await DetallePedidoComboOpcion.findAll({ where: { detalle_pedido_id: res.body.datos.id } });
+    expect(filas).toHaveLength(1);
+    expect(filas[0].opcion_id).toBe(opcionId);
+  });
+
+  it('agregarItem rechaza opciones_por_producto de un producto ajeno al combo', async () => {
+    const pedidoBase = await request(app)
+      .post('/api/v1/ventas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ tipo: 'llevar', sesion_caja_id: sesionId });
+    const pedidoId = pedidoBase.body.datos.id;
+    const productoAjeno = await Producto.create({ categoria_id: (await Categoria.findOne()).id, nombre: 'Producto Ajeno Agregar Item Test', precio: 4, stock: 0 });
+
+    const res = await request(app)
+      .post(`/api/v1/ventas/${pedidoId}/items`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ combo_id: comboId, cantidad: 1, opciones_por_producto: [{ producto_id: productoAjeno.id, opcion_ids: [] }] });
+    expect(res.status).toBe(400);
+    await Producto.destroy({ where: { id: productoAjeno.id } });
+  });
 });

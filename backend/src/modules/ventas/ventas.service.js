@@ -924,7 +924,7 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
   return { ...creado.toJSON(), datos_impresion };
 }
 
-async function agregarItem(pedido_id, { producto_id, combo_id, cantidad = 1, nota, peso, opcion_ids }, alcance) {
+async function agregarItem(pedido_id, { producto_id, combo_id, cantidad = 1, nota, peso, opcion_ids, opciones_por_producto }, alcance) {
   const pedido = await Pedido.findByPk(pedido_id);
   if (!pedido) throw Object.assign(new Error('Pedido no encontrado'), { status: 404 });
   _verificarAlcance(pedido, alcance);
@@ -936,9 +936,17 @@ async function agregarItem(pedido_id, { producto_id, combo_id, cantidad = 1, not
     if (!combo.activo || !estaActivoHoy(combo)) {
       throw Object.assign(new Error(`El combo "${combo.nombre}" no está disponible`), { status: 409 });
     }
+    const opcionesPorProductoValidadas = await _validarOpcionesCombo(combo_id, opciones_por_producto);
+    const extraCombo = await _extraPorOpciones(opcionesPorProductoValidadas.flatMap((o) => o.opcion_ids || []));
     const item = await DetallePedido.create({
-      pedido_id, combo_id, producto_id: null, cantidad, precio: parseFloat(combo.precio), peso: null, nota,
+      pedido_id, combo_id, producto_id: null, cantidad, precio: parseFloat(combo.precio) + extraCombo, peso: null, nota,
     });
+    if (opcionesPorProductoValidadas.length) {
+      const filas = opcionesPorProductoValidadas.flatMap((o) =>
+        (o.opcion_ids || []).map((opcion_id) => ({ detalle_pedido_id: item.id, producto_id: o.producto_id, opcion_id }))
+      );
+      if (filas.length) await DetallePedidoComboOpcion.bulkCreate(filas);
+    }
     await _recalcularTotal(pedido_id);
     emitir('restaurante:actualizar', { tipo: 'pedido_items' });
     return item;
