@@ -605,6 +605,7 @@ export default function VentasPage() {
 
       {colaOpcionesCombo && (
         <SelectorOpcionModal
+          key={colaOpcionesCombo.pendientes[0]?.id}
           producto={colaOpcionesCombo.pendientes[0]}
           subtitulo={`Combo: ${colaOpcionesCombo.combo.nombre} — Producto ${colaOpcionesCombo.resueltas.length + 1} de ${colaOpcionesCombo.pendientes.length + colaOpcionesCombo.resueltas.length}`}
           onElegir={elegirOpcionCombo}
