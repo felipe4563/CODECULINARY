@@ -8,6 +8,16 @@ function _fsNombre(nombre, anchoColPx, fsMax) {
   return Math.max(fsMin, Math.min(fsMax, fsNecesario));
 }
 
+// Ver misma función en ticketVenta.js.
+function _opcionesPorProducto(comboOpciones) {
+  const mapa = {};
+  (comboOpciones || []).forEach((co) => {
+    if (!co.opcion?.nombre) return;
+    (mapa[co.producto_id] ??= []).push(co.opcion.nombre);
+  });
+  return mapa;
+}
+
 export function imprimirTicketCocina(pedido, config = {}, numeroOrdenDiario = null) {
   const nombre  = config.nombre_negocio ?? 'Restaurante';
   const dir     = config.direccion      ?? '';
@@ -35,8 +45,12 @@ export function imprimirTicketCocina(pedido, config = {}, numeroOrdenDiario = nu
       : parseFloat(d.precio).toFixed(2);
     const subtotal = (parseFloat(d.precio) * d.cantidad).toFixed(2);
     const nombre = d.producto?.nombre ?? (esCombo ? `Combo: ${d.combo.nombre}` : '');
+    const opcionesPorProducto = esCombo ? _opcionesPorProducto(d.combo_opciones) : {};
     const contenidoCombo = esCombo && d.combo.productos?.length
-      ? `<br><span class="prod-combo-detalle">${d.combo.productos.map(p => `${p.ComboProducto?.cantidad ?? 1}x ${p.nombre}`).join(', ')}</span>`
+      ? `<br><span class="prod-combo-detalle">${d.combo.productos.map(p => {
+          const opciones = opcionesPorProducto[p.id];
+          return `${p.ComboProducto?.cantidad ?? 1}x ${p.nombre}${opciones?.length ? ` (${opciones.join(', ')})` : ''}`;
+        }).join(', ')}</span>`
       : '';
     const fsNombre = _fsNombre(nombre, 109, 13);
     return `

@@ -45,6 +45,19 @@ function quitarAcentos(str) {
   return str.replace(/[áéíóúÁÉÍÓÚñÑüÜ¡¿°·★—]/g, (ch) => REEMPLAZO_ASCII[ch] ?? ch);
 }
 
+// Agrupa las opciones elegidas de un combo por producto_id — ver la misma
+// función en ticketVenta.js/ticketCocina.js (el HTML), acá replicada para
+// el camino ESC/POS Bluetooth.
+function _opcionesPorProducto(comboOpciones) {
+  const mapa = {};
+  (comboOpciones || []).forEach((co) => {
+    if (!co.opcion || !co.opcion.nombre) return;
+    if (!mapa[co.producto_id]) mapa[co.producto_id] = [];
+    mapa[co.producto_id].push(co.opcion.nombre);
+  });
+  return mapa;
+}
+
 class Esc {
   constructor(anchoPapel = '80mm') {
     this.b = [];
@@ -158,9 +171,11 @@ function buildCaja(data, logo) {
       if (qty > 1) t.left().line('  (' + sym + ' ' + pu + ' c/u)');
     }
     if (esCombo && d.combo.productos && d.combo.productos.length) {
+      const opcionesPorProducto = _opcionesPorProducto(d.combo_opciones);
       const contenidoCombo = d.combo.productos.map((p) => {
         const cant = (p.ComboProducto && p.ComboProducto.cantidad) || 1;
-        return cant + 'x ' + p.nombre;
+        const opciones = opcionesPorProducto[p.id];
+        return cant + 'x ' + p.nombre + (opciones && opciones.length ? ' (' + opciones.join(', ') + ')' : '');
       }).join(', ');
       t.left().line('  (' + contenidoCombo + ')');
     }
@@ -252,9 +267,11 @@ function buildCocina(data) {
       t.left().line(sym + ' ' + pu2 + ' c/u  Sub: ' + sym + ' ' + sub2);
     }
     if (esCombo2 && d2.combo.productos && d2.combo.productos.length) {
+      const opcionesPorProducto2 = _opcionesPorProducto(d2.combo_opciones);
       const contenidoCombo2 = d2.combo.productos.map((p) => {
         const cant = (p.ComboProducto && p.ComboProducto.cantidad) || 1;
-        return cant + 'x ' + p.nombre;
+        const opciones = opcionesPorProducto2[p.id];
+        return cant + 'x ' + p.nombre + (opciones && opciones.length ? ' (' + opciones.join(', ') + ')' : '');
       }).join(', ');
       t.left().bold(true).line('>> Incluye: ' + contenidoCombo2).bold(false);
     }

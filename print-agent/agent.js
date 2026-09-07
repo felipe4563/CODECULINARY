@@ -382,6 +382,18 @@ function quitarAcentos(str) {
   return str.replace(/[áéíóúÁÉÍÓÚñÑüÜ¡¿°·★—]/g, function(ch) { return REEMPLAZO_ASCII[ch] || ch; });
 }
 
+// Agrupa las opciones elegidas de un combo por producto_id — ver la misma
+// función en escpos.js (comparten el mismo shape de payload).
+function _opcionesPorProducto(comboOpciones) {
+  var mapa = {};
+  (comboOpciones || []).forEach(function (co) {
+    if (!co.opcion || !co.opcion.nombre) return;
+    if (!mapa[co.producto_id]) mapa[co.producto_id] = [];
+    mapa[co.producto_id].push(co.opcion.nombre);
+  });
+  return mapa;
+}
+
 class Esc {
   constructor() { this.b = []; }
   raw(bytes)  { this.b.push(...bytes); return this; }
@@ -496,9 +508,11 @@ function buildCaja(data) {
       if (qty > 1) t.left().line('        (' + sym + ' ' + pu + ' c/u)');
     }
     if (esCombo && d.combo.productos && d.combo.productos.length) {
+      var opcionesPorProducto = _opcionesPorProducto(d.combo_opciones);
       var contenidoCombo = d.combo.productos.map(function(p) {
         var cant = (p.ComboProducto && p.ComboProducto.cantidad) || 1;
-        return cant + 'x ' + p.nombre;
+        var opciones = opcionesPorProducto[p.id];
+        return cant + 'x ' + p.nombre + (opciones && opciones.length ? ' (' + opciones.join(', ') + ')' : '');
       }).join(', ');
       t.left().line('        (' + contenidoCombo + ')');
     }
@@ -598,9 +612,11 @@ function buildCocina(data) {
       t.left().line('     ' + sym + ' ' + pu2 + ' c/u       Sub: ' + sym + ' ' + sub2);
     }
     if (esCombo2 && d2.combo.productos && d2.combo.productos.length) {
+      var opcionesPorProducto2 = _opcionesPorProducto(d2.combo_opciones);
       var contenidoCombo2 = d2.combo.productos.map(function(p) {
         var cant = (p.ComboProducto && p.ComboProducto.cantidad) || 1;
-        return cant + 'x ' + p.nombre;
+        var opciones = opcionesPorProducto2[p.id];
+        return cant + 'x ' + p.nombre + (opciones && opciones.length ? ' (' + opciones.join(', ') + ')' : '');
       }).join(', ');
       t.left().bold(true).line('     >> Incluye: ' + contenidoCombo2).bold(false);
     }
