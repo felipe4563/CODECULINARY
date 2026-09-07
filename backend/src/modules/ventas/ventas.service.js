@@ -171,6 +171,13 @@ const INCLUDE_PEDIDO_COMPLETO = [
         model: Combo, as: 'combo', attributes: ['id', 'nombre', 'descripcion'], required: false,
         include: [{ model: Producto, as: 'productos', attributes: ['id', 'nombre'], through: { attributes: ['cantidad'] } }],
       },
+      {
+        model: DetallePedidoComboOpcion, as: 'combo_opciones', required: false,
+        include: [
+          { model: Producto, as: 'producto', attributes: ['id', 'nombre'] },
+          { model: Opcion, as: 'opcion', attributes: ['id', 'nombre', 'precio_adicional'] },
+        ],
+      },
     ],
   },
   { model: Cupon, as: 'cupon', attributes: ['id', 'codigo', 'tipo', 'valor'], required: false },

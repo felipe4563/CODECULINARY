@@ -866,4 +866,24 @@ describe('Ventas — opciones por producto dentro de un combo', () => {
     expect(res.status).toBe(400);
     await Producto.destroy({ where: { id: productoAjeno.id } });
   });
+
+  it('GET del pedido incluye combo_opciones con nombres de producto y opción', async () => {
+    const creado = await request(app)
+      .post('/api/v1/ventas/completa')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        tipo: 'llevar', metodo_pago: 'efectivo', monto_recibido: 30, sesion_caja_id: sesionId,
+        items: [{ combo_id: comboId, cantidad: 1, opciones_por_producto: [{ producto_id: productoId, opcion_ids: [opcionId] }] }],
+      });
+    const pedidoId = creado.body.datos.id;
+
+    const res = await request(app)
+      .get(`/api/v1/ventas/${pedidoId}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    const detalleCombo = res.body.datos.detalles.find((d) => d.combo_id === comboId);
+    expect(detalleCombo.combo_opciones).toHaveLength(1);
+    expect(detalleCombo.combo_opciones[0].producto.nombre).toBe('Producto Combo Opciones Ventas Test');
+    expect(detalleCombo.combo_opciones[0].opcion.nombre).toBe('Grande');
+  });
 });
