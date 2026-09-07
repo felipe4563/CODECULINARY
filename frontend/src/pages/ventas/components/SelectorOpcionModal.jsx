@@ -7,7 +7,7 @@ function etiquetaOpcion(opcion) {
     : opcion.nombre;
 }
 
-export default function SelectorOpcionModal({ producto, onElegir, onClose }) {
+export default function SelectorOpcionModal({ producto, subtitulo, onElegir, onClose }) {
   const grupos = producto.grupos_opciones ?? [];
   const [paso, setPaso] = useState(0);
   const [selecciones, setSelecciones] = useState({}); // { [grupoId]: opcion[] }
@@ -71,6 +71,9 @@ export default function SelectorOpcionModal({ producto, onElegir, onClose }) {
   return (
     <Modal titulo={`${producto.nombre} — ${grupoActual.nombre}`} onClose={onClose}>
       <div className="space-y-4">
+        {subtitulo && (
+          <p className="text-xs font-medium text-primary">{subtitulo}</p>
+        )}
         {grupos.length > 1 && (
           <p className="text-xs text-muted-foreground">Paso {paso + 1} de {grupos.length}</p>
         )}
