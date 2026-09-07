@@ -206,7 +206,8 @@ async function reimprimir(id, alcance) {
   // se pasa como override.
   const numero_orden_diario = await _numeroOrdenDiarioOriginal(pedido);
   return _emitirImpresion(
-    pedido, pedido.metodo_pago, parseFloat(pedido.cambio || 0), pedido.sucursal_id, numero_orden_diario
+    pedido, pedido.metodo_pago, parseFloat(pedido.cambio || 0), pedido.sucursal_id, numero_orden_diario,
+    { esReimpresion: true }
   );
 }
 
@@ -465,7 +466,7 @@ async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, 
   return monto_neto;
 }
 
-async function _emitirImpresion(pedido, metodo_pago, cambio, sucursal_id, numeroOrdenDiarioOverride) {
+async function _emitirImpresion(pedido, metodo_pago, cambio, sucursal_id, numeroOrdenDiarioOverride, { esReimpresion = false } = {}) {
   const cfgRows = await Configuracion.findAll({ where: { clave: ['nombre_negocio', 'simbolo_moneda', 'direccion', 'telefono', 'flujo_cocina', 'cocina_destino', 'cocina_pantalla_dedicada', 'logo'] } });
   const cfg = cfgRows.reduce((o, r) => { o[r.clave] = r.valor; return o; }, {});
 
@@ -490,18 +491,26 @@ async function _emitirImpresion(pedido, metodo_pago, cambio, sucursal_id, numero
   let caja_id = null;
   let modo_impresion = 'fisica';
   let ancho_papel_bluetooth = '80mm';
+  let imprimirTicketCliente = true;
   if (pedido.sesion_caja_id) {
     const sesion = await SesionCaja.findByPk(pedido.sesion_caja_id, {
       attributes: ['caja_id'],
-      include: [{ model: Caja, as: 'caja', attributes: ['modo_impresion', 'ancho_papel_bluetooth'] }],
+      include: [{ model: Caja, as: 'caja', attributes: ['modo_impresion', 'ancho_papel_bluetooth', 'imprimir_ticket_cliente'] }],
     });
     caja_id = sesion ? sesion.caja_id : null;
     modo_impresion = sesion?.caja?.modo_impresion || 'fisica';
     ancho_papel_bluetooth = sesion?.caja?.ancho_papel_bluetooth || '80mm';
+    imprimirTicketCliente = sesion?.caja?.imprimir_ticket_cliente !== 0;
   }
 
-  const datosCaja = { pedido: pedido.toJSON(), metodo_pago, cambio, config: cfg, numero_orden_diario, modo_impresion, ancho_papel_bluetooth };
-  emitir('print:caja', datosCaja, sucursal_id, caja_id);
+  // La reimpresión manual ("Imprimir de nuevo") ignora el flag a propósito:
+  // el cajero puede necesitar dar el comprobante puntualmente aunque esa
+  // caja no lo imprima sola en cada venta.
+  let datosCaja = null;
+  if (imprimirTicketCliente || esReimpresion) {
+    datosCaja = { pedido: pedido.toJSON(), metodo_pago, cambio, config: cfg, numero_orden_diario, modo_impresion, ancho_papel_bluetooth };
+    emitir('print:caja', datosCaja, sucursal_id, caja_id);
+  }
 
   let datosCocina = null;
   if (cfg.flujo_cocina === 'fisico') {

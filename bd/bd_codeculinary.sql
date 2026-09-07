@@ -47,6 +47,7 @@ CREATE TABLE `cajas` (
   `nombre` varchar(100) NOT NULL,
   `modo_impresion` enum('fisica','bluetooth') NOT NULL DEFAULT 'fisica',
   `ancho_papel_bluetooth` enum('58mm','80mm') NOT NULL DEFAULT '80mm',
+  `imprimir_ticket_cliente` tinyint(1) NOT NULL DEFAULT 1,
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `creado_en` timestamp NULL DEFAULT current_timestamp(),
   `actualizado_en` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -56,8 +57,8 @@ CREATE TABLE `cajas` (
 -- Volcado de datos para la tabla `cajas`
 --
 
-INSERT INTO `cajas` (`id`, `sucursal_id`, `nombre`, `modo_impresion`, `ancho_papel_bluetooth`, `activo`, `creado_en`, `actualizado_en`) VALUES
-(1, 1, 'Caja 1', 'fisica', '80mm', 1, '2026-07-24 12:23:54', '2026-07-24 12:23:54');
+INSERT INTO `cajas` (`id`, `sucursal_id`, `nombre`, `modo_impresion`, `ancho_papel_bluetooth`, `imprimir_ticket_cliente`, `activo`, `creado_en`, `actualizado_en`) VALUES
+(1, 1, 'Caja 1', 'fisica', '80mm', 1, 1, '2026-07-24 12:23:54', '2026-07-24 12:23:54');
 
 -- --------------------------------------------------------
 
@@ -90,8 +91,28 @@ CREATE TABLE `clientes` (
   `direccion` varchar(255) DEFAULT NULL,
   `fecha_nacimiento` date DEFAULT NULL,
   `puntos` int(11) NOT NULL DEFAULT 0,
+  `pin_hash` varchar(255) DEFAULT NULL,
+  `pin_intentos_fallidos` int(11) NOT NULL DEFAULT 0,
+  `pin_bloqueado_hasta` datetime DEFAULT NULL,
   `creado_en` timestamp NOT NULL DEFAULT current_timestamp(),
   `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `cliente_pin_verificaciones`
+--
+
+CREATE TABLE `cliente_pin_verificaciones` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `cliente_id` int(10) UNSIGNED NOT NULL,
+  `pin_hash` varchar(255) DEFAULT NULL,
+  `email` varchar(255) NOT NULL,
+  `codigo_hash` varchar(255) NOT NULL,
+  `intentos` int(11) NOT NULL DEFAULT 0,
+  `expira_en` datetime NOT NULL,
+  `creado_en` datetime NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -189,7 +210,8 @@ INSERT INTO `configuraciones` (`id`, `clave`, `valor`, `creado_en`, `actualizado
 (44, 'ruleta_max_giros_periodo', '1', current_timestamp(), current_timestamp()),
 (45, 'ruleta_periodo', 'dia', current_timestamp(), current_timestamp()),
 (46, 'ruleta_vigencia_dias_premio', '7', current_timestamp(), current_timestamp()),
-(47, 'cocina_destino', 'centralizada', current_timestamp(), current_timestamp());
+(47, 'cocina_destino', 'centralizada', current_timestamp(), current_timestamp()),
+(48, 'cocina_pantalla_dedicada', 'false', current_timestamp(), current_timestamp());
 
 -- --------------------------------------------------------
 
@@ -996,6 +1018,13 @@ ALTER TABLE `clientes`
   ADD UNIQUE KEY `clientes_doc_unique` (`numero_documento`);
 
 --
+-- Indices de la tabla `cliente_pin_verificaciones`
+--
+ALTER TABLE `cliente_pin_verificaciones`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `cliente_id` (`cliente_id`);
+
+--
 -- Indices de la tabla `compras`
 --
 ALTER TABLE `compras`
@@ -1307,6 +1336,12 @@ ALTER TABLE `clientes`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT de la tabla `cliente_pin_verificaciones`
+--
+ALTER TABLE `cliente_pin_verificaciones`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT de la tabla `compras`
 --
 ALTER TABLE `compras`
@@ -1322,7 +1357,7 @@ ALTER TABLE `cupones`
 -- AUTO_INCREMENT de la tabla `configuraciones`
 --
 ALTER TABLE `configuraciones`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=42;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=49;
 
 --
 -- AUTO_INCREMENT de la tabla `detalle_arqueo`
@@ -1489,6 +1524,12 @@ ALTER TABLE `areas`
 --
 ALTER TABLE `cajas`
   ADD CONSTRAINT `cajas_ibfk_1` FOREIGN KEY (`sucursal_id`) REFERENCES `sucursales` (`id`);
+
+--
+-- Filtros para la tabla `cliente_pin_verificaciones`
+--
+ALTER TABLE `cliente_pin_verificaciones`
+  ADD CONSTRAINT `cliente_pin_verificaciones_cliente_fk` FOREIGN KEY (`cliente_id`) REFERENCES `clientes` (`id`) ON DELETE CASCADE;
 
 --
 -- Filtros para la tabla `combo_productos`

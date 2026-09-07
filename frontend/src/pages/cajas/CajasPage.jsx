@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Landmark, Plus, Pencil, Trash2, AlertCircle, RefreshCw, Printer, Bluetooth } from 'lucide-react';
+import { Landmark, Plus, Pencil, Trash2, AlertCircle, RefreshCw, Printer, Bluetooth, Receipt } from 'lucide-react';
 import { getCajas, crearCaja, actualizarCaja, eliminarCaja } from '../../api/cajas';
 import { getSucursales } from '../../api/sucursales';
 import { usePermisos } from '../../hooks/usePermisos';
@@ -10,6 +10,15 @@ function BadgeEstado({ activo }) {
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${activo ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
       {activo ? 'Activa' : 'Inactiva'}
+    </span>
+  );
+}
+
+function BadgeTicketCliente({ imprime }) {
+  if (imprime) return null;
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+      <Receipt className="w-3 h-3" /> Sin ticket cliente
     </span>
   );
 }
@@ -134,8 +143,9 @@ export default function CajasPage() {
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-2">
                   <p className="text-xs text-muted-foreground truncate">{c.sucursal?.nombre ?? '—'}</p>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
                     <BadgeModoImpresion modo={c.modo_impresion} anchoPapel={c.ancho_papel_bluetooth} />
+                    <BadgeTicketCliente imprime={c.imprimir_ticket_cliente} />
                     <BadgeEstado activo={c.activo} />
                   </div>
                 </div>
@@ -171,7 +181,10 @@ export default function CajasPage() {
                         {c.sucursal?.nombre ?? '—'}
                       </td>
                       <td className="px-5 py-3.5">
-                        <BadgeModoImpresion modo={c.modo_impresion} anchoPapel={c.ancho_papel_bluetooth} />
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <BadgeModoImpresion modo={c.modo_impresion} anchoPapel={c.ancho_papel_bluetooth} />
+                          <BadgeTicketCliente imprime={c.imprimir_ticket_cliente} />
+                        </div>
                       </td>
                       <td className="px-5 py-3.5 text-center">
                         <BadgeEstado activo={c.activo} />
@@ -257,14 +270,15 @@ function ModalCaja({ caja, sucursales, onClose, onExito }) {
   const [nombre, setNombre]               = useState(caja?.nombre ?? '');
   const [modoImpresion, setModoImpresion] = useState(caja?.modo_impresion ?? 'fisica');
   const [anchoPapel, setAnchoPapel]       = useState(caja?.ancho_papel_bluetooth ?? '80mm');
+  const [imprimirTicketCliente, setImprimirTicketCliente] = useState(caja?.imprimir_ticket_cliente ?? 1);
   const [activo, setActivo]               = useState(caja?.activo ?? 1);
   const [error, setError]                 = useState(null);
 
   const guardar = useMutation({
     mutationFn: () => {
       const datos = esNuevo
-        ? { sucursal_id: parseInt(sucursalId), nombre: nombre.trim(), modo_impresion: modoImpresion, ancho_papel_bluetooth: anchoPapel }
-        : { nombre: nombre.trim(), modo_impresion: modoImpresion, ancho_papel_bluetooth: anchoPapel, activo };
+        ? { sucursal_id: parseInt(sucursalId), nombre: nombre.trim(), modo_impresion: modoImpresion, ancho_papel_bluetooth: anchoPapel, imprimir_ticket_cliente: imprimirTicketCliente }
+        : { nombre: nombre.trim(), modo_impresion: modoImpresion, ancho_papel_bluetooth: anchoPapel, imprimir_ticket_cliente: imprimirTicketCliente, activo };
       return esNuevo ? crearCaja(datos) : actualizarCaja(caja.id, datos);
     },
     onSuccess: onExito,
@@ -352,6 +366,24 @@ function ModalCaja({ caja, sucursales, onClose, onExito }) {
             </p>
           </div>
         )}
+        <div>
+          <div className="flex items-center gap-3">
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Ticket de cliente</label>
+            <button
+              type="button"
+              onClick={() => setImprimirTicketCliente(v => v ? 0 : 1)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${imprimirTicketCliente ? 'bg-emerald-500' : 'bg-muted'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${imprimirTicketCliente ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+            <span className="text-xs text-muted-foreground">{imprimirTicketCliente ? 'Se imprime' : 'No se imprime'}</span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1.5">
+            {imprimirTicketCliente
+              ? 'Al vender, esta caja imprime automáticamente el ticket para el cliente.'
+              : 'Esta caja no imprime el ticket de cliente al vender (por ejemplo, si solo necesita el ticket de cocina). Igual se puede imprimir a mano con "Reimprimir" si hace falta.'}
+          </p>
+        </div>
         {!esNuevo && (
           <div className="flex items-center gap-3">
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Estado</label>

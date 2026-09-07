@@ -468,7 +468,7 @@ function buildCaja(data) {
   // ── Fecha / Hora / Mesa /Llevar ──────────────────────────────────────────
   t.left().cols('Fecha: ' + fecha, hora);
   if (esLlevar) {
-    t.left().line('PARA LLEVAR — ' + (pedido.nombre_cliente || 'Cliente'));
+    t.left().line('PARA LLEVAR — ' + ((pedido.cliente && pedido.cliente.numero_documento) || pedido.nombre_cliente || 'Cliente'));
   } else {
     var mesaNombre = (pedido.mesa && pedido.mesa.nombre) ? pedido.mesa.nombre : '---';
     t.left().line(mesaNombre.toUpperCase());
@@ -534,7 +534,7 @@ function buildCaja(data) {
 
   // ── Cliente / puntos de fidelidad ────────────────────────────────────────
   if (pedido.cliente && (puntosGanados > 0 || pedido.cliente.puntos != null)) {
-    if (pedido.cliente.nombre) t.left().line('Cliente: ' + pedido.cliente.nombre);
+    if (pedido.cliente.numero_documento || pedido.cliente.nombre) t.left().line('Cliente: ' + (pedido.cliente.numero_documento || pedido.cliente.nombre));
     if (puntosGanados > 0) t.left().line('+ ' + puntosGanados + ' puntos ganados');
     if (pedido.cliente.puntos != null) t.left().bold(true).line('Saldo de puntos: ' + pedido.cliente.puntos).bold(false);
     t.rule('-');

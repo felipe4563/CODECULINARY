@@ -235,7 +235,7 @@ ${['', ''].map((_, i) => `
   <div class="badge ${esLlevar ? 'llevar' : ''}">
     ${esLlevar
       ? `<div class="badge-tipo">— Para Llevar —</div>
-         <div class="badge-numero">${pedido.nombre_cliente ?? '—'} &nbsp;·&nbsp; # ${nOrden}</div>`
+         <div class="badge-numero">${pedido.cliente?.numero_documento ?? pedido.nombre_cliente ?? '—'} &nbsp;·&nbsp; # ${nOrden}</div>`
       : `<div class="badge-tipo">— Orden de Mesa —</div>
          <div class="badge-numero">${pedido.mesa?.nombre ?? '—'} &nbsp;·&nbsp; # ${nOrden}</div>`}
   </div>
@@ -277,7 +277,7 @@ ${['', ''].map((_, i) => `
 
   ${pedido.cliente && (puntosGanados > 0 || pedido.cliente.puntos != null) ? `
   <div class="puntos-bloque">
-    ${pedido.cliente.nombre ? `<div>Cliente: <b>${pedido.cliente.nombre}</b></div>` : ''}
+    ${(pedido.cliente.numero_documento || pedido.cliente.nombre) ? `<div>Cliente: <b>${pedido.cliente.numero_documento ?? pedido.cliente.nombre}</b></div>` : ''}
     ${puntosGanados > 0 ? `<div>+ ${puntosGanados} puntos ganados</div>` : ''}
     ${pedido.cliente.puntos != null ? `<div>Saldo de puntos: <b>${pedido.cliente.puntos}</b></div>` : ''}
   </div>` : ''}

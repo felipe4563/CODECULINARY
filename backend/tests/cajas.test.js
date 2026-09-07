@@ -34,6 +34,34 @@ describe('Cajas CRUD', () => {
     expect(res.body.datos.sucursal_id).toBe(sucursalTest.id);
   });
 
+  it('crea una caja con imprimir_ticket_cliente en false', async () => {
+    const res = await request(app)
+      .post('/api/v1/cajas')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ sucursal_id: sucursalTest.id, nombre: 'Caja Solo Cocina Test', imprimir_ticket_cliente: 0 });
+    expect(res.status).toBe(201);
+    expect(res.body.datos.imprimir_ticket_cliente).toBe(0);
+  });
+
+  it('crea una caja sin especificar imprimir_ticket_cliente y queda en true por defecto', async () => {
+    const res = await request(app)
+      .post('/api/v1/cajas')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ sucursal_id: sucursalTest.id, nombre: 'Caja Default Ticket Test' });
+    expect(res.status).toBe(201);
+    expect(res.body.datos.imprimir_ticket_cliente).toBe(1);
+  });
+
+  it('edita imprimir_ticket_cliente de una caja existente', async () => {
+    const caja = await Caja.create({ sucursal_id: sucursalTest.id, nombre: 'Caja Editar Ticket Test' });
+    const res = await request(app)
+      .put(`/api/v1/cajas/${caja.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ imprimir_ticket_cliente: 0 });
+    expect(res.status).toBe(200);
+    expect(res.body.datos.imprimir_ticket_cliente).toBe(0);
+  });
+
   it('rechaza crear una caja con sucursal_id inexistente', async () => {
     const res = await request(app)
       .post('/api/v1/cajas')

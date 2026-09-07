@@ -637,3 +637,81 @@ describe('Ventas — reimprimir ticket', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('Ventas — ticket de cliente por caja', () => {
+  let sucursalId, areaId, mesaId, usuarioId, cajaId, sesionId, token, productoId;
+
+  beforeAll(async () => {
+    const sucursal = await Sucursal.create({ nombre: 'Sucursal Ticket Cliente Test' });
+    sucursalId = sucursal.id;
+    const area = await Area.create({ nombre: 'Area Ticket Cliente Test', sucursal_id: sucursalId });
+    areaId = area.id;
+    const mesa = await Mesa.create({ area_id: areaId, nombre: 'Mesa Ticket Cliente Test' });
+    mesaId = mesa.id;
+    const categoria = await Categoria.create({ nombre: 'Categoria Ticket Cliente Test' });
+    const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Ticket Cliente Test', precio: 10, stock: 0 });
+    productoId = producto.id;
+    await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 20 });
+
+    const rol = await Rol.findOne({ where: { nombre: 'Cajero' } });
+    const hash = await bcrypt.hash('clave123', 10);
+    const usuario = await Usuario.create({ rol_id: rol.id, nombre: 'Ticket Cliente Test', email: 'ticket-cliente-test@restaurante.com', contrasena: hash });
+    usuarioId = usuario.id;
+    await usuario.addSucursal(sucursal);
+
+    const login = await request(app).post('/api/v1/auth/login').send({ email: 'ticket-cliente-test@restaurante.com', contrasena: 'clave123' });
+    token = login.body.datos.token;
+
+    // La caja de esta suite tiene el ticket de cliente desactivado — es el
+    // caso "solo cocina" del toggle nuevo.
+    const caja = await Caja.create({ sucursal_id: sucursalId, nombre: 'Caja Ticket Cliente Test', imprimir_ticket_cliente: 0 });
+    cajaId = caja.id;
+    const sesion = await SesionCaja.create({ usuario_id: usuarioId, sucursal_id: sucursalId, caja_id: cajaId, monto_apertura: 0 });
+    sesionId = sesion.id;
+  });
+
+  afterAll(async () => {
+    await Pedido.destroy({ where: { usuario_id: usuarioId } });
+    await LibroCaja.destroy({ where: { usuario_id: usuarioId } });
+    await SesionCaja.destroy({ where: { id: sesionId } });
+    await Caja.destroy({ where: { id: cajaId } });
+    await ProductoStockSucursal.destroy({ where: { producto_id: productoId } });
+    await Producto.destroy({ where: { id: productoId } });
+    await Usuario.destroy({ where: { id: usuarioId } });
+    await Mesa.destroy({ where: { id: mesaId } });
+    await Area.destroy({ where: { id: areaId } });
+    await Sucursal.destroy({ where: { id: sucursalId } });
+  });
+
+  it('vender con imprimir_ticket_cliente=false no arma el ticket de caja', async () => {
+    const res = await request(app)
+      .post('/api/v1/ventas/completa')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        tipo: 'llevar', metodo_pago: 'efectivo', monto_recibido: 20, sesion_caja_id: sesionId,
+        items: [{ producto_id: productoId, cantidad: 2 }],
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.datos.datos_impresion.caja).toBeNull();
+  });
+
+  it('reimprimir ignora el flag y arma el ticket de caja igual', async () => {
+    const creado = await request(app)
+      .post('/api/v1/ventas/completa')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        tipo: 'llevar', metodo_pago: 'efectivo', monto_recibido: 20, sesion_caja_id: sesionId,
+        items: [{ producto_id: productoId, cantidad: 1 }],
+      });
+    const pedidoId = creado.body.datos.id;
+
+    const res = await request(app)
+      .post(`/api/v1/ventas/${pedidoId}/reimprimir`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.datos.caja).not.toBeNull();
+    expect(res.body.datos.caja.pedido.id).toBe(pedidoId);
+  });
+});
