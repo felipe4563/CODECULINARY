@@ -24,6 +24,11 @@ function _normalizarCombo(combo) {
 
 async function listar() {
   const combos = await Combo.findAll({ include: INCLUDE_PRODUCTOS, order: [['nombre', 'ASC']] });
+  // Llamar toJSON() antes de _normalizarCombo es necesario porque Sequelize no serializa
+  // correctamente las mutaciones de propiedades directas en la instancia — cuando Express
+  // serializa la respuesta, invoca el toJSON del modelo que puede restaurar la estructura
+  // original anidada. Convertir a plain object primero asegura que las normalizaciones
+  // (flatening de ProductoGrupoOpciones, reordenamiento, etc.) persistan en la respuesta.
   return combos.map((c) => _normalizarCombo(c.toJSON()));
 }
 

@@ -1,21 +1,11 @@
 const request = require('supertest');
 const app = require('../src/app');
-const { Sucursal, Usuario, Rol, Categoria, Producto, GrupoOpciones, Opcion, ProductoGrupoOpciones, Combo, ComboProducto, Permiso, sequelize } = require('../src/models');
-const bcrypt = require('bcryptjs');
+const { Categoria, Producto, GrupoOpciones, Opcion, ProductoGrupoOpciones, Combo, ComboProducto } = require('../src/models');
 
 describe('Combos — grupos_opciones anidado', () => {
   let adminToken, categoriaId, productoId, grupoId, comboId;
 
   beforeAll(async () => {
-    // Asegurar que el rol Admin tiene permisos para combos
-    const adminRol = await Rol.findOne({ where: { nombre: 'Administrador' } });
-    if (adminRol) {
-      const permisoCombosVer = await Permiso.findOne({ where: { modulo: 'combos', accion: 'ver' } });
-      if (permisoCombosVer) {
-        await adminRol.addPermiso(permisoCombosVer);
-      }
-    }
-
     const login = await request(app).post('/api/v1/auth/login').send({ email: 'admin@restaurante.com', contrasena: process.env.ADMIN_PASSWORD || 'admin123' });
     adminToken = login.body.datos.token;
 
