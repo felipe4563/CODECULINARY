@@ -60,6 +60,7 @@ const InsumoStockSucursal = require('./InsumoStockSucursal');
 const InsumoMovimiento = require('./InsumoMovimiento');
 const RecetaInsumo = require('./RecetaInsumo');
 const DetallePedidoOpcion = require('./DetallePedidoOpcion');
+const DetallePedidoComboOpcion = require('./DetallePedidoComboOpcion');
 
 // Roles y Permisos
 Rol.belongsToMany(Permiso, { through: RolesPermisos, foreignKey: 'rol_id', otherKey: 'permiso_id', as: 'permisos' });
@@ -196,6 +197,14 @@ RecetaInsumo.belongsTo(Insumo, { foreignKey: 'insumo_id', as: 'insumo' });
 DetallePedido.belongsToMany(Opcion, { through: DetallePedidoOpcion, foreignKey: 'detalle_pedido_id', otherKey: 'opcion_id', as: 'opciones' });
 Opcion.belongsToMany(DetallePedido, { through: DetallePedidoOpcion, foreignKey: 'opcion_id', otherKey: 'detalle_pedido_id', as: 'detalles_pedido' });
 
+// Opciones elegidas por producto dentro de un combo (ver migración 043) —
+// el combo sigue siendo una sola fila de DetallePedido; esta tabla guarda,
+// por separado, qué opción se eligió para cada producto componente.
+DetallePedido.hasMany(DetallePedidoComboOpcion, { foreignKey: 'detalle_pedido_id', as: 'combo_opciones' });
+DetallePedidoComboOpcion.belongsTo(DetallePedido, { foreignKey: 'detalle_pedido_id' });
+DetallePedidoComboOpcion.belongsTo(Producto, { foreignKey: 'producto_id', as: 'producto' });
+DetallePedidoComboOpcion.belongsTo(Opcion, { foreignKey: 'opcion_id', as: 'opcion' });
+
 // Pagos QR (CodePay)
 Pedido.hasMany(PagoQr, { foreignKey: 'pedido_id', as: 'pagosQr' });
 PagoQr.belongsTo(Pedido, { foreignKey: 'pedido_id', as: 'pedido' });
@@ -220,5 +229,5 @@ module.exports = {
   Combo, ComboProducto, Promocion,
   Cupon,
   RuletaPremio, RuletaGiro,
-  Insumo, InsumoStockSucursal, InsumoMovimiento, RecetaInsumo, DetallePedidoOpcion,
+  Insumo, InsumoStockSucursal, InsumoMovimiento, RecetaInsumo, DetallePedidoOpcion, DetallePedidoComboOpcion,
 };

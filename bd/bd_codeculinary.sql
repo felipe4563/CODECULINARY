@@ -118,6 +118,18 @@ CREATE TABLE `cliente_pin_verificaciones` (
 -- --------------------------------------------------------
 
 --
+-- Estructura de tabla para la tabla `detalle_pedido_combo_opciones`
+--
+
+CREATE TABLE `detalle_pedido_combo_opciones` (
+  `detalle_pedido_id` int(10) UNSIGNED NOT NULL,
+  `producto_id` int(10) UNSIGNED NOT NULL,
+  `opcion_id` int(10) UNSIGNED NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Estructura de tabla para la tabla `combos`
 --
 
@@ -1025,6 +1037,14 @@ ALTER TABLE `cliente_pin_verificaciones`
   ADD UNIQUE KEY `cliente_id` (`cliente_id`);
 
 --
+-- Indices de la tabla `detalle_pedido_combo_opciones`
+--
+ALTER TABLE `detalle_pedido_combo_opciones`
+  ADD PRIMARY KEY (`detalle_pedido_id`,`producto_id`,`opcion_id`),
+  ADD KEY `producto_id` (`producto_id`),
+  ADD KEY `opcion_id` (`opcion_id`);
+
+--
 -- Indices de la tabla `compras`
 --
 ALTER TABLE `compras`
@@ -1530,6 +1550,14 @@ ALTER TABLE `cajas`
 --
 ALTER TABLE `cliente_pin_verificaciones`
   ADD CONSTRAINT `cliente_pin_verificaciones_cliente_fk` FOREIGN KEY (`cliente_id`) REFERENCES `clientes` (`id`) ON DELETE CASCADE;
+
+--
+-- Filtros para la tabla `detalle_pedido_combo_opciones`
+--
+ALTER TABLE `detalle_pedido_combo_opciones`
+  ADD CONSTRAINT `detalle_pedido_combo_opciones_ibfk_1` FOREIGN KEY (`detalle_pedido_id`) REFERENCES `detalle_pedidos` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `detalle_pedido_combo_opciones_ibfk_2` FOREIGN KEY (`producto_id`) REFERENCES `productos` (`id`),
+  ADD CONSTRAINT `detalle_pedido_combo_opciones_ibfk_3` FOREIGN KEY (`opcion_id`) REFERENCES `opciones` (`id`) ON DELETE CASCADE;
 
 --
 -- Filtros para la tabla `combo_productos`
