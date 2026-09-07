@@ -19,7 +19,7 @@ describe('Ventas API', () => {
   });
 });
 
-const { Sucursal, Area, Mesa, Categoria, Producto, ProductoStockSucursal, Usuario, Rol, SesionCaja, Pedido, RegistroInventario, LibroCaja, Caja, PagoQr } = require('../src/models');
+const { Sucursal, Area, Mesa, Categoria, Producto, ProductoStockSucursal, Usuario, Rol, SesionCaja, Pedido, DetallePedido, RegistroInventario, LibroCaja, Caja, PagoQr, GrupoOpciones, Opcion, Combo, ComboProducto, DetallePedidoComboOpcion } = require('../src/models');
 const bcrypt = require('bcryptjs');
 
 describe('Ventas por sucursal', () => {
@@ -713,5 +713,122 @@ describe('Ventas — ticket de cliente por caja', () => {
     expect(res.status).toBe(200);
     expect(res.body.datos.caja).not.toBeNull();
     expect(res.body.datos.caja.pedido.id).toBe(pedidoId);
+  });
+});
+
+describe('Ventas — opciones por producto dentro de un combo', () => {
+  let sucursalId, usuarioId, cajaId, sesionId, token;
+  let productoId, otroProductoId, grupoId, opcionId, comboId;
+
+  beforeAll(async () => {
+    const sucursal = await Sucursal.create({ nombre: 'Sucursal Combo Opciones Ventas Test' });
+    sucursalId = sucursal.id;
+    const rol = await Rol.findOne({ where: { nombre: 'Cajero' } });
+    const hash = await bcrypt.hash('clave123', 10);
+    const usuario = await Usuario.create({ rol_id: rol.id, nombre: 'Combo Opciones Ventas Test', email: 'combo-opciones-ventas-test@restaurante.com', contrasena: hash });
+    usuarioId = usuario.id;
+    await usuario.addSucursal(sucursal);
+    const login = await request(app).post('/api/v1/auth/login').send({ email: 'combo-opciones-ventas-test@restaurante.com', contrasena: 'clave123' });
+    token = login.body.datos.token;
+
+    const caja = await Caja.create({ sucursal_id: sucursalId, nombre: 'Caja Combo Opciones Ventas Test' });
+    cajaId = caja.id;
+    const sesion = await SesionCaja.create({ usuario_id: usuarioId, sucursal_id: sucursalId, caja_id: cajaId, monto_apertura: 0 });
+    sesionId = sesion.id;
+
+    const categoria = await Categoria.create({ nombre: 'Categoria Combo Opciones Ventas Test' });
+    const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Combo Opciones Ventas Test', precio: 10, stock: 0 });
+    productoId = producto.id;
+    await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 20 });
+    const otroProducto = await Producto.create({ categoria_id: categoria.id, nombre: 'Otro Producto Combo Opciones Ventas Test', precio: 6, stock: 0 });
+    otroProductoId = otroProducto.id;
+    await ProductoStockSucursal.create({ producto_id: otroProductoId, sucursal_id: sucursalId, stock: 20 });
+
+    const grupo = await GrupoOpciones.create({ nombre: 'Tamaño Combo Opciones Ventas Test', tipo_seleccion: 'unica' });
+    grupoId = grupo.id;
+    const opcion = await Opcion.create({ grupo_opciones_id: grupoId, nombre: 'Grande', precio_adicional: 3, orden: 0 });
+    opcionId = opcion.id;
+
+    const combo = await Combo.create({ nombre: 'Combo Opciones Ventas Test', precio: 20 });
+    comboId = combo.id;
+    await ComboProducto.create({ combo_id: comboId, producto_id: productoId, cantidad: 1 });
+    await ComboProducto.create({ combo_id: comboId, producto_id: otroProductoId, cantidad: 1 });
+  });
+
+  afterAll(async () => {
+    await Pedido.destroy({ where: { usuario_id: usuarioId } });
+    await ComboProducto.destroy({ where: { combo_id: comboId } });
+    await Combo.destroy({ where: { id: comboId } });
+    await Opcion.destroy({ where: { grupo_opciones_id: grupoId } });
+    await GrupoOpciones.destroy({ where: { id: grupoId } });
+    await SesionCaja.destroy({ where: { id: sesionId } });
+    await Caja.destroy({ where: { id: cajaId } });
+    await ProductoStockSucursal.destroy({ where: { producto_id: [productoId, otroProductoId] } });
+    await Producto.destroy({ where: { id: [productoId, otroProductoId] } });
+    await LibroCaja.destroy({ where: { usuario_id: usuarioId } });
+    await Usuario.destroy({ where: { id: usuarioId } });
+    await Sucursal.destroy({ where: { id: sucursalId } });
+  });
+
+  it('crearCompleta con combo + opción con precio_adicional suma el extra al total', async () => {
+    const res = await request(app)
+      .post('/api/v1/ventas/completa')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        tipo: 'llevar', metodo_pago: 'efectivo', monto_recibido: 30, sesion_caja_id: sesionId,
+        items: [{ combo_id: comboId, cantidad: 1, opciones_por_producto: [{ producto_id: productoId, opcion_ids: [opcionId] }] }],
+      });
+    expect(res.status).toBe(201);
+    expect(parseFloat(res.body.datos.total)).toBe(23); // 20 (combo) + 3 (opción)
+  });
+
+  it('crearCompleta con combo sin opciones elegidas sigue funcionando igual que antes', async () => {
+    const res = await request(app)
+      .post('/api/v1/ventas/completa')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        tipo: 'llevar', metodo_pago: 'efectivo', monto_recibido: 30, sesion_caja_id: sesionId,
+        items: [{ combo_id: comboId, cantidad: 1 }],
+      });
+    expect(res.status).toBe(201);
+    expect(parseFloat(res.body.datos.total)).toBe(20);
+  });
+
+  it('dos productos del mismo combo con opciones propias no se mezclan entre sí', async () => {
+    const otraOpcion = await Opcion.create({ grupo_opciones_id: grupoId, nombre: 'Chico', precio_adicional: 0, orden: 1 });
+    const res = await request(app)
+      .post('/api/v1/ventas/completa')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        tipo: 'llevar', metodo_pago: 'efectivo', monto_recibido: 30, sesion_caja_id: sesionId,
+        items: [{
+          combo_id: comboId, cantidad: 1,
+          opciones_por_producto: [
+            { producto_id: productoId, opcion_ids: [opcionId] },
+            { producto_id: otroProductoId, opcion_ids: [otraOpcion.id] },
+          ],
+        }],
+      });
+    expect(res.status).toBe(201);
+
+    const detalle = await DetallePedido.findOne({ where: { pedido_id: res.body.datos.id, combo_id: comboId } });
+    const filas = await DetallePedidoComboOpcion.findAll({ where: { detalle_pedido_id: detalle.id } });
+    expect(filas.map(f => `${f.producto_id}:${f.opcion_id}`).sort()).toEqual(
+      [`${productoId}:${opcionId}`, `${otroProductoId}:${otraOpcion.id}`].sort()
+    );
+    await Opcion.destroy({ where: { id: otraOpcion.id } });
+  });
+
+  it('rechaza opciones_por_producto con un producto que no pertenece al combo', async () => {
+    const productoAjeno = await Producto.create({ categoria_id: (await Categoria.findOne()).id, nombre: 'Producto Ajeno Combo Test', precio: 4, stock: 0 });
+    const res = await request(app)
+      .post('/api/v1/ventas/completa')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        tipo: 'llevar', metodo_pago: 'efectivo', monto_recibido: 30, sesion_caja_id: sesionId,
+        items: [{ combo_id: comboId, cantidad: 1, opciones_por_producto: [{ producto_id: productoAjeno.id, opcion_ids: [] }] }],
+      });
+    expect(res.status).toBe(400);
+    await Producto.destroy({ where: { id: productoAjeno.id } });
   });
 });

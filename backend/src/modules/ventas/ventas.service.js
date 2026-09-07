@@ -1,7 +1,7 @@
 const { Op } = require('sequelize');
 const {
-  Pedido, DetallePedido, Mesa, Producto, Cliente, SesionCaja, Caja, LibroCaja, Configuracion, PagoQr, Opcion, Combo, Promocion, Cupon,
-  RecetaInsumo, DetallePedidoOpcion, sequelize,
+  Pedido, DetallePedido, Mesa, Producto, Cliente, SesionCaja, Caja, LibroCaja, Configuracion, PagoQr, Opcion, Combo, ComboProducto, Promocion, Cupon,
+  RecetaInsumo, DetallePedidoOpcion, DetallePedidoComboOpcion, sequelize,
 } = require('../../models');
 const { emitir } = require('../../socket');
 const { ajustarStockSucursal } = require('../inventario/stock.service');
@@ -31,6 +31,22 @@ async function _extraPorOpciones(opcion_ids = []) {
   if (!opcion_ids || opcion_ids.length === 0) return 0;
   const opciones = await Opcion.findAll({ where: { id: opcion_ids } });
   return opciones.reduce((sum, o) => sum + parseFloat(o.precio_adicional || 0), 0);
+}
+
+// Valida que cada producto_id en opciones_por_producto realmente pertenezca
+// al combo — evita que alguien mande opciones para un producto ajeno al
+// combo. No valida "obligatorio": eso es solo del lado del frontend, igual
+// que ya pasa hoy con productos sueltos.
+async function _validarOpcionesCombo(combo_id, opcionesPorProducto = []) {
+  if (!opcionesPorProducto || opcionesPorProducto.length === 0) return [];
+  const comboProductos = await ComboProducto.findAll({ where: { combo_id }, attributes: ['producto_id'] });
+  const idsValidos = new Set(comboProductos.map((cp) => cp.producto_id));
+  for (const entrada of opcionesPorProducto) {
+    if (!idsValidos.has(entrada.producto_id)) {
+      throw Object.assign(new Error(`El producto ${entrada.producto_id} no pertenece a este combo`), { status: 400 });
+    }
+  }
+  return opcionesPorProducto;
 }
 
 // Si el producto tiene una promoción vigente hoy, devuelve el precio ya
@@ -812,8 +828,10 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
       if (!combo.activo || !estaActivoHoy(combo)) {
         throw Object.assign(new Error(`El combo "${combo.nombre}" no está disponible`), { status: 409 });
       }
-      const linea = { cantidad: item.cantidad ?? 1, precio: parseFloat(combo.precio), peso: null };
-      productos.push({ item, combo, linea });
+      const opcionesPorProducto = await _validarOpcionesCombo(item.combo_id, item.opciones_por_producto);
+      const extraCombo = await _extraPorOpciones(opcionesPorProducto.flatMap((o) => o.opcion_ids || []));
+      const linea = { cantidad: item.cantidad ?? 1, precio: parseFloat(combo.precio) + extraCombo, peso: null };
+      productos.push({ item, combo, linea, opcionesPorProducto });
       continue;
     }
     const producto = await Producto.findByPk(item.producto_id);
@@ -864,7 +882,7 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
     }, { transaction: t });
 
     const detalles = [];
-    for (const { item, combo, linea } of productos) {
+    for (const { item, combo, linea, opcionesPorProducto } of productos) {
       const detallePedido = await DetallePedido.create({
         pedido_id: pedido.id,
         producto_id: combo ? null : item.producto_id,
@@ -876,6 +894,12 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
           item.opcion_ids.map(opcion_id => ({ detalle_pedido_id: detallePedido.id, opcion_id })),
           { transaction: t },
         );
+      }
+      if (combo && opcionesPorProducto?.length) {
+        const filas = opcionesPorProducto.flatMap((o) =>
+          (o.opcion_ids || []).map((opcion_id) => ({ detalle_pedido_id: detallePedido.id, producto_id: o.producto_id, opcion_id }))
+        );
+        if (filas.length) await DetallePedidoComboOpcion.bulkCreate(filas, { transaction: t });
       }
       detalles.push({ id: detallePedido.id, producto_id: combo ? null : item.producto_id, combo_id: combo ? item.combo_id : null, cantidad: linea.cantidad, precio: linea.precio });
     }
