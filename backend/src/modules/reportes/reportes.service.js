@@ -2,7 +2,7 @@ const { Op, fn, literal } = require('sequelize');
 const {
   Pedido, DetallePedido, Mesa, Cliente, Producto, Combo, Usuario,
   RegistroInventario, Compra, Proveedor, LibroCaja, SesionCaja, Sucursal,
-  Opcion, GrupoOpciones,
+  Opcion, GrupoOpciones, DetallePedidoComboOpcion,
 } = require('../../models');
 
 // Offset fijo de Bolivia: un datetime sin offset se parsea en la hora local
@@ -165,20 +165,40 @@ async function ventasProductos(filtros = {}, alcance) {
 // Replica exacta de claveVariante/nombreVariante en
 // frontend/src/pages/reportes/tabs/TabVariantes.jsx (líneas 16-31): agrupa por
 // producto + combinación exacta de opciones elegidas (ordenadas por id para
-// que el orden de selección no genere filas distintas). Los combos no tienen
-// opciones — quedan como su propia fila por combo_id.
+// que el orden de selección no genere filas distintas). Los combos también
+// pueden tener, por cada producto interno, una opción elegida
+// (DetallePedidoComboOpcion) — se agrupan por combo_id + combinación exacta
+// de esas elecciones (producto_id + opcion_id, ordenadas), con el mismo
+// criterio que ya usa el carrito para distinguir variantes (ver
+// _claveOpcionesCombo en VentasPage.jsx/AutoservicioPage.jsx).
 function _esLineaCombo(detalle) {
   return detalle.producto?.id == null && detalle.combo?.id != null;
 }
 
+function _comboOpcionesOrdenadas(detalle) {
+  return [...(detalle.combo_opciones || [])].sort((a, b) => {
+    if (a.producto_id !== b.producto_id) return a.producto_id - b.producto_id;
+    return a.opcion_id - b.opcion_id;
+  });
+}
+
 function _claveVariante(detalle) {
-  if (_esLineaCombo(detalle)) return `combo-${detalle.combo.id}`;
+  if (_esLineaCombo(detalle)) {
+    const combinacion = _comboOpcionesOrdenadas(detalle).map((o) => `${o.producto_id}:${o.opcion_id}`).join(',');
+    return `combo-${detalle.combo.id}::${combinacion}`;
+  }
   const opcionIds = (detalle.opciones || []).map((o) => o.id).sort((a, b) => a - b);
   return `${detalle.producto?.id}::${opcionIds.join(',')}`;
 }
 
 function _nombreVariante(detalle) {
-  if (_esLineaCombo(detalle)) return `${detalle.combo?.nombre || 'Combo eliminado'} (Combo)`;
+  if (_esLineaCombo(detalle)) {
+    const base = `${detalle.combo?.nombre || 'Combo eliminado'} (Combo)`;
+    const elecciones = _comboOpcionesOrdenadas(detalle)
+      .map((o) => o.opcion?.nombre ? `${o.producto?.nombre || 'Producto'}: ${o.opcion.nombre}` : null)
+      .filter(Boolean);
+    return elecciones.length ? `${base} — ${elecciones.join(', ')}` : base;
+  }
   const opciones = [...(detalle.opciones || [])].sort((a, b) => a.id - b.id);
   const base = detalle.producto?.nombre || 'Producto eliminado';
   return opciones.length ? `${base} — ${opciones.map((o) => o.nombre).join(', ')}` : base;
@@ -193,6 +213,13 @@ async function ventasVariantes(filtros = {}, alcance) {
       { model: Producto, as: 'producto', attributes: ['id', 'nombre'], required: false },
       { model: Combo, as: 'combo', attributes: ['id', 'nombre'], required: false },
       { model: Opcion, as: 'opciones', attributes: ['id', 'nombre'], through: { attributes: [] } },
+      {
+        model: DetallePedidoComboOpcion, as: 'combo_opciones', required: false,
+        include: [
+          { model: Opcion, as: 'opcion', attributes: ['id', 'nombre'] },
+          { model: Producto, as: 'producto', attributes: ['id', 'nombre'] },
+        ],
+      },
     ],
     attributes: ['producto_id', 'combo_id', 'cantidad', 'peso', 'precio'],
   });
@@ -205,9 +232,10 @@ async function ventasVariantes(filtros = {}, alcance) {
     const cantidad = esPesable ? parseFloat(d.peso || 0) : (d.cantidad || 0);
     const monto = (d.cantidad || 0) * parseFloat(d.precio || 0);
     if (!mapa.has(clave)) {
+      const conOpciones = _esLineaCombo(d) ? (d.combo_opciones || []).length > 0 : (d.opciones || []).length > 0;
       mapa.set(clave, {
         clave, nombre: _nombreVariante(d), unidad: esPesable ? 'kg' : 'un',
-        conOpciones: (d.opciones || []).length > 0, cantidad: 0, monto: 0, ventas: 0,
+        conOpciones, cantidad: 0, monto: 0, ventas: 0,
       });
     }
     const variante = mapa.get(clave);

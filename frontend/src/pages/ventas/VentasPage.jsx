@@ -217,15 +217,16 @@ export default function VentasPage() {
   }
 
   function elegirOpcionCombo(seleccion) {
-    setColaOpcionesCombo((cola) => {
-      const [actual, ...resto] = cola.pendientes;
-      const resueltas = [...cola.resueltas, { producto_id: actual.id, opcion_ids: seleccion.opcionIds }];
-      if (resto.length === 0) {
-        agregarComboAlCarrito(cola.combo, resueltas);
-        return null;
-      }
-      return { ...cola, pendientes: resto, resueltas };
-    });
+    const cola = colaOpcionesCombo;
+    if (!cola) return;
+    const [actual, ...resto] = cola.pendientes;
+    const resueltas = [...cola.resueltas, { producto_id: actual.id, opcion_ids: seleccion.opcionIds }];
+    if (resto.length === 0) {
+      agregarComboAlCarrito(cola.combo, resueltas);
+      setColaOpcionesCombo(null);
+    } else {
+      setColaOpcionesCombo({ ...cola, pendientes: resto, resueltas });
+    }
   }
 
   function handleProducto(prod) {

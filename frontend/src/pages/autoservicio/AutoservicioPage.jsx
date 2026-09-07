@@ -68,7 +68,7 @@ export default function AutoservicioPage() {
   }, [menu, categoriaActiva]);
 
   const totalCarrito = useMemo(
-    () => carrito.reduce((s, l) => s + (l.tipo === 'combo' ? parseFloat(l.combo.precio) : precioConPromo(l.producto) + l.extra) * l.cantidad, 0),
+    () => carrito.reduce((s, l) => s + (l.tipo === 'combo' ? parseFloat(l.combo.precio) + l.extra_combo : precioConPromo(l.producto) + l.extra) * l.cantidad, 0),
     [carrito, promoPorProducto]
   );
 
@@ -155,8 +155,40 @@ export default function AutoservicioPage() {
       .sort((a, b) => a.producto_id - b.producto_id)
   );
 
+  // Suma el precio_adicional de las opciones elegidas dentro de un combo —
+  // misma lógica que VentasPage._extraOpcionesCombo. El backend siempre
+  // recalcula precio + extra al cobrar, así que si esto no se refleja acá el
+  // cliente ve un total distinto al que termina pagando.
+  const _extraOpcionesCombo = (combo, opcionesPorProducto) => {
+    const opcionesPorId = new Map();
+    (combo.productos || []).forEach((p) => (p.grupos_opciones || []).forEach((g) => (g.opciones || []).forEach((o) => opcionesPorId.set(o.id, o))));
+    return (opcionesPorProducto || []).reduce(
+      (sum, entrada) => sum + (entrada.opcion_ids || []).reduce((s, id) => s + parseFloat(opcionesPorId.get(id)?.precio_adicional || 0), 0),
+      0
+    );
+  };
+
+  // Texto con las opciones elegidas para un combo (ej. "Papas: Grande"),
+  // usado en el carrito para distinguir visualmente dos líneas del mismo
+  // combo con distintas variantes elegidas.
+  const _opcionesComboTexto = (combo, opcionesPorProducto) => {
+    const productosPorId = new Map((combo.productos || []).map((p) => [p.id, p]));
+    const opcionesPorId = new Map();
+    (combo.productos || []).forEach((p) => (p.grupos_opciones || []).forEach((g) => (g.opciones || []).forEach((o) => opcionesPorId.set(o.id, o))));
+    return (opcionesPorProducto || [])
+      .flatMap((entrada) => (entrada.opcion_ids || []).map((id) => {
+        const opcion = opcionesPorId.get(id);
+        const producto = productosPorId.get(entrada.producto_id);
+        return opcion ? `${producto?.nombre ?? ''}: ${opcion.nombre}` : null;
+      }))
+      .filter(Boolean)
+      .join(', ');
+  };
+
   const agregarComboAlCarrito = (combo, opcionesPorProducto = []) => {
     const clave = _claveOpcionesCombo(opcionesPorProducto);
+    const extraCombo = _extraOpcionesCombo(combo, opcionesPorProducto);
+    const opcionesTexto = _opcionesComboTexto(combo, opcionesPorProducto);
     setCarrito((c) => {
       const idx = c.findIndex((l) => l.tipo === 'combo' && l.combo.id === combo.id && l.combo_opciones_key === clave);
       if (idx >= 0) {
@@ -164,7 +196,10 @@ export default function AutoservicioPage() {
         copia[idx] = { ...copia[idx], cantidad: copia[idx].cantidad + 1 };
         return copia;
       }
-      return [...c, { tipo: 'combo', combo, cantidad: 1, opciones_por_producto: opcionesPorProducto, combo_opciones_key: clave }];
+      return [...c, {
+        tipo: 'combo', combo, cantidad: 1, opciones_por_producto: opcionesPorProducto,
+        combo_opciones_key: clave, extra_combo: extraCombo, opciones_texto: opcionesTexto,
+      }];
     });
   };
 
@@ -178,15 +213,16 @@ export default function AutoservicioPage() {
   };
 
   const elegirOpcionCombo = (seleccion) => {
-    setColaOpcionesCombo((cola) => {
-      const [actual, ...resto] = cola.pendientes;
-      const resueltas = [...cola.resueltas, { producto_id: actual.id, opcion_ids: seleccion.opcionIds }];
-      if (resto.length === 0) {
-        agregarComboAlCarrito(cola.combo, resueltas);
-        return null;
-      }
-      return { ...cola, pendientes: resto, resueltas };
-    });
+    const cola = colaOpcionesCombo;
+    if (!cola) return;
+    const [actual, ...resto] = cola.pendientes;
+    const resueltas = [...cola.resueltas, { producto_id: actual.id, opcion_ids: seleccion.opcionIds }];
+    if (resto.length === 0) {
+      agregarComboAlCarrito(cola.combo, resueltas);
+      setColaOpcionesCombo(null);
+    } else {
+      setColaOpcionesCombo({ ...cola, pendientes: resto, resueltas });
+    }
   };
 
   const comboContenido = (combo) => (combo.productos || []).map((p) => `${p.ComboProducto?.cantidad ?? 1}x ${p.nombre}`).join(', ');
@@ -409,7 +445,7 @@ export default function AutoservicioPage() {
               const esCombo = l.tipo === 'combo';
               const nombre = esCombo ? l.combo.nombre : l.producto.nombre;
               const imagen = esCombo ? null : l.producto.imagen;
-              const precioUnitario = esCombo ? parseFloat(l.combo.precio) : precioConPromo(l.producto) + l.extra;
+              const precioUnitario = esCombo ? parseFloat(l.combo.precio) + l.extra_combo : precioConPromo(l.producto) + l.extra;
               // Un combo puede tener varias líneas (una por combinación de
               // opciones elegidas), igual que ya pasa con productos con
               // opciones — por eso acá se opera siempre por índice.
@@ -428,6 +464,7 @@ export default function AutoservicioPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-foreground truncate">{esCombo && <Gift className="w-3 h-3 inline mr-1 text-primary" />}{nombre}</p>
+                    {esCombo && l.opciones_texto && <p className="text-muted-foreground text-xs truncate">{l.opciones_texto}</p>}
                     {l.nota && <p className="text-muted-foreground text-xs truncate">{l.nota}</p>}
                     <p className="text-muted-foreground text-xs">{bs(precioUnitario)} c/u</p>
                   </div>

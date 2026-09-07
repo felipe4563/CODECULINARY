@@ -1,7 +1,7 @@
 const request = require('supertest');
 const bcrypt = require('bcryptjs');
 const app = require('../src/app');
-const { Sucursal, Area, Mesa, Categoria, Producto, SesionCaja, LibroCaja, Pedido, DetallePedido, Caja, Rol, Usuario, GrupoOpciones, Opcion, DetallePedidoOpcion, Compra, Proveedor, RegistroInventario } = require('../src/models');
+const { Sucursal, Area, Mesa, Categoria, Producto, SesionCaja, LibroCaja, Pedido, DetallePedido, Caja, Rol, Usuario, GrupoOpciones, Opcion, DetallePedidoOpcion, Compra, Proveedor, RegistroInventario, Combo, ComboProducto, DetallePedidoComboOpcion } = require('../src/models');
 
 describe('Reportes filtrados por sucursal', () => {
   let adminToken, sucursalOtra, pedidoOtraSucursalId, pedidoPropioId, cajaOtra;
@@ -368,6 +368,69 @@ describe('GET /api/v1/reportes/ventas/variantes', () => {
     expect(conOpciones.cantidad).toBe(2);
     expect(conOpciones.ventas).toBe(2);
     expect(conOpciones.monto).toBe(24);
+  });
+});
+
+describe('GET /api/v1/reportes/ventas/variantes — combos con opciones por producto', () => {
+  let token, categoria, producto, grupo, opcionGrande, opcionChica, combo, pedidoA, pedidoB, detalleA, detalleB;
+
+  beforeAll(async () => {
+    const login = await request(app).post('/api/v1/auth/login').send({ email: 'admin@restaurante.com', contrasena: process.env.ADMIN_PASSWORD || 'admin123' });
+    token = login.body.datos.token;
+    const sucursalId = login.body.datos.usuario.sucursal_activa.id;
+
+    categoria = await Categoria.create({ nombre: 'Categoria Variantes Combo Test' });
+    producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Papas Variantes Combo Test', precio: 5, stock: null });
+    grupo = await GrupoOpciones.create({ nombre: 'Tamaño Variantes Combo Test', tipo_seleccion: 'unica' });
+    opcionGrande = await Opcion.create({ grupo_opciones_id: grupo.id, nombre: 'Grande', precio_adicional: 3, orden: 0 });
+    opcionChica = await Opcion.create({ grupo_opciones_id: grupo.id, nombre: 'Chica', precio_adicional: 0, orden: 1 });
+
+    combo = await Combo.create({ nombre: 'Combo Variantes Test', precio: 20 });
+    await ComboProducto.create({ combo_id: combo.id, producto_id: producto.id, cantidad: 1 });
+
+    // Pedido A: combo con "Grande" elegida. Pedido B: mismo combo, con "Chica".
+    // Deben quedar como dos filas distintas del reporte, no fusionadas.
+    pedidoA = await Pedido.create({ sucursal_id: sucursalId, usuario_id: 1, tipo: 'llevar', estado: 'completado', total: 23 });
+    detalleA = await DetallePedido.create({ pedido_id: pedidoA.id, combo_id: combo.id, cantidad: 1, precio: 23 });
+    await DetallePedidoComboOpcion.create({ detalle_pedido_id: detalleA.id, producto_id: producto.id, opcion_id: opcionGrande.id });
+
+    pedidoB = await Pedido.create({ sucursal_id: sucursalId, usuario_id: 1, tipo: 'llevar', estado: 'completado', total: 20 });
+    detalleB = await DetallePedido.create({ pedido_id: pedidoB.id, combo_id: combo.id, cantidad: 1, precio: 20 });
+    await DetallePedidoComboOpcion.create({ detalle_pedido_id: detalleB.id, producto_id: producto.id, opcion_id: opcionChica.id });
+  });
+
+  afterAll(async () => {
+    await DetallePedidoComboOpcion.destroy({ where: { detalle_pedido_id: [detalleA.id, detalleB.id] } });
+    await DetallePedido.destroy({ where: { id: [detalleA.id, detalleB.id] } });
+    await Pedido.destroy({ where: { id: [pedidoA.id, pedidoB.id] } });
+    await ComboProducto.destroy({ where: { combo_id: combo.id } });
+    await Combo.destroy({ where: { id: combo.id } });
+    await Opcion.destroy({ where: { id: [opcionGrande.id, opcionChica.id] } });
+    await GrupoOpciones.destroy({ where: { id: grupo.id } });
+    await Producto.destroy({ where: { id: producto.id } });
+    await Categoria.destroy({ where: { id: categoria.id } });
+  });
+
+  test('dos variantes del mismo combo con distintas opciones elegidas aparecen como filas separadas', async () => {
+    const res = await request(app)
+      .get('/api/v1/reportes/ventas/variantes')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+
+    const filasCombo = res.body.datos.filter((v) => v.nombre.startsWith('Combo Variantes Test'));
+    expect(filasCombo.length).toBe(2);
+
+    const filaGrande = filasCombo.find((v) => v.nombre.includes('Grande'));
+    const filaChica = filasCombo.find((v) => v.nombre.includes('Chica'));
+    expect(filaGrande).toBeTruthy();
+    expect(filaChica).toBeTruthy();
+    expect(filaGrande.clave).not.toBe(filaChica.clave);
+    expect(filaGrande.conOpciones).toBe(true);
+    expect(filaChica.conOpciones).toBe(true);
+    expect(filaGrande.cantidad).toBe(1);
+    expect(filaGrande.monto).toBe(23);
+    expect(filaChica.cantidad).toBe(1);
+    expect(filaChica.monto).toBe(20);
   });
 });
 

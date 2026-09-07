@@ -8,6 +8,7 @@ const bcrypt = require('bcryptjs');
 
 describe('DetallePedidoComboOpcion — cascada de borrado', () => {
   let sucursalId, usuarioId, cajaId, sesionId, pedidoId, detalleId, opcionId, productoId;
+  let categoriaId, grupoId, comboId;
 
   beforeAll(async () => {
     const sucursal = await Sucursal.create({ nombre: 'Sucursal Combo Opciones Test' });
@@ -22,14 +23,17 @@ describe('DetallePedidoComboOpcion — cascada de borrado', () => {
     sesionId = sesion.id;
 
     const categoria = await Categoria.create({ nombre: 'Categoria Combo Opciones Test' });
+    categoriaId = categoria.id;
     const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Combo Opciones Test', precio: 5, stock: 0 });
     productoId = producto.id;
 
     const grupo = await GrupoOpciones.create({ nombre: 'Tamaño Combo Opciones Test', tipo_seleccion: 'unica' });
+    grupoId = grupo.id;
     const opcion = await Opcion.create({ grupo_opciones_id: grupo.id, nombre: 'Grande', precio_adicional: 3, orden: 0 });
     opcionId = opcion.id;
 
     const combo = await Combo.create({ nombre: 'Combo Test Cascada', precio: 20 });
+    comboId = combo.id;
     await ComboProducto.create({ combo_id: combo.id, producto_id: productoId, cantidad: 1 });
 
     const pedido = await Pedido.create({
@@ -48,6 +52,15 @@ describe('DetallePedidoComboOpcion — cascada de borrado', () => {
     await Caja.destroy({ where: { id: cajaId } });
     await Usuario.destroy({ where: { id: usuarioId } });
     await Sucursal.destroy({ where: { id: sucursalId } });
+    // El Combo fixture queda `activo: 1` por default — sin limpiarlo, cada
+    // corrida deja "Combo Test Cascada" vendible en el grid del POS y en el
+    // menú QR de Autoservicio de la BD de desarrollo real.
+    await ComboProducto.destroy({ where: { combo_id: comboId } });
+    await Combo.destroy({ where: { id: comboId } });
+    await Opcion.destroy({ where: { id: opcionId } });
+    await GrupoOpciones.destroy({ where: { id: grupoId } });
+    await Producto.destroy({ where: { id: productoId } });
+    await Categoria.destroy({ where: { id: categoriaId } });
   });
 
   it('la fila de opciones existe antes de borrar el detalle', async () => {
