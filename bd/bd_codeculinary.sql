@@ -211,7 +211,8 @@ INSERT INTO `configuraciones` (`id`, `clave`, `valor`, `creado_en`, `actualizado
 (45, 'ruleta_periodo', 'dia', '2026-09-07 17:44:45', '2026-09-07 17:44:45'),
 (46, 'ruleta_vigencia_dias_premio', '7', '2026-09-07 17:44:45', '2026-09-07 17:44:45'),
 (47, 'cocina_destino', 'centralizada', '2026-09-07 17:44:45', '2026-09-07 17:44:45'),
-(48, 'cocina_pantalla_dedicada', 'false', '2026-09-07 17:44:45', '2026-09-07 17:44:45');
+(48, 'cocina_pantalla_dedicada', 'false', '2026-09-07 17:44:45', '2026-09-07 17:44:45'),
+(49, 'portada', NULL, '2026-09-08 00:00:00', '2026-09-08 00:00:00');
 
 -- --------------------------------------------------------
 
@@ -949,6 +950,8 @@ CREATE TABLE `sucursales` (
   `nombre` varchar(255) NOT NULL,
   `direccion` varchar(255) DEFAULT NULL,
   `telefono` varchar(50) DEFAULT NULL,
+  `latitud` decimal(10,7) DEFAULT NULL,
+  `longitud` decimal(10,7) DEFAULT NULL,
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `creado_en` timestamp NULL DEFAULT current_timestamp(),
   `actualizado_en` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -958,8 +961,8 @@ CREATE TABLE `sucursales` (
 -- Volcado de datos para la tabla `sucursales`
 --
 
-INSERT INTO `sucursales` (`id`, `nombre`, `direccion`, `telefono`, `activo`, `creado_en`, `actualizado_en`) VALUES
-(1, 'Ivigarzama', '', '', 1, '2026-07-24 12:23:40', '2026-07-24 12:23:40');
+INSERT INTO `sucursales` (`id`, `nombre`, `direccion`, `telefono`, `latitud`, `longitud`, `activo`, `creado_en`, `actualizado_en`) VALUES
+(1, 'Ivigarzama', '', '', NULL, NULL, 1, '2026-07-24 12:23:40', '2026-07-24 12:23:40');
 
 -- --------------------------------------------------------
 

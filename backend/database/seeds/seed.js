@@ -147,6 +147,7 @@ async function seed() {
       ('zona_horaria', 'America/La_Paz'),
       ('pie_ticket', '¡Gracias por su preferencia!'),
       ('logo', NULL),
+      ('portada', NULL),
       ('flujo_cocina', 'digital')
   `);
 

@@ -6,6 +6,8 @@ const Sucursal = sequelize.define('Sucursal', {
   nombre: { type: DataTypes.STRING(255), allowNull: false },
   direccion: { type: DataTypes.STRING(255) },
   telefono: { type: DataTypes.STRING(50) },
+  latitud: { type: DataTypes.DECIMAL(10, 7) },
+  longitud: { type: DataTypes.DECIMAL(10, 7) },
   activo: { type: DataTypes.TINYINT(1), defaultValue: 1 },
 }, {
   tableName: 'sucursales',

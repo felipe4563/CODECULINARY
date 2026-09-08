@@ -23,9 +23,12 @@ const ZONAS_HORARIAS = [
 export default function TabNegocio({ puedeEditar }) {
   const qc = useQueryClient();
   const logoRef = useRef(null);
+  const portadaRef = useRef(null);
   const [guardado, setGuardado] = useState(false);
   const [subiendoLogo, setSubiendoLogo] = useState(false);
   const [errorLogo, setErrorLogo] = useState('');
+  const [subiendoPortada, setSubiendoPortada] = useState(false);
+  const [errorPortada, setErrorPortada] = useState('');
 
   const { data: config = {}, isLoading } = useQuery({
     queryKey: ['configuracion'],
@@ -45,6 +48,7 @@ export default function TabNegocio({ puedeEditar }) {
       zona_horaria:   config.zona_horaria   ?? 'America/La_Paz',
       pie_ticket:     config.pie_ticket     ?? '¡Gracias por su preferencia!',
       logo:           config.logo           ?? '',
+      portada:        config.portada        ?? '',
       color_primario:   config.color_primario   ?? '',
       color_secundario: config.color_secundario ?? '',
     });
@@ -82,6 +86,22 @@ export default function TabNegocio({ puedeEditar }) {
       setErrorLogo('Error al subir la imagen. Intenta de nuevo.');
     } finally {
       setSubiendoLogo(false);
+      e.target.value = '';
+    }
+  }
+
+  async function handlePortada(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setErrorPortada('');
+    setSubiendoPortada(true);
+    try {
+      const url = await subirLogo(file);
+      set('portada', url);
+    } catch {
+      setErrorPortada('Error al subir la imagen. Intenta de nuevo.');
+    } finally {
+      setSubiendoPortada(false);
       e.target.value = '';
     }
   }
@@ -159,6 +179,47 @@ export default function TabNegocio({ puedeEditar }) {
               <p className="text-xs text-muted-foreground">PNG, JPG o WebP · máx. 5MB · se usa en tickets y PDF.</p>
               {errorLogo && <p className="text-xs text-destructive">{errorLogo}</p>}
               <input ref={logoRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleLogo} />
+            </div>
+          )}
+        </div>
+      </SettingsSection>
+
+      <SettingsSection titulo="Portada" descripcion="Banner del negocio que se muestra en la app de pedidos externa">
+        <div className="space-y-3">
+          {form.portada ? (
+            <div className="relative">
+              <img
+                src={logoSrc(form.portada)}
+                alt="Portada"
+                className="w-full max-w-md h-32 object-cover rounded-xl border border-border"
+              />
+              {puedeEditar && (
+                <button
+                  onClick={() => set('portada', '')}
+                  className="absolute -top-2 -right-2 w-5 h-5 bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-full flex items-center justify-center"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="w-full max-w-md h-32 rounded-xl border-2 border-dashed border-input flex items-center justify-center text-muted-foreground">
+              {subiendoPortada ? <RefreshCw className="w-6 h-6 animate-spin" /> : <Store className="w-8 h-8" />}
+            </div>
+          )}
+          {puedeEditar && (
+            <div className="space-y-1.5">
+              <button
+                onClick={() => portadaRef.current?.click()}
+                disabled={subiendoPortada}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-60"
+              >
+                <Upload className="w-4 h-4" />
+                {subiendoPortada ? 'Subiendo...' : form.portada ? 'Cambiar portada' : 'Subir portada'}
+              </button>
+              <p className="text-xs text-muted-foreground">PNG, JPG o WebP · máx. 5MB · ideal formato horizontal (ej. 1200x400).</p>
+              {errorPortada && <p className="text-xs text-destructive">{errorPortada}</p>}
+              <input ref={portadaRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePortada} />
             </div>
           )}
         </div>

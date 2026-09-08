@@ -134,6 +134,48 @@ function elevateAndRestart() {
 
 // ── PowerShell GUI form ───────────────────────────────────────────────────────
 
+// Ancho fijo de la barra lateral de pasos (wizard) — el contenido de cada
+// paso arranca en X = SIDEBAR_ANCHO + 20 en vez de X = 20.
+const SIDEBAR_ANCHO = 170;
+const PASOS_WIZARD = [
+  { n: 1, label: 'Servidor' },
+  { n: 2, label: 'Configuracion' },
+  { n: 3, label: 'Cajas' },
+];
+
+// Genera el panel lateral azul con los 3 pasos del wizard, resaltando el
+// paso actual. `alturaForm` es el alto total del form (el panel ocupa toda
+// la altura). Se agrega directo a $form en el PS generado.
+function _sidebarPS(pasoActual, alturaForm) {
+  const itemsPS = PASOS_WIZARD.map((p) => {
+    const activo = p.n === pasoActual;
+    const completado = p.n < pasoActual;
+    const marcador = completado ? 'OK' : String(p.n) + '.';
+    const colorTexto = activo
+      ? '[System.Drawing.Color]::White'
+      : '[System.Drawing.Color]::FromArgb(147, 173, 227)';
+    const fontStyle = activo ? '[System.Drawing.FontStyle]::Bold' : '[System.Drawing.FontStyle]::Regular';
+    const y = 40 + (p.n - 1) * 42;
+    return `
+$lblPaso${p.n} = New-Object System.Windows.Forms.Label
+$lblPaso${p.n}.Text      = "${marcador}  ${p.label}"
+$lblPaso${p.n}.Font      = New-Object System.Drawing.Font("Segoe UI", 10, ${fontStyle})
+$lblPaso${p.n}.ForeColor = ${colorTexto}
+$lblPaso${p.n}.Location  = New-Object System.Drawing.Point(20, ${y})
+$lblPaso${p.n}.Size      = New-Object System.Drawing.Size(140, 26)
+$panelLateral.Controls.Add($lblPaso${p.n})`;
+  }).join('');
+
+  return `
+$panelLateral = New-Object System.Windows.Forms.Panel
+$panelLateral.BackColor = [System.Drawing.Color]::FromArgb(30, 64, 175)
+$panelLateral.Location  = New-Object System.Drawing.Point(0, 0)
+$panelLateral.Size      = New-Object System.Drawing.Size(${SIDEBAR_ANCHO}, ${alturaForm})
+${itemsPS}
+$form.Controls.Add($panelLateral)
+`;
+}
+
 function pedirServidor(defaults) {
   const outFile     = path.join(os.tmpdir(), `agente_srv_${Date.now()}.txt`);
   const defServidor = defaults.servidor || 'https://';
@@ -144,44 +186,44 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text            = "Agente de Impresion Termica - Paso 1 de 2"
-$form.Size            = New-Object System.Drawing.Size(500, 210)
+$form.Text            = "Agente de Impresion Termica - Paso 1 de 3"
+$form.ClientSize      = New-Object System.Drawing.Size(670, 210)
 $form.StartPosition   = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
 $form.MaximizeBox     = $false
 $form.MinimizeBox     = $false
 $form.BackColor       = [System.Drawing.Color]::White
-
+${_sidebarPS(1, 210)}
 $lblTitulo = New-Object System.Windows.Forms.Label
 $lblTitulo.Text      = "Configuracion del Agente de Impresion"
 $lblTitulo.Font      = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
-$lblTitulo.Location  = New-Object System.Drawing.Point(20, 18)
+$lblTitulo.Location  = New-Object System.Drawing.Point(190, 18)
 $lblTitulo.Size      = New-Object System.Drawing.Size(450, 28)
 $lblTitulo.ForeColor = [System.Drawing.Color]::FromArgb(30, 64, 175)
 
 $lblSub = New-Object System.Windows.Forms.Label
 $lblSub.Text      = "Ingresa la URL del servidor para buscar las sucursales disponibles."
 $lblSub.Font      = New-Object System.Drawing.Font("Segoe UI", 8.5)
-$lblSub.Location  = New-Object System.Drawing.Point(20, 48)
+$lblSub.Location  = New-Object System.Drawing.Point(190, 48)
 $lblSub.Size      = New-Object System.Drawing.Size(450, 34)
 $lblSub.ForeColor = [System.Drawing.Color]::FromArgb(100, 100, 100)
 
 $lblServidor = New-Object System.Windows.Forms.Label
 $lblServidor.Text     = "URL del Servidor:"
 $lblServidor.Font     = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$lblServidor.Location = New-Object System.Drawing.Point(20, 84)
+$lblServidor.Location = New-Object System.Drawing.Point(190, 84)
 $lblServidor.Size     = New-Object System.Drawing.Size(200, 20)
 
 $tbServidor = New-Object System.Windows.Forms.TextBox
 $tbServidor.Text     = "${defServidor}"
 $tbServidor.Font     = New-Object System.Drawing.Font("Segoe UI", 9)
-$tbServidor.Location = New-Object System.Drawing.Point(20, 106)
+$tbServidor.Location = New-Object System.Drawing.Point(190, 106)
 $tbServidor.Size     = New-Object System.Drawing.Size(450, 26)
 
 $btnCancelar = New-Object System.Windows.Forms.Button
 $btnCancelar.Text         = "Cancelar"
 $btnCancelar.Font         = New-Object System.Drawing.Font("Segoe UI", 9)
-$btnCancelar.Location     = New-Object System.Drawing.Point(248, 146)
+$btnCancelar.Location     = New-Object System.Drawing.Point(418, 146)
 $btnCancelar.Size         = New-Object System.Drawing.Size(100, 34)
 $btnCancelar.FlatStyle    = [System.Windows.Forms.FlatStyle]::Flat
 $btnCancelar.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
@@ -192,7 +234,7 @@ $btnSiguiente.Font         = New-Object System.Drawing.Font("Segoe UI", 9, [Syst
 $btnSiguiente.BackColor    = [System.Drawing.Color]::FromArgb(37, 99, 235)
 $btnSiguiente.ForeColor    = [System.Drawing.Color]::White
 $btnSiguiente.FlatStyle    = [System.Windows.Forms.FlatStyle]::Flat
-$btnSiguiente.Location     = New-Object System.Drawing.Point(358, 146)
+$btnSiguiente.Location     = New-Object System.Drawing.Point(528, 146)
 $btnSiguiente.Size         = New-Object System.Drawing.Size(112, 34)
 $btnSiguiente.DialogResult = [System.Windows.Forms.DialogResult]::OK
 
@@ -254,7 +296,7 @@ function showConfigForm(defaults, sucursales, instalado) {
       + '$btnDesinstalar.BackColor = [System.Drawing.Color]::FromArgb(220, 38, 38)\n'
       + '$btnDesinstalar.ForeColor = [System.Drawing.Color]::White\n'
       + '$btnDesinstalar.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat\n'
-      + '$btnDesinstalar.Location  = New-Object System.Drawing.Point(20, 314)\n'
+      + '$btnDesinstalar.Location  = New-Object System.Drawing.Point(190, 314)\n'
       + '$btnDesinstalar.Size      = New-Object System.Drawing.Size(115, 34)\n'
       + '$btnDesinstalar.Add_Click({\n'
       + '  $confirm = [System.Windows.Forms.MessageBox]::Show(\n'
@@ -278,42 +320,42 @@ Add-Type -AssemblyName System.Drawing
 $printers = @([System.Drawing.Printing.PrinterSettings]::InstalledPrinters)
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text            = "Agente de Impresion Termica - Paso 2 de 2"
-$form.Size            = New-Object System.Drawing.Size(500, 396)
+$form.Text            = "Agente de Impresion Termica - Paso 2 de 3"
+$form.ClientSize      = New-Object System.Drawing.Size(670, 396)
 $form.StartPosition   = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
 $form.MaximizeBox     = $false
 $form.MinimizeBox     = $false
 $form.BackColor       = [System.Drawing.Color]::White
-
+${_sidebarPS(2, 396)}
 $lblTitulo = New-Object System.Windows.Forms.Label
 $lblTitulo.Text      = "Configuracion del Agente de Impresion"
 $lblTitulo.Font      = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
-$lblTitulo.Location  = New-Object System.Drawing.Point(20, 18)
+$lblTitulo.Location  = New-Object System.Drawing.Point(190, 18)
 $lblTitulo.Size      = New-Object System.Drawing.Size(450, 28)
 $lblTitulo.ForeColor = [System.Drawing.Color]::FromArgb(30, 64, 175)
 
 $lblSub = New-Object System.Windows.Forms.Label
 $lblSub.Text      = "${subtitulo}"
 $lblSub.Font      = New-Object System.Drawing.Font("Segoe UI", 8.5)
-$lblSub.Location  = New-Object System.Drawing.Point(20, 48)
+$lblSub.Location  = New-Object System.Drawing.Point(190, 48)
 $lblSub.Size      = New-Object System.Drawing.Size(450, 18)
 $lblSub.ForeColor = [System.Drawing.Color]::FromArgb(100, 100, 100)
 
 $sep1 = New-Object System.Windows.Forms.Panel
 $sep1.BackColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
-$sep1.Location  = New-Object System.Drawing.Point(20, 72)
+$sep1.Location  = New-Object System.Drawing.Point(190, 72)
 $sep1.Size      = New-Object System.Drawing.Size(450, 1)
 
 $lblSucursal = New-Object System.Windows.Forms.Label
 $lblSucursal.Text     = "Sucursal:"
 $lblSucursal.Font     = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$lblSucursal.Location = New-Object System.Drawing.Point(20, 84)
+$lblSucursal.Location = New-Object System.Drawing.Point(190, 84)
 $lblSucursal.Size     = New-Object System.Drawing.Size(300, 20)
 
 $cbSucursal = New-Object System.Windows.Forms.ComboBox
 $cbSucursal.Font          = New-Object System.Drawing.Font("Segoe UI", 9)
-$cbSucursal.Location      = New-Object System.Drawing.Point(20, 106)
+$cbSucursal.Location      = New-Object System.Drawing.Point(190, 106)
 $cbSucursal.Size          = New-Object System.Drawing.Size(450, 26)
 $cbSucursal.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
 foreach ($n in @(${nombresSucursalesPS})) { $cbSucursal.Items.Add($n) | Out-Null }
@@ -323,12 +365,12 @@ elseif ($cbSucursal.Items.Count -gt 0) { $cbSucursal.SelectedIndex = 0 }
 $lblCaja = New-Object System.Windows.Forms.Label
 $lblCaja.Text     = "Impresora de Caja (recibos):"
 $lblCaja.Font     = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$lblCaja.Location = New-Object System.Drawing.Point(20, 146)
+$lblCaja.Location = New-Object System.Drawing.Point(190, 146)
 $lblCaja.Size     = New-Object System.Drawing.Size(300, 20)
 
 $cbCaja = New-Object System.Windows.Forms.ComboBox
 $cbCaja.Font          = New-Object System.Drawing.Font("Segoe UI", 9)
-$cbCaja.Location      = New-Object System.Drawing.Point(20, 168)
+$cbCaja.Location      = New-Object System.Drawing.Point(190, 168)
 $cbCaja.Size          = New-Object System.Drawing.Size(450, 26)
 $cbCaja.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDown
 foreach ($p in $printers) { $cbCaja.Items.Add($p) | Out-Null }
@@ -338,12 +380,12 @@ if ($cbCaja.Text -eq "" -and $cbCaja.Items.Count -gt 0) { $cbCaja.SelectedIndex 
 $lblCocina = New-Object System.Windows.Forms.Label
 $lblCocina.Text     = "Impresora de Cocina (comandas):"
 $lblCocina.Font     = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$lblCocina.Location = New-Object System.Drawing.Point(20, 210)
+$lblCocina.Location = New-Object System.Drawing.Point(190, 210)
 $lblCocina.Size     = New-Object System.Drawing.Size(300, 20)
 
 $cbCocina = New-Object System.Windows.Forms.ComboBox
 $cbCocina.Font          = New-Object System.Drawing.Font("Segoe UI", 9)
-$cbCocina.Location      = New-Object System.Drawing.Point(20, 232)
+$cbCocina.Location      = New-Object System.Drawing.Point(190, 232)
 $cbCocina.Size          = New-Object System.Drawing.Size(450, 26)
 $cbCocina.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDown
 foreach ($p in $printers) { $cbCocina.Items.Add($p) | Out-Null }
@@ -352,13 +394,13 @@ if ($cbCocina.Text -eq "" -and $cbCocina.Items.Count -gt 0) { $cbCocina.Selected
 
 $sep2 = New-Object System.Windows.Forms.Panel
 $sep2.BackColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
-$sep2.Location  = New-Object System.Drawing.Point(20, 272)
+$sep2.Location  = New-Object System.Drawing.Point(190, 272)
 $sep2.Size      = New-Object System.Drawing.Size(450, 1)
 
 $btnCancelar = New-Object System.Windows.Forms.Button
 $btnCancelar.Text         = "Cancelar"
 $btnCancelar.Font         = New-Object System.Drawing.Font("Segoe UI", 9)
-$btnCancelar.Location     = New-Object System.Drawing.Point(248, 314)
+$btnCancelar.Location     = New-Object System.Drawing.Point(418, 314)
 $btnCancelar.Size         = New-Object System.Drawing.Size(100, 34)
 $btnCancelar.FlatStyle    = [System.Windows.Forms.FlatStyle]::Flat
 $btnCancelar.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
@@ -369,7 +411,7 @@ $btnInstalar.Font         = New-Object System.Drawing.Font("Segoe UI", 9, [Syste
 $btnInstalar.BackColor    = [System.Drawing.Color]::FromArgb(37, 99, 235)
 $btnInstalar.ForeColor    = [System.Drawing.Color]::White
 $btnInstalar.FlatStyle    = [System.Windows.Forms.FlatStyle]::Flat
-$btnInstalar.Location     = New-Object System.Drawing.Point(358, 314)
+$btnInstalar.Location     = New-Object System.Drawing.Point(528, 314)
 $btnInstalar.Size         = New-Object System.Drawing.Size(112, 34)
 $btnInstalar.DialogResult = [System.Windows.Forms.DialogResult]::OK
 
@@ -426,13 +468,17 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
 }
 
 // Solo se muestra cuando la sucursal elegida tiene más de una caja registrada
-// (si tiene 0 o 1, no hace falta preguntar — ver main()).
-function pedirCaja(cajas, defaults) {
-  const outFile     = path.join(os.tmpdir(), `agente_caja_${Date.now()}.txt`);
-  const outFileSafe = outFile.replace(/\\/g, '\\\\');
-  const indiceDefecto = defaults.caja_id
-    ? cajas.findIndex((c) => c.id === defaults.caja_id)
-    : -1;
+// (si tiene 0 o 1, no hace falta preguntar — ver main()). Selección múltiple:
+// una misma PC puede imprimir los tickets de venta de más de una caja (ej.
+// una sola impresora atendiendo dos puntos de cobro).
+function pedirCajas(cajas, defaults) {
+  const outFile      = path.join(os.tmpdir(), `agente_caja_${Date.now()}.txt`);
+  const outFileSafe  = outFile.replace(/\\/g, '\\\\');
+  const idsDefecto   = new Set(defaults.caja_ids || []);
+  const indicesDefectoPS = cajas
+    .map((c, i) => i)
+    .filter((i) => idsDefecto.has(cajas[i].id))
+    .join(', ');
   const nombresCajasPS = cajas
     .map((c) => `"${String(c.nombre).replace(/"/g, '\`"')}"`)
     .join(', ');
@@ -443,46 +489,50 @@ Add-Type -AssemblyName System.Drawing
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text            = "Agente de Impresion Termica - Paso 3 de 3"
-$form.Size            = New-Object System.Drawing.Size(500, 210)
+$form.ClientSize      = New-Object System.Drawing.Size(670, 280)
 $form.StartPosition   = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
 $form.MaximizeBox     = $false
 $form.MinimizeBox     = $false
 $form.BackColor       = [System.Drawing.Color]::White
-
+${_sidebarPS(3, 280)}
 $lblTitulo = New-Object System.Windows.Forms.Label
 $lblTitulo.Text      = "Esta sucursal tiene mas de una caja"
 $lblTitulo.Font      = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
-$lblTitulo.Location  = New-Object System.Drawing.Point(20, 18)
+$lblTitulo.Location  = New-Object System.Drawing.Point(190, 18)
 $lblTitulo.Size      = New-Object System.Drawing.Size(450, 28)
 $lblTitulo.ForeColor = [System.Drawing.Color]::FromArgb(30, 64, 175)
 
 $lblSub = New-Object System.Windows.Forms.Label
-$lblSub.Text      = "Indica a que caja pertenece esta PC, para que sus tickets de venta no se impriman en otra caja."
+$lblSub.Text      = "Marca a que caja(s) pertenece esta PC - puede ser mas de una si esta impresora atiende varios puntos de cobro."
 $lblSub.Font      = New-Object System.Drawing.Font("Segoe UI", 8.5)
-$lblSub.Location  = New-Object System.Drawing.Point(20, 48)
+$lblSub.Location  = New-Object System.Drawing.Point(190, 48)
 $lblSub.Size      = New-Object System.Drawing.Size(450, 34)
 $lblSub.ForeColor = [System.Drawing.Color]::FromArgb(100, 100, 100)
 
 $lblCaja = New-Object System.Windows.Forms.Label
-$lblCaja.Text     = "Caja:"
+$lblCaja.Text     = "Cajas:"
 $lblCaja.Font     = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$lblCaja.Location = New-Object System.Drawing.Point(20, 84)
+$lblCaja.Location = New-Object System.Drawing.Point(190, 84)
 $lblCaja.Size     = New-Object System.Drawing.Size(200, 20)
 
-$cbCaja = New-Object System.Windows.Forms.ComboBox
-$cbCaja.Font          = New-Object System.Drawing.Font("Segoe UI", 9)
-$cbCaja.Location      = New-Object System.Drawing.Point(20, 106)
-$cbCaja.Size          = New-Object System.Drawing.Size(450, 26)
-$cbCaja.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
-foreach ($n in @(${nombresCajasPS})) { $cbCaja.Items.Add($n) | Out-Null }
-if (${indiceDefecto} -ge 0) { $cbCaja.SelectedIndex = ${indiceDefecto} }
-elseif ($cbCaja.Items.Count -gt 0) { $cbCaja.SelectedIndex = 0 }
+$clbCajas = New-Object System.Windows.Forms.CheckedListBox
+$clbCajas.Font          = New-Object System.Drawing.Font("Segoe UI", 9)
+$clbCajas.Location      = New-Object System.Drawing.Point(190, 106)
+$clbCajas.Size          = New-Object System.Drawing.Size(450, 110)
+$clbCajas.CheckOnClick  = $true
+foreach ($n in @(${nombresCajasPS})) { $clbCajas.Items.Add($n) | Out-Null }
+$indicesDefecto = @(${indicesDefectoPS})
+if ($indicesDefecto.Count -gt 0) {
+  foreach ($i in $indicesDefecto) { $clbCajas.SetItemChecked($i, $true) }
+} elseif ($clbCajas.Items.Count -gt 0) {
+  $clbCajas.SetItemChecked(0, $true)
+}
 
 $btnCancelar = New-Object System.Windows.Forms.Button
 $btnCancelar.Text         = "Cancelar"
 $btnCancelar.Font         = New-Object System.Drawing.Font("Segoe UI", 9)
-$btnCancelar.Location     = New-Object System.Drawing.Point(248, 146)
+$btnCancelar.Location     = New-Object System.Drawing.Point(418, 226)
 $btnCancelar.Size         = New-Object System.Drawing.Size(100, 34)
 $btnCancelar.FlatStyle    = [System.Windows.Forms.FlatStyle]::Flat
 $btnCancelar.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
@@ -493,18 +543,25 @@ $btnInstalar.Font         = New-Object System.Drawing.Font("Segoe UI", 9, [Syste
 $btnInstalar.BackColor    = [System.Drawing.Color]::FromArgb(37, 99, 235)
 $btnInstalar.ForeColor    = [System.Drawing.Color]::White
 $btnInstalar.FlatStyle    = [System.Windows.Forms.FlatStyle]::Flat
-$btnInstalar.Location     = New-Object System.Drawing.Point(358, 146)
+$btnInstalar.Location     = New-Object System.Drawing.Point(528, 226)
 $btnInstalar.Size         = New-Object System.Drawing.Size(112, 34)
-$btnInstalar.DialogResult = [System.Windows.Forms.DialogResult]::OK
+$btnInstalar.Add_Click({
+  if ($clbCajas.CheckedIndices.Count -eq 0) {
+    [System.Windows.Forms.MessageBox]::Show("Marca al menos una caja.", "Dato requerido", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+    return
+  }
+  $form.DialogResult = [System.Windows.Forms.DialogResult]::OK
+  $form.Close()
+})
 
-$form.Controls.AddRange(@($lblTitulo, $lblSub, $lblCaja, $cbCaja, $btnCancelar, $btnInstalar))
-$form.AcceptButton = $btnInstalar
+$form.Controls.AddRange(@($lblTitulo, $lblSub, $lblCaja, $clbCajas, $btnCancelar, $btnInstalar))
 $form.CancelButton = $btnCancelar
 
 $result = $form.ShowDialog()
 
 if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
-  [System.IO.File]::WriteAllLines("${outFileSafe}", @("OK", $cbCaja.SelectedIndex))
+  $indices = @($clbCajas.CheckedIndices | ForEach-Object { $_ })
+  [System.IO.File]::WriteAllLines("${outFileSafe}", @("OK", ($indices -join ',')))
 } else {
   [System.IO.File]::WriteAllText("${outFileSafe}", "CANCEL")
 }
@@ -525,9 +582,9 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
     const raw = readFileSync(outFile, 'utf8').trim().split('\n');
     unlinkSync(outFile);
     if (raw[0].trim() !== 'OK') return 'CANCEL';
-    const indiceElegido = parseInt((raw[1] || '').trim(), 10);
-    const cajaElegida = cajas[indiceElegido];
-    return cajaElegida ? cajaElegida.id : null;
+    const indices = (raw[1] || '').trim().split(',').filter(Boolean).map((s) => parseInt(s, 10));
+    const idsElegidos = indices.map((i) => cajas[i]?.id).filter((id) => id != null);
+    return idsElegidos;
   } catch { return 'CANCEL'; }
 }
 
@@ -615,12 +672,51 @@ $icon.Dispose()
   );
 }
 
+// ── Detener el agente en ejecución (para poder actualizar su .exe) ──────────
+// Windows bloquea el .exe mientras el proceso del agente está corriendo, así
+// que reinstalar/actualizar sobre una instalación existente fallaba con
+// EBUSY al intentar copiar el archivo. Reutiliza la misma técnica que
+// uninstall() ya usaba: matar por PID leído del lock file, nunca por nombre
+// (matar por nombre mataría también a este propio instalador).
+function detenerAgenteEnEjecucion() {
+  const lockFile = path.join(INSTALL_DIR, 'agente.lock');
+  let pid = null;
+  try {
+    if (existsSync(lockFile)) {
+      const raw = readFileSync(lockFile, 'utf8').trim();
+      if (raw && !isNaN(parseInt(raw, 10))) pid = parseInt(raw, 10);
+    }
+  } catch {}
+  if (!pid) return;
+
+  try { execSync('taskkill /F /PID ' + pid, { stdio: 'pipe' }); } catch {}
+
+  // taskkill devuelve el control antes de que Windows libere el archivo del
+  // proceso muerto — se sondea hasta 5s (taskkill /FI + ping como sleep, sin
+  // depender de setTimeout/async) antes de intentar copiar encima.
+  const limite = Date.now() + 5000;
+  while (Date.now() < limite) {
+    try {
+      const out = execSync('tasklist /FI "PID eq ' + pid + '" /NH', { encoding: 'utf8' });
+      if (!out.includes(String(pid))) break;
+    } catch { break; }
+    try { execSync('ping 127.0.0.1 -n 1 -w 300 > nul', { stdio: 'ignore' }); } catch {}
+  }
+
+  try { unlinkSync(lockFile); } catch {}
+}
+
 // ── Instalación ───────────────────────────────────────────────────────────────
 
 function install(cfg) {
   try {
     // 1. Crear directorio de instalación
     mkdirSync(INSTALL_DIR, { recursive: true });
+
+    // 1.5. Si ya había un agente corriendo (actualización sobre instalación
+    //      existente), detenerlo primero — si no, el paso siguiente falla con
+    //      EBUSY porque Windows tiene el .exe bloqueado.
+    detenerAgenteEnEjecucion();
 
     // 2. Copiar el exe al directorio de instalación
     const srcExe = process.execPath;
@@ -827,18 +923,23 @@ async function main() {
     }
 
     // Paso 3 (solo si aplica): si la sucursal elegida tiene más de una caja
-    // registrada, hay que saber a cuál pertenece esta PC — si no, el ticket
-    // de venta (por el respaldo de socket) podría imprimirse también en la
-    // impresora de otra caja de la misma sucursal.
-    let caja_id = null;
+    // registrada, hay que saber a cuál(es) pertenece esta PC — si no, el
+    // ticket de venta (por el respaldo de socket) podría imprimirse también
+    // en la impresora de otra caja de la misma sucursal. Una PC puede
+    // pertenecer a más de una caja (una sola impresora para varios puntos
+    // de cobro).
+    let caja_ids = [];
+    // Compatibilidad con instalaciones previas a la selección múltiple, que
+    // guardaban un único `caja_id` en vez de `caja_ids`.
+    const defaultsCajaIds = defaults.caja_ids || (defaults.caja_id ? [defaults.caja_id] : []);
     try {
       const cajas = await obtenerCajas(servidor, resultado.sucursal_id);
       if (cajas.length === 1) {
-        caja_id = cajas[0].id;
+        caja_ids = [cajas[0].id];
       } else if (cajas.length > 1) {
-        const elegida = pedirCaja(cajas, defaults);
-        if (elegida === 'CANCEL') { process.exit(0); return; }
-        caja_id = elegida;
+        const elegidas = pedirCajas(cajas, { caja_ids: defaultsCajaIds });
+        if (elegidas === 'CANCEL') { process.exit(0); return; }
+        caja_ids = elegidas;
       }
     } catch (err) {
       showMessage('Aviso', `No se pudo verificar las cajas de la sucursal:\n${err.message}\n\nSe instalará sin asignar a una caja específica.`);
@@ -847,7 +948,7 @@ async function main() {
     install({
       servidor, sucursal_id: resultado.sucursal_id,
       impresora_caja: resultado.impresora_caja, impresora_cocina: resultado.impresora_cocina,
-      caja_id,
+      caja_ids,
     });
   } catch (err) {
     showMessage('Error inesperado', `El instalador encontró un error:\n${err.message}`, true);

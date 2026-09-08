@@ -236,12 +236,19 @@ function ModalSucursal({ sucursal, onClose, onExito }) {
   const [nombre, setNombre]       = useState(sucursal?.nombre ?? '');
   const [direccion, setDireccion] = useState(sucursal?.direccion ?? '');
   const [telefono, setTelefono]   = useState(sucursal?.telefono ?? '');
+  const [latitud, setLatitud]     = useState(sucursal?.latitud ?? '');
+  const [longitud, setLongitud]   = useState(sucursal?.longitud ?? '');
   const [activo, setActivo]       = useState(sucursal?.activo ?? 1);
   const [error, setError]         = useState(null);
 
   const guardar = useMutation({
     mutationFn: () => {
-      const datos = { nombre: nombre.trim(), direccion: direccion.trim(), telefono: telefono.trim(), activo };
+      const datos = {
+        nombre: nombre.trim(), direccion: direccion.trim(), telefono: telefono.trim(),
+        latitud: latitud === '' ? null : parseFloat(latitud),
+        longitud: longitud === '' ? null : parseFloat(longitud),
+        activo,
+      };
       return esNuevo ? crearSucursal(datos) : actualizarSucursal(sucursal.id, datos);
     },
     onSuccess: onExito,
@@ -284,6 +291,32 @@ function ModalSucursal({ sucursal, onClose, onExito }) {
             placeholder="70000000"
             className="w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
           />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+            Ubicación (para la app de pedidos externa)
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              type="number"
+              step="any"
+              value={latitud}
+              onChange={e => setLatitud(e.target.value)}
+              placeholder="Latitud, ej: -17.783"
+              className="w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
+            />
+            <input
+              type="number"
+              step="any"
+              value={longitud}
+              onChange={e => setLongitud(e.target.value)}
+              placeholder="Longitud, ej: -63.183"
+              className="w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground mt-1.5">
+            Opcional. Buscá la sucursal en Google Maps, clic derecho sobre el pin y copiá las coordenadas.
+          </p>
         </div>
         {!esNuevo && (
           <div className="flex items-center gap-3">

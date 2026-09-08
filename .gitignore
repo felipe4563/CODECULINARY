@@ -22,8 +22,14 @@ backend/uploads/*
 # de ejemplo y URLs de un servicio de terceros, no se sube al repo.
 api_personas/
 
-# Doc interna para coordinar con el equipo de la app de pedidos — no se sube.
-docs/sincronizacion-productos-websocket.md
+# Archivos .md: documentación de trabajo/notas, no se sube al repo. Los .md
+# que ya estaban commiteados antes de esta regla (specs, planes) no se ven
+# afectados — esto solo aplica a archivos nuevos.
+*.md
 
 # Workspace de trabajo de Superpowers (ledgers, briefs, reportes) — scratch local.
 .superpowers/
+
+# Simulador de la app de pedidos externa — herramienta de pruebas local, no
+# es parte del producto.
+frontend/public/simulador-app-externa.html

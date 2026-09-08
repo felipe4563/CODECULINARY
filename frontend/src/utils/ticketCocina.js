@@ -53,11 +53,16 @@ export function imprimirTicketCocina(pedido, config = {}, numeroOrdenDiario = nu
           return `${p.ComboProducto?.cantidad ?? 1}x ${p.nombre}${opciones?.length ? ` (${opciones.join(', ')})` : ''}`;
         }).join(', ')}</span>`
       : '';
+    // Opciones de un producto SUELTO (ej. "Punto de la carne: Bien cocida") —
+    // distinto de las opciones de productos dentro de un combo (arriba).
+    const opcionesProducto = !esCombo && d.opciones?.length
+      ? `<br><span class="prod-combo-detalle">${d.opciones.map(o => o.nombre).join(', ')}</span>`
+      : '';
     const fsNombre = _fsNombre(nombre, 109, 13);
     return `
     <tr class="fila-prod">
       <td class="col-prod">
-        <span class="prod-nombre" style="font-size:${fsNombre}px">${nombre}</span>${contenidoCombo}
+        <span class="prod-nombre" style="font-size:${fsNombre}px">${nombre}</span>${contenidoCombo}${opcionesProducto}
         ${d.nota ? `<br><span class="prod-nota">» ${d.nota}</span>` : ''}
       </td>
       <td class="col-cant">${cantEtiqueta}</td>

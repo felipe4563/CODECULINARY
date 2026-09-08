@@ -183,6 +183,8 @@ function buildCaja(data, logo) {
         return cant + 'x ' + p.nombre + (opciones && opciones.length ? ' (' + opciones.join(', ') + ')' : '');
       }).join(', ');
       t.left().line('  (' + contenidoCombo + ')');
+    } else if (d.opciones && d.opciones.length) {
+      t.left().line('  (' + d.opciones.map((o) => o.nombre).join(', ') + ')');
     }
     if (d.nota) t.left().bold(true).line('  >> ' + d.nota).bold(false);
   }
@@ -290,6 +292,8 @@ function buildCocina(data) {
         return cant + 'x ' + p.nombre + (opciones && opciones.length ? ' (' + opciones.join(', ') + ')' : '');
       }).join(', ');
       t.left().bold(true).line('>> Incluye: ' + contenidoCombo2).bold(false);
+    } else if (d2.opciones && d2.opciones.length) {
+      t.left().bold(true).line('>> ' + d2.opciones.map((o) => o.nombre).join(', ')).bold(false);
     }
     if (d2.nota) t.left().bold(true).dblH().line('>> ' + d2.nota).normal().bold(false);
     t.rule('-');

@@ -196,9 +196,15 @@ const socket = io(config.servidor, {
   reconnectionAttempts: Infinity,
 });
 
+// Compatibilidad con instalaciones previas a la selección múltiple de cajas,
+// que guardaban un único `caja_id` en vez de `caja_ids`.
+const cajaIds = config.caja_ids || (config.caja_id ? [config.caja_id] : []);
+
 socket.on('connect', () => {
   console.log(`[${ts()}] ✓ Conectado (id: ${socket.id})`);
-  socket.emit('agente:conectado', { sucursal_id: config.sucursal_id || null, caja_id: config.caja_id || null });
+  // El backend solo trackea una caja "representativa" por agente para el
+  // indicador de estado en vivo — no afecta a qué salas se une el agente.
+  socket.emit('agente:conectado', { sucursal_id: config.sucursal_id || null, caja_id: cajaIds[0] || null });
   if (config.sucursal_id) {
     socket.emit('unirse_sucursal', config.sucursal_id);
     console.log(`[${ts()}] → Unido a la sala de la sucursal ${config.sucursal_id} (comandas de cocina)`);
@@ -206,14 +212,14 @@ socket.on('connect', () => {
     console.log(`[${ts()}] ⚠ config.json no tiene sucursal_id — este agente NO recibirá ningún evento de impresión hasta que se configure`);
   }
   // Sala por caja: si hay varias cajas en la misma sucursal, cada una tiene
-  // su propia impresora — sin caja_id, print:caja llegaría por igual a todas
-  // las cajas de la sucursal (ver socket.js del backend). Con una sola caja
-  // configurada por sucursal, esto queda vacío y no rompe nada.
-  if (config.caja_id) {
-    socket.emit('unirse_caja', config.caja_id);
-    console.log(`[${ts()}] → Unido a la sala de la caja ${config.caja_id} (tickets de venta)`);
+  // su propia impresora — sin caja_ids, print:caja llegaría por igual a
+  // todas las cajas de la sucursal (ver socket.js del backend). Una PC puede
+  // unirse a más de una sala si atiende varios puntos de cobro.
+  if (cajaIds.length) {
+    cajaIds.forEach(function(id) { socket.emit('unirse_caja', id); });
+    console.log(`[${ts()}] → Unido a la(s) sala(s) de caja ${cajaIds.join(', ')} (tickets de venta)`);
   } else {
-    console.log(`[${ts()}] ⚠ config.json no tiene caja_id — el ticket de venta por socket (respaldo) solo llegará si esta es la única caja de la sucursal`);
+    console.log(`[${ts()}] ⚠ config.json no tiene caja_ids — el ticket de venta por socket (respaldo) solo llegará si esta es la única caja de la sucursal`);
   }
 });
 socket.on('disconnect',    () => console.log(`[${ts()}] ✗ Desconectado — reintentando...`));
@@ -520,6 +526,9 @@ function buildCaja(data) {
         return cant + 'x ' + p.nombre + (opciones && opciones.length ? ' (' + opciones.join(', ') + ')' : '');
       }).join(', ');
       t.left().line('        (' + contenidoCombo + ')');
+    } else if (d.opciones && d.opciones.length) {
+      var nombresOpciones = d.opciones.map(function(o) { return o.nombre; }).join(', ');
+      t.left().line('        (' + nombresOpciones + ')');
     }
     if (d.nota) t.left().bold(true).line('      >> ' + d.nota).bold(false);
   }
@@ -635,6 +644,9 @@ function buildCocina(data) {
         return cant + 'x ' + p.nombre + (opciones && opciones.length ? ' (' + opciones.join(', ') + ')' : '');
       }).join(', ');
       t.left().bold(true).line('     >> Incluye: ' + contenidoCombo2).bold(false);
+    } else if (d2.opciones && d2.opciones.length) {
+      var nombresOpciones2 = d2.opciones.map(function(o) { return o.nombre; }).join(', ');
+      t.left().bold(true).line('     >> ' + nombresOpciones2).bold(false);
     }
     if (d2.nota) t.left().bold(true).dblH().line(' >> ' + d2.nota).normal().bold(false);
     t.rule('-');

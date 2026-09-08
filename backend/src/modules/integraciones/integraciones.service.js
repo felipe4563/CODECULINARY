@@ -1,18 +1,33 @@
-const { SesionCaja, Pedido, Producto, Combo } = require('../../models');
+const { SesionCaja, Pedido, Producto, Combo, Sucursal } = require('../../models');
 const ventasService = require('../ventas/ventas.service');
 const cuponesService = require('../cupones/cupones.service');
 const { listarProductos } = require('../productos/productos.service');
 const { listarActivos: listarCombosActivos } = require('../combos/combos.service');
 const { listarActivas: listarPromocionesActivas } = require('../promociones/promociones.service');
+const { obtenerPublica: obtenerConfigPublica } = require('../configuracion/configuracion.service');
 
 async function obtenerMenu(sucursal_id) {
   const alcance = { sucursal_id, acceso_todas: false };
-  const [productos, combos, promociones] = await Promise.all([
+  const [productos, combos, promociones, sucursal, config] = await Promise.all([
     listarProductos({ solo_vendibles: true, solo_disponibles: true }, alcance),
     listarCombosActivos(),
     listarPromocionesActivas(),
+    Sucursal.findByPk(sucursal_id, { attributes: ['id', 'nombre', 'direccion', 'telefono', 'latitud', 'longitud'] }),
+    obtenerConfigPublica(),
   ]);
-  return { productos, combos, promociones };
+  return {
+    sucursal,
+    negocio: {
+      nombre_negocio: config.nombre_negocio ?? null,
+      logo: config.logo ?? null,
+      portada: config.portada ?? null,
+      moneda: config.moneda ?? null,
+      simbolo_moneda: config.simbolo_moneda ?? null,
+    },
+    productos,
+    combos,
+    promociones,
+  };
 }
 
 // Recalcula el subtotal con los precios reales de la base de datos antes de

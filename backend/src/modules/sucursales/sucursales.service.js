@@ -14,20 +14,22 @@ async function listarPublico() {
   });
 }
 
-async function crear({ nombre, direccion, telefono, activo = 1 }) {
+async function crear({ nombre, direccion, telefono, latitud, longitud, activo = 1 }) {
   if (!nombre || !nombre.trim()) {
     throw Object.assign(new Error('El nombre es requerido'), { status: 400 });
   }
-  return Sucursal.create({ nombre: nombre.trim(), direccion, telefono, activo });
+  return Sucursal.create({ nombre: nombre.trim(), direccion, telefono, latitud: latitud || null, longitud: longitud || null, activo });
 }
 
-async function actualizar(id, { nombre, direccion, telefono, activo }) {
+async function actualizar(id, { nombre, direccion, telefono, latitud, longitud, activo }) {
   const sucursal = await Sucursal.findByPk(id);
   if (!sucursal) throw Object.assign(new Error('Sucursal no encontrada'), { status: 404 });
   const datos = {};
   if (nombre !== undefined) datos.nombre = nombre;
   if (direccion !== undefined) datos.direccion = direccion;
   if (telefono !== undefined) datos.telefono = telefono;
+  if (latitud !== undefined) datos.latitud = latitud || null;
+  if (longitud !== undefined) datos.longitud = longitud || null;
   if (activo !== undefined) datos.activo = activo;
   await sucursal.update(datos);
   return sucursal;

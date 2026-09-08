@@ -178,6 +178,10 @@ const INCLUDE_PEDIDO_COMPLETO = [
           { model: Opcion, as: 'opcion', attributes: ['id', 'nombre', 'precio_adicional'] },
         ],
       },
+      // Opciones elegidas de un producto SUELTO (no dentro de un combo) — ej.
+      // "Punto de la carne: Bien cocida". Distinto de combo_opciones, que es
+      // para las opciones de los productos DENTRO de un combo.
+      { model: Opcion, as: 'opciones', attributes: ['id', 'nombre', 'precio_adicional'], through: { attributes: [] }, required: false },
     ],
   },
   { model: Cupon, as: 'cupon', attributes: ['id', 'codigo', 'tipo', 'valor'], required: false },

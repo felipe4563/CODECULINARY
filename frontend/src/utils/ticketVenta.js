@@ -82,10 +82,15 @@ export function imprimirTicketVenta(pedido, pago, config = {}, numeroOrdenDiario
           return `${p.ComboProducto?.cantidad ?? 1}x ${p.nombre}${opciones?.length ? ` (${opciones.join(', ')})` : ''}`;
         }).join(', ')}</span>`
       : '';
+    // Opciones de un producto SUELTO (ej. "Punto de la carne: Bien cocida") —
+    // distinto de las opciones de productos dentro de un combo (arriba).
+    const opcionesProducto = !esCombo && d.opciones?.length
+      ? `<br><span class="prod-combo-detalle">${d.opciones.map(o => o.nombre).join(', ')}</span>`
+      : '';
     const fsNombre = _fsNombre(nombre, 114, 14);
     return `
     <tr class="fila-prod">
-      <td class="col-prod"><span class="prod-nombre" style="font-size:${fsNombre}px">${nombre}</span>${contenidoCombo}</td>
+      <td class="col-prod"><span class="prod-nombre" style="font-size:${fsNombre}px">${nombre}</span>${contenidoCombo}${opcionesProducto}</td>
       <td class="col-cant">${cantEtiqueta}</td>
       <td class="col-precio">${precioEtiqueta}</td>
       <td class="col-sub">${subtotal}</td>

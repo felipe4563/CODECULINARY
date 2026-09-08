@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Truck, MapPin, Phone, RefreshCw, DollarSign } from 'lucide-react';
 import { getVentas, cobrarVenta } from '../../api/ventas';
 import Modal from '../../components/ui/Modal';
+import ModalPagoQr from '../ventas/components/ModalPagoQr';
 
 const ESTADO_LABEL = {
   pendiente: 'Pendiente', listo: 'Listo', completado: 'Completado', cancelado: 'Cancelado',
@@ -95,14 +96,39 @@ function ModalCobrar({ pedido, onClose }) {
   const qc = useQueryClient();
   const [metodo_pago, setMetodoPago] = useState('efectivo');
   const [monto_recibido, setMontoRecibido] = useState(pedido.total);
+  const [pagoQrEstado, setPagoQrEstado] = useState(null); // { pedidoId, pagoQr } | null
 
   const cobrar = useMutation({
     mutationFn: () => cobrarVenta(pedido.id, { metodo_pago, monto_recibido: parseFloat(monto_recibido) }),
-    onSuccess: () => {
+    onSuccess: (resultado) => {
+      if (resultado.pago_qr) {
+        setPagoQrEstado({ pedidoId: resultado.pedido.id, pagoQr: resultado.pago_qr });
+        return;
+      }
       qc.invalidateQueries({ queryKey: ['ventas'] });
       onClose();
     },
   });
+
+  const reintentar = useMutation({
+    mutationFn: () => cobrarVenta(pagoQrEstado.pedidoId, { metodo_pago: 'qr', monto_recibido: pedido.total }),
+    onSuccess: (resultado) => setPagoQrEstado({ pedidoId: resultado.pedido.id, pagoQr: resultado.pago_qr }),
+  });
+
+  if (pagoQrEstado) {
+    return (
+      <ModalPagoQr
+        pedidoId={pagoQrEstado.pedidoId}
+        pagoQr={pagoQrEstado.pagoQr}
+        onClose={onClose}
+        onCompletado={() => {
+          qc.invalidateQueries({ queryKey: ['ventas'] });
+          onClose();
+        }}
+        onReintentar={() => reintentar.mutate()}
+      />
+    );
+  }
 
   return (
     <Modal titulo={`Cobrar pedido #${pedido.numero_llevar ?? pedido.id}`} onClose={onClose}>
