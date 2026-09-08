@@ -1,5 +1,5 @@
 import { useParams, Navigate } from 'react-router-dom';
-import { Building2, Grid3x3, AlertCircle, ChefHat, Store, Star, Cake, Disc3 } from 'lucide-react';
+import { Building2, Grid3x3, AlertCircle, ChefHat, Store, Star, Cake, Disc3, Plug } from 'lucide-react';
 import { usePermisos } from '../../hooks/usePermisos';
 import TabNegocio from './tabs/TabNegocio';
 import TabAreas from './tabs/TabAreas';
@@ -8,6 +8,7 @@ import TabFlujo from './tabs/TabFlujo';
 import TabFidelidad from './tabs/TabFidelidad';
 import TabCumpleanos from './tabs/TabCumpleanos';
 import TabRuleta from './tabs/TabRuleta';
+import TabIntegraciones from './tabs/TabIntegraciones';
 
 const TABS = [
   { id: 'negocio', label: 'Negocio',      descripcion: 'Datos generales, logo y colores de marca',  Icono: Store,    Comp: TabNegocio },
@@ -17,6 +18,7 @@ const TABS = [
   { id: 'fidelidad', label: 'Fidelidad', descripcion: 'Puntos por compra y valor de canje para clientes', Icono: Star, Comp: TabFidelidad },
   { id: 'cumpleanos', label: 'Cumpleaños', descripcion: 'Cupón automático de cumpleaños para clientes', Icono: Cake, Comp: TabCumpleanos },
   { id: 'ruleta', label: 'Ruleta', descripcion: 'Costo en puntos y límites de giro de la ruleta de premios', Icono: Disc3, Comp: TabRuleta },
+  { id: 'integraciones', label: 'Integraciones', descripcion: 'API keys para apps de pedidos externas', Icono: Plug, Comp: TabIntegraciones },
 ];
 
 export default function ConfiguracionPage() {

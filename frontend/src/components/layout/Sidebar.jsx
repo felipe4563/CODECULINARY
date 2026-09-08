@@ -7,7 +7,7 @@ import {
   LayoutDashboard, UtensilsCrossed, Wallet, BookOpen,
   Package, Boxes, Truck, Users, UserCog, Shield, Settings, X,
   BarChart2, ChefHat, ChevronDown, ChevronRight, Building2, Landmark, Store, Grid3x3,
-  Gift, Tag, Star, Ticket, Cake, Disc3, Wheat, Printer,
+  Gift, Tag, Star, Ticket, Cake, Disc3, Wheat, Printer, Plug,
 } from 'lucide-react';
 
 const NAV_GROUPS = [
@@ -57,6 +57,7 @@ const NAV_GROUPS = [
           { to: '/configuracion/fidelidad', label: 'Fidelidad', Icono: Star },
           { to: '/configuracion/cumpleanos', label: 'Cumpleaños', Icono: Cake },
           { to: '/configuracion/ruleta', label: 'Ruleta', Icono: Disc3 },
+          { to: '/configuracion/integraciones', label: 'Integraciones', Icono: Plug },
         ],
       },
     ],
