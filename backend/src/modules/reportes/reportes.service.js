@@ -78,13 +78,16 @@ async function ventasResumen(filtros = {}, alcance) {
   // caller pidió solo efectivo ignoraría ese filtro y devolvería el total sin
   // filtrar (mismo patrón que cajaResumen para `tipo` y libro_caja.service.js
   // resumen() para `tipo`).
-  const [totalVentas, ventasEfectivo, ventasQR, cantidad, cajerosRaw] = await Promise.all([
+  const [totalVentas, ventasEfectivo, ventasQR, ventasAppExterna, cantidad, cajerosRaw] = await Promise.all([
     Pedido.sum('total', { where }),
     (!filtros.metodo_pago || filtros.metodo_pago === 'efectivo')
       ? Pedido.sum('total', { where: { ...where, metodo_pago: 'efectivo' } })
       : Promise.resolve(0),
     (!filtros.metodo_pago || filtros.metodo_pago === 'qr')
       ? Pedido.sum('total', { where: { ...where, metodo_pago: 'qr' } })
+      : Promise.resolve(0),
+    (!filtros.metodo_pago || filtros.metodo_pago === 'app_externa')
+      ? Pedido.sum('total', { where: { ...where, metodo_pago: 'app_externa' } })
       : Promise.resolve(0),
     Pedido.count({ where }),
     Pedido.findAll({
@@ -122,6 +125,7 @@ async function ventasResumen(filtros = {}, alcance) {
     total_ventas: parseFloat(totalVentas || 0),
     ventas_efectivo: parseFloat(ventasEfectivo || 0),
     ventas_qr: parseFloat(ventasQR || 0),
+    ventas_app_externa: parseFloat(ventasAppExterna || 0),
     cantidad: cantidad || 0,
     filtros: filtrosResp,
   };

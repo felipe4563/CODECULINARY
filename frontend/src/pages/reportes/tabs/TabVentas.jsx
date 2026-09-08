@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Download, ShoppingCart, TrendingUp, DollarSign, BarChart2 } from 'lucide-react';
+import { Download, ShoppingCart, TrendingUp, DollarSign, BarChart2, Smartphone } from 'lucide-react';
 import { getReporteVentas, getReporteVentasResumen } from '../../../api/reportes';
 import { useAuth } from '../../../hooks/useAuth';
 import { useAuthStore } from '../../../store/authStore';
@@ -94,6 +94,7 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
     total: resumen?.total_ventas ?? 0,
     efectivo: resumen?.ventas_efectivo ?? 0,
     qr: resumen?.ventas_qr ?? 0,
+    appExterna: resumen?.ventas_app_externa ?? 0,
   };
 
   const resumenSucursales = useMemo(() => {
@@ -102,12 +103,13 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
     data.forEach(v => {
       const id = v.sucursal?.id;
       if (id == null) return;
-      if (!mapa.has(id)) mapa.set(id, { id, nombre: v.sucursal.nombre, count: 0, total: 0, efectivo: 0, qr: 0 });
+      if (!mapa.has(id)) mapa.set(id, { id, nombre: v.sucursal.nombre, count: 0, total: 0, efectivo: 0, qr: 0, otros: 0 });
       const s = mapa.get(id);
       s.count += 1;
       s.total += parseFloat(v.total || 0);
       if (v.metodo_pago === 'efectivo') s.efectivo += parseFloat(v.total || 0);
-      else s.qr += parseFloat(v.total || 0);
+      else if (v.metodo_pago === 'qr') s.qr += parseFloat(v.total || 0);
+      else s.otros = (s.otros || 0) + parseFloat(v.total || 0);
     });
     return Array.from(mapa.values()).sort((a, b) => b.total - a.total);
   }, [data, accesoTodas]);
@@ -149,6 +151,7 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
           { label: 'Total Ingresos',     valor: bs(stats.total) },
           { label: 'Efectivo',           valor: bs(stats.efectivo) },
           { label: 'QR / Transferencia', valor: bs(stats.qr) },
+          { label: 'Pagado en app',      valor: bs(stats.appExterna) },
         ],
         nombreArchivo: `reporte-ventas-${desde}-${hasta}${filtroCajero !== 'todos' ? `-${cajeroLabel}` : ''}${filtroMetodoPago !== 'todos' ? `-${filtroMetodoPago}` : ''}${filtroTipo !== 'todos' ? `-${filtroTipo}` : ''}.pdf`,
       });
@@ -218,11 +221,12 @@ export default function TabVentas({ empresa, logo, direccion, telefono }) {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard label="N° Ventas"          valor={stats.count}        color="primary" Icono={ShoppingCart} idx={0} />
-        <StatCard label="Total Ingresos"     valor={bs(stats.total)}    color="emerald" Icono={TrendingUp}   idx={1} />
-        <StatCard label="Efectivo"           valor={bs(stats.efectivo)} color="blue"    Icono={DollarSign}   idx={2} />
-        <StatCard label="QR / Transferencia" valor={bs(stats.qr)}       color="amber"   Icono={BarChart2}    idx={3} />
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+        <StatCard label="N° Ventas"          valor={stats.count}            color="primary" Icono={ShoppingCart} idx={0} />
+        <StatCard label="Total Ingresos"     valor={bs(stats.total)}        color="emerald" Icono={TrendingUp}   idx={1} />
+        <StatCard label="Efectivo"           valor={bs(stats.efectivo)}     color="blue"    Icono={DollarSign}   idx={2} />
+        <StatCard label="QR / Transferencia" valor={bs(stats.qr)}           color="amber"   Icono={BarChart2}    idx={3} />
+        <StatCard label="Pagado en app"      valor={bs(stats.appExterna)}   color="purple"  Icono={Smartphone}   idx={4} />
       </div>
 
       {accesoTodas && resumenSucursales.length > 0 && (

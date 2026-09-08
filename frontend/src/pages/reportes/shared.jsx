@@ -68,6 +68,7 @@ const COLORES = {
   rose:    { bg: 'bg-rose-50 dark:bg-rose-900/20',       bar: 'bg-rose-500',    icon: 'text-rose-600 dark:text-rose-400',       text: 'text-rose-700 dark:text-rose-300' },
   blue:    { bg: 'bg-blue-50 dark:bg-blue-900/20',       bar: 'bg-blue-500',    icon: 'text-blue-600 dark:text-blue-400',       text: 'text-blue-700 dark:text-blue-300' },
   amber:   { bg: 'bg-amber-50 dark:bg-amber-900/20',     bar: 'bg-amber-500',   icon: 'text-amber-600 dark:text-amber-400',    text: 'text-amber-700 dark:text-amber-300' },
+  purple:  { bg: 'bg-purple-50 dark:bg-purple-900/20',   bar: 'bg-purple-500',  icon: 'text-purple-600 dark:text-purple-400',  text: 'text-purple-700 dark:text-purple-300' },
 };
 
 export function StatCard({ label, valor, color, Icono, idx }) {
