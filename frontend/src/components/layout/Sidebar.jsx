@@ -164,9 +164,9 @@ export default function Sidebar({ visible, onCerrar }) {
         {/* Header */}
         <div className="flex items-center justify-between py-4 px-4 min-h-[60px] border-b border-border">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-8 h-8 rounded-lg shrink-0 overflow-hidden bg-primary flex items-center justify-center">
+            <div className={`w-8 h-8 rounded-lg shrink-0 overflow-hidden flex items-center justify-center ${logo ? '' : 'bg-primary'}`}>
               {logo
-                ? <img src={logo} alt="Logo" className="w-full h-full object-cover" />
+                ? <img src={logo} alt="Logo" className="w-full h-full object-contain" />
                 : <UtensilsCrossed className="w-4 h-4 text-primary-foreground" />
               }
             </div>

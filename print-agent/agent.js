@@ -202,9 +202,7 @@ const cajaIds = config.caja_ids || (config.caja_id ? [config.caja_id] : []);
 
 socket.on('connect', () => {
   console.log(`[${ts()}] ✓ Conectado (id: ${socket.id})`);
-  // El backend solo trackea una caja "representativa" por agente para el
-  // indicador de estado en vivo — no afecta a qué salas se une el agente.
-  socket.emit('agente:conectado', { sucursal_id: config.sucursal_id || null, caja_id: cajaIds[0] || null });
+  socket.emit('agente:conectado', { sucursal_id: config.sucursal_id || null, caja_ids: cajaIds });
   if (config.sucursal_id) {
     socket.emit('unirse_sucursal', config.sucursal_id);
     console.log(`[${ts()}] → Unido a la sala de la sucursal ${config.sucursal_id} (comandas de cocina)`);
