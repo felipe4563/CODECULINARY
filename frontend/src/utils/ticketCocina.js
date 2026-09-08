@@ -29,6 +29,7 @@ export function imprimirTicketCocina(pedido, config = {}, numeroOrdenDiario = nu
   const hora  = ahora.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' });
 
   const esLlevar = pedido.tipo === 'llevar';
+  const esDelivery = pedido.tipo === 'delivery';
   const nOrden   = String(
     numeroOrdenDiario != null ? numeroOrdenDiario : (esLlevar ? (pedido.numero_llevar ?? pedido.id) : pedido.id)
   ).padStart(3, '0');
@@ -249,17 +250,22 @@ export function imprimirTicketCocina(pedido, config = {}, numeroOrdenDiario = nu
   <hr class="sep"/>
 
   <!-- Tipo de orden -->
-  <div class="badge ${esLlevar ? 'llevar' : ''}">
-    ${esLlevar
-      ? `<div class="badge-tipo">— Para Llevar —</div>
-         <div class="badge-numero"># ${nOrden}</div>`
-      : `<div class="badge-tipo">— Orden de Mesa —</div>
-         <div class="badge-numero">${pedido.mesa?.nombre ?? '—'} &nbsp;·&nbsp; # ${nOrden}</div>`}
+  <div class="badge ${esLlevar || esDelivery ? 'llevar' : ''}">
+    ${esDelivery
+      ? `<div class="badge-tipo">— Delivery —</div>
+         <div class="badge-numero">${pedido.nombre_cliente ?? '—'} &nbsp;·&nbsp; # ${nOrden}</div>
+         ${pedido.direccion_entrega ? `<div class="badge-numero">${pedido.direccion_entrega}</div>` : ''}
+         ${pedido.telefono_cliente ? `<div class="badge-numero">Tel: ${pedido.telefono_cliente}</div>` : ''}`
+      : esLlevar
+        ? `<div class="badge-tipo">— Para Llevar —</div>
+           <div class="badge-numero"># ${nOrden}</div>`
+        : `<div class="badge-tipo">— Orden de Mesa —</div>
+           <div class="badge-numero">${pedido.mesa?.nombre ?? '—'} &nbsp;·&nbsp; # ${nOrden}</div>`}
   </div>
 
   <!-- Info -->
   <div style="margin: 2px 0 4px">
-    ${esLlevar
+    ${esLlevar && !esDelivery
       ? `<div class="info-row"><span class="info-label">Cliente</span><span class="info-valor">${pedido.nombre_cliente ?? '—'}</span></div>`
       : ''}
     <div class="info-row"><span class="info-label">Fecha</span><span class="info-valor">${fecha}</span></div>
