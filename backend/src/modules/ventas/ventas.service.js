@@ -490,7 +490,7 @@ async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, 
   return monto_neto;
 }
 
-async function _emitirImpresion(pedido, metodo_pago, cambio, sucursal_id, numeroOrdenDiarioOverride, { esReimpresion = false } = {}) {
+async function _emitirImpresion(pedido, metodo_pago, cambio, sucursal_id, numeroOrdenDiarioOverride, { esReimpresion = false, suprimirCocina = false } = {}) {
   const cfgRows = await Configuracion.findAll({ where: { clave: ['nombre_negocio', 'simbolo_moneda', 'direccion', 'telefono', 'flujo_cocina', 'cocina_destino', 'cocina_pantalla_dedicada', 'logo'] } });
   const cfg = cfgRows.reduce((o, r) => { o[r.clave] = r.valor; return o; }, {});
 
@@ -537,7 +537,7 @@ async function _emitirImpresion(pedido, metodo_pago, cambio, sucursal_id, numero
   }
 
   let datosCocina = null;
-  if (cfg.flujo_cocina === 'fisico') {
+  if (cfg.flujo_cocina === 'fisico' && !suprimirCocina) {
     datosCocina = { pedido: pedido.toJSON(), config: cfg, numero_orden_diario, modo_impresion, ancho_papel_bluetooth };
     if (cfg.cocina_destino === 'por_caja') {
       // Cada caja imprime su propio ticket de cocina junto con el de venta
@@ -1072,7 +1072,14 @@ async function cobrar(pedido_id, usuario_id, { metodo_pago, monto_recibido, desc
 
   const cobrado = await obtener(pedido_id);
   emitir('restaurante:actualizar', { tipo: 'pedido_cobrado' }, pedido.sucursal_id);
-  const datos_impresion = await _emitirImpresion(cobrado, metodo_pago, parseFloat(monto_recibido) - monto_neto, pedido.sucursal_id);
+  // Un pedido creado por la app externa (origen: 'app_externa') pasó por la
+  // rama `diferido` de crearCompleta, que ya imprimió la comanda de cocina
+  // al crearse (para que empiecen a prepararla ya). Acá, al cobrar, solo
+  // corresponde imprimir el comprobante de caja — reimprimir cocina sería
+  // una comanda duplicada real (fuera de la ventana de dedup del agente de
+  // impresión) que podría hacer que la cocina vuelva a cocinar un pedido ya
+  // entregado.
+  const datos_impresion = await _emitirImpresion(cobrado, metodo_pago, parseFloat(monto_recibido) - monto_neto, pedido.sucursal_id, undefined, { suprimirCocina: pedido.origen === 'app_externa' });
   return { ...cobrado.toJSON(), datos_impresion };
 }
 

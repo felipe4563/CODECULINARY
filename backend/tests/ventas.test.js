@@ -19,7 +19,7 @@ describe('Ventas API', () => {
   });
 });
 
-const { Sucursal, Area, Mesa, Categoria, Producto, ProductoStockSucursal, Usuario, Rol, SesionCaja, Pedido, DetallePedido, RegistroInventario, LibroCaja, Caja, PagoQr, GrupoOpciones, Opcion, Combo, ComboProducto, DetallePedidoComboOpcion } = require('../src/models');
+const { Sucursal, Area, Mesa, Categoria, Producto, ProductoStockSucursal, Usuario, Rol, SesionCaja, Pedido, DetallePedido, RegistroInventario, LibroCaja, Caja, PagoQr, GrupoOpciones, Opcion, Combo, ComboProducto, DetallePedidoComboOpcion, Configuracion } = require('../src/models');
 const bcrypt = require('bcryptjs');
 
 describe('Ventas por sucursal', () => {
@@ -889,9 +889,12 @@ describe('Ventas — opciones por producto dentro de un combo', () => {
 });
 
 describe('crearCompleta — delivery y pago diferido', () => {
-  let sucursalId, usuarioId, cajaId, sesionId, token, productoId;
+  let sucursalId, usuarioId, cajaId, sesionId, token, productoId, configFlujoOriginal;
 
   beforeAll(async () => {
+    configFlujoOriginal = await Configuracion.findOne({ where: { clave: 'flujo_cocina' } });
+    await Configuracion.upsert({ clave: 'flujo_cocina', valor: 'fisico' });
+
     const sucursal = await Sucursal.create({ nombre: 'Sucursal Delivery Diferido Test' });
     sucursalId = sucursal.id;
     const rol = await Rol.findOne({ where: { nombre: 'Cajero' } });
@@ -922,6 +925,8 @@ describe('crearCompleta — delivery y pago diferido', () => {
     await Producto.destroy({ where: { id: productoId } });
     await Usuario.destroy({ where: { id: usuarioId } });
     await Sucursal.destroy({ where: { id: sucursalId } });
+    if (configFlujoOriginal) await Configuracion.upsert({ clave: 'flujo_cocina', valor: configFlujoOriginal.valor });
+    else await Configuracion.destroy({ where: { clave: 'flujo_cocina' } });
   });
 
   it("tipo 'delivery' sin direccion_entrega → 400", async () => {
@@ -981,6 +986,28 @@ describe('crearCompleta — delivery y pago diferido', () => {
     expect(cobrado.status).toBe(200);
     expect(cobrado.body.datos.estado).toBe('completado');
     expect(cobrado.body.datos.metodo_pago).toBe('efectivo');
+  });
+
+  it("cobrar un pedido 'diferido' con origen app_externa NO reimprime cocina (ya se imprimió al crear)", async () => {
+    const creado = await request(app)
+      .post('/api/v1/ventas/completa')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        tipo: 'llevar', items: [{ producto_id: productoId, cantidad: 1 }],
+        metodo_pago: 'diferido', sesion_caja_id: sesionId,
+        origen: 'app_externa', origen_app: 'PedidosYa',
+      });
+    const pedidoId = creado.body.datos.id;
+
+    const cobrado = await request(app)
+      .post(`/api/v1/ventas/${pedidoId}/cobrar`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ metodo_pago: 'efectivo', monto_recibido: 9999 });
+
+    expect(cobrado.status).toBe(200);
+    expect(cobrado.body.datos.estado).toBe('completado');
+    expect(cobrado.body.datos.datos_impresion.cocina).toBeNull();
+    expect(cobrado.body.datos.datos_impresion.caja).not.toBeNull();
   });
 });
 
