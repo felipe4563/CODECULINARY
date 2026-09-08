@@ -45,10 +45,10 @@ export default function CocinaPage() {
     );
   }
 
-  const pendientesMesa   = pedidos.filter(p => p.estado === 'pendiente' && p.tipo !== 'llevar');
-  const listosMesa       = pedidos.filter(p => p.estado === 'listo'     && p.tipo !== 'llevar');
-  const pendientesLlevar = pedidos.filter(p => p.estado === 'pendiente' && p.tipo === 'llevar');
-  const listosLlevar     = pedidos.filter(p => p.estado === 'listo'     && p.tipo === 'llevar');
+  const pendientesMesa   = pedidos.filter(p => p.estado === 'pendiente' && p.tipo === 'mesa');
+  const listosMesa       = pedidos.filter(p => p.estado === 'listo'     && p.tipo === 'mesa');
+  const pendientesLlevar = pedidos.filter(p => p.estado === 'pendiente' && p.tipo !== 'mesa');
+  const listosLlevar     = pedidos.filter(p => p.estado === 'listo'     && p.tipo !== 'mesa');
 
   return (
     <div className="space-y-6">
@@ -219,6 +219,20 @@ function PedidoCard({ pedido, onListo, cargando, esLlevar }) {
           <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
         )}
       </div>
+
+      {pedido.origen === 'app_externa' && (
+        <div className="flex items-center gap-1.5 flex-wrap text-xs">
+          <span className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-medium">
+            {pedido.origen_app || 'App externa'}
+          </span>
+        </div>
+      )}
+      {pedido.tipo === 'delivery' && (pedido.direccion_entrega || pedido.telefono_cliente) && (
+        <div className="text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
+          {pedido.direccion_entrega && <div>📍 {pedido.direccion_entrega}</div>}
+          {pedido.telefono_cliente && <div>📞 {pedido.telefono_cliente}</div>}
+        </div>
+      )}
 
       {/* Items */}
       <ul className="space-y-1.5">

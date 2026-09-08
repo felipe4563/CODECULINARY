@@ -78,10 +78,11 @@ export default function PantallaCocinaImpresion() {
 
       imprimirBluetoothCocina(datos);
 
-      const esLlevar = datos.pedido.tipo === 'llevar';
-      const etiqueta = esLlevar
-        ? `Para llevar — ${datos.pedido.nombre_cliente || 'Cliente'}`
-        : (datos.pedido.mesa?.nombre || 'Mesa');
+      const etiqueta = datos.pedido.tipo === 'mesa'
+        ? (datos.pedido.mesa?.nombre || 'Mesa')
+        : datos.pedido.tipo === 'delivery'
+          ? `Delivery — ${datos.pedido.nombre_cliente || 'Cliente'}`
+          : `Para llevar — ${datos.pedido.nombre_cliente || 'Cliente'}`;
       const hora = new Date().toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' });
       setImpresos((prev) => [{ pedidoId, etiqueta, hora }, ...prev].slice(0, 30));
     }
