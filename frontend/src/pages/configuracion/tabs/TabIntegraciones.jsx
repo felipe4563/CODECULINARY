@@ -10,6 +10,7 @@ export default function TabIntegraciones({ puedeEditar }) {
   const qc = useQueryClient();
   const [modalCrear, setModalCrear] = useState(false);
   const [keyGenerada, setKeyGenerada] = useState(null); // { api_key, nombre_app }
+  const [confirmAccion, setConfirmAccion] = useState(null); // { tipo: 'desactivar'|'regenerar', key }
 
   const { data: keys = [], isLoading } = useQuery({ queryKey: ['integraciones-api-keys'], queryFn: getApiKeys });
   const { data: sucursales = [] } = useQuery({ queryKey: ['sucursales'], queryFn: getSucursales });
@@ -25,13 +26,17 @@ export default function TabIntegraciones({ puedeEditar }) {
 
   const desactivar = useMutation({
     mutationFn: desactivarApiKey,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['integraciones-api-keys'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['integraciones-api-keys'] });
+      setConfirmAccion(null);
+    },
   });
 
   const regenerar = useMutation({
     mutationFn: regenerarApiKey,
     onSuccess: (datos) => {
       qc.invalidateQueries({ queryKey: ['integraciones-api-keys'] });
+      setConfirmAccion(null);
       setKeyGenerada(datos);
     },
   });
@@ -75,7 +80,7 @@ export default function TabIntegraciones({ puedeEditar }) {
             {puedeEditar && (
               <div className="flex gap-1 shrink-0">
                 <button
-                  onClick={() => regenerar.mutate(k.id)}
+                  onClick={() => setConfirmAccion({ tipo: 'regenerar', key: k })}
                   title="Regenerar key"
                   className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                 >
@@ -83,7 +88,7 @@ export default function TabIntegraciones({ puedeEditar }) {
                 </button>
                 {k.activo && (
                   <button
-                    onClick={() => desactivar.mutate(k.id)}
+                    onClick={() => setConfirmAccion({ tipo: 'desactivar', key: k })}
                     title="Desactivar"
                     className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                   >
@@ -126,6 +131,58 @@ export default function TabIntegraciones({ puedeEditar }) {
             >
               <Copy className="w-4 h-4" />
             </button>
+          </div>
+        </Modal>
+      )}
+
+      {confirmAccion && (
+        <Modal
+          titulo={confirmAccion.tipo === 'desactivar' ? 'Desactivar integración' : 'Regenerar API key'}
+          onClose={() => setConfirmAccion(null)}
+        >
+          <p className="text-sm text-muted-foreground mb-4">
+            {confirmAccion.tipo === 'desactivar' ? (
+              <>
+                ¿Desactivar la integración con <strong>{confirmAccion.key.nombre_app}</strong>?
+                Dejará de poder recibir pedidos hasta que generes una nueva key.
+              </>
+            ) : (
+              <>
+                ¿Regenerar la key de <strong>{confirmAccion.key.nombre_app}</strong>? La key
+                actual dejará de funcionar de inmediato — vas a tener que actualizarla en la
+                app externa.
+              </>
+            )}
+          </p>
+          {(confirmAccion.tipo === 'desactivar' ? desactivar : regenerar).error && (
+            <p className="text-sm text-destructive mb-3">
+              {(confirmAccion.tipo === 'desactivar' ? desactivar : regenerar).error?.response?.data?.mensaje ?? 'Error al procesar la acción'}
+            </p>
+          )}
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => setConfirmAccion(null)}
+              className="px-4 py-2 rounded-xl text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            >
+              Cancelar
+            </button>
+            {confirmAccion.tipo === 'desactivar' ? (
+              <button
+                onClick={() => desactivar.mutate(confirmAccion.key.id)}
+                disabled={desactivar.isPending}
+                className="px-4 py-2 rounded-xl text-sm bg-destructive hover:bg-destructive/90 text-destructive-foreground transition-colors disabled:opacity-60"
+              >
+                {desactivar.isPending ? 'Desactivando...' : 'Desactivar'}
+              </button>
+            ) : (
+              <button
+                onClick={() => regenerar.mutate(confirmAccion.key.id)}
+                disabled={regenerar.isPending}
+                className="px-4 py-2 rounded-xl text-sm bg-primary hover:bg-primary/90 text-primary-foreground transition-colors disabled:opacity-60"
+              >
+                {regenerar.isPending ? 'Regenerando...' : 'Regenerar'}
+              </button>
+            )}
           </div>
         </Modal>
       )}
