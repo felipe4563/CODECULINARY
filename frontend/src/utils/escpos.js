@@ -108,6 +108,7 @@ function buildCaja(data, logo) {
   const metodo_pago = data.metodo_pago;
   const cfg = data.config || {};
   const esLlevar = pedido.tipo === 'llevar';
+  const esDelivery = pedido.tipo === 'delivery';
   const nLevar = pedido.numero_llevar != null ? pedido.numero_llevar : pedido.id;
   const nOrden = String(data.numero_orden_diario != null ? data.numero_orden_diario : (esLlevar ? nLevar : pedido.id)).padStart(3, '0');
   const ahora = new Date();
@@ -144,7 +145,11 @@ function buildCaja(data, logo) {
   t.rule('-');
 
   t.left().cols('Fecha: ' + fecha, hora);
-  if (esLlevar) {
+  if (esDelivery) {
+    t.left().line('DELIVERY' + (pedido.origen_app ? ' · ' + pedido.origen_app : '') + ' — ' + (pedido.nombre_cliente || 'Cliente'));
+    if (pedido.direccion_entrega) t.left().line(pedido.direccion_entrega);
+    if (pedido.telefono_cliente) t.left().line('Tel: ' + pedido.telefono_cliente);
+  } else if (esLlevar) {
     t.left().line('PARA LLEVAR — ' + ((pedido.cliente && pedido.cliente.numero_documento) || pedido.nombre_cliente || 'Cliente'));
   } else {
     const mesaNombre = (pedido.mesa && pedido.mesa.nombre) ? pedido.mesa.nombre : '---';
@@ -201,7 +206,8 @@ function buildCaja(data, logo) {
   t.left().bold(true).cols('TOTAL ' + sym, total.toFixed(2)).bold(false);
   t.rule('=');
 
-  t.left().line('Pago: ' + (metodo_pago === 'efectivo' ? 'Efectivo' : 'QR / Transferencia'));
+  const METODO_PAGO_LABEL = { qr: 'QR / Transferencia', app_externa: 'Pagado en la app', diferido: 'Pendiente de cobro' };
+  t.left().line('Pago: ' + (METODO_PAGO_LABEL[metodo_pago] || 'Efectivo'));
   t.rule('-');
 
   if (pedido.cliente && (puntosGanados > 0 || pedido.cliente.puntos != null)) {
@@ -224,6 +230,7 @@ function buildCocina(data) {
   const cfg = data.config || {};
   const t = new Esc(data.ancho_papel_bluetooth);
   const esLlevar = pedido.tipo === 'llevar';
+  const esDelivery = pedido.tipo === 'delivery';
   const nLevar = pedido.numero_llevar != null ? pedido.numero_llevar : pedido.id;
   const nOrden = String(data.numero_orden_diario != null ? data.numero_orden_diario : (esLlevar ? nLevar : pedido.id)).padStart(3, '0');
   const ahora = new Date();
@@ -236,7 +243,10 @@ function buildCocina(data) {
   t.center().bold(true).dblW().line('COCINA').normal().bold(false);
   t.rule('#');
 
-  if (esLlevar) {
+  if (esDelivery) {
+    t.center().dbl().bold(true).line('DELIVERY').normal().bold(false);
+    t.center().dbl().bold(true).line('# ' + nOrden).normal().bold(false);
+  } else if (esLlevar) {
     t.center().dbl().bold(true).line('PARA LLEVAR').normal().bold(false);
     t.center().dbl().bold(true).line('# ' + nOrden).normal().bold(false);
   } else {
@@ -246,7 +256,13 @@ function buildCocina(data) {
   }
   t.rule('#');
 
-  if (esLlevar) t.left().bold(true).dblH().line('Cliente: ' + (pedido.nombre_cliente || '-')).normal().bold(false);
+  if (esDelivery) {
+    t.left().bold(true).dblH().line('Cliente: ' + (pedido.nombre_cliente || '-')).normal().bold(false);
+    if (pedido.direccion_entrega) t.left().line(pedido.direccion_entrega);
+    if (pedido.telefono_cliente) t.left().line('Tel: ' + pedido.telefono_cliente);
+  } else if (esLlevar) {
+    t.left().bold(true).dblH().line('Cliente: ' + (pedido.nombre_cliente || '-')).normal().bold(false);
+  }
   t.left().line('Hora: ' + hora);
   t.rule('#');
 

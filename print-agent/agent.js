@@ -437,6 +437,7 @@ function buildCaja(data) {
   var metodo_pago = data.metodo_pago;
   var cfg         = data.config || {};
   var esLlevar    = pedido.tipo === 'llevar';
+  var esDelivery  = pedido.tipo === 'delivery';
   var nLevar      = pedido.numero_llevar != null ? pedido.numero_llevar : pedido.id;
   var nOrden      = String(data.numero_orden_diario != null ? data.numero_orden_diario : (esLlevar ? nLevar : pedido.id)).padStart(3, '0');
   var ahora       = new Date();
@@ -479,7 +480,11 @@ function buildCaja(data) {
 
   // ── Fecha / Hora / Mesa /Llevar ──────────────────────────────────────────
   t.left().cols('Fecha: ' + fecha, hora);
-  if (esLlevar) {
+  if (esDelivery) {
+    t.left().line('DELIVERY' + (pedido.origen_app ? ' · ' + pedido.origen_app : '') + ' — ' + (pedido.nombre_cliente || 'Cliente'));
+    if (pedido.direccion_entrega) t.left().line(pedido.direccion_entrega);
+    if (pedido.telefono_cliente) t.left().line('Tel: ' + pedido.telefono_cliente);
+  } else if (esLlevar) {
     t.left().line('PARA LLEVAR — ' + ((pedido.cliente && pedido.cliente.numero_documento) || pedido.nombre_cliente || 'Cliente'));
   } else {
     var mesaNombre = (pedido.mesa && pedido.mesa.nombre) ? pedido.mesa.nombre : '---';
@@ -543,7 +548,8 @@ function buildCaja(data) {
   t.rule('=');
 
   // ── Método de pago ────────────────────────────────────────────────────────
-  t.left().line('Forma de pago: ' + (metodo_pago === 'efectivo' ? 'Efectivo' : 'QR / Transferencia'));
+  var METODO_PAGO_LABEL = { qr: 'QR / Transferencia', app_externa: 'Pagado en la app', diferido: 'Pendiente de cobro' };
+  t.left().line('Forma de pago: ' + (METODO_PAGO_LABEL[metodo_pago] || 'Efectivo'));
   t.rule('-');
 
   // ── Cliente / puntos de fidelidad ────────────────────────────────────────
@@ -564,6 +570,7 @@ function buildCocina(data) {
   var cfg      = data.config || {};
   var t        = new Esc();
   var esLlevar = pedido.tipo === 'llevar';
+  var esDelivery = pedido.tipo === 'delivery';
   var nLevar   = pedido.numero_llevar != null ? pedido.numero_llevar : pedido.id;
   var nOrden   = String(data.numero_orden_diario != null ? data.numero_orden_diario : (esLlevar ? nLevar : pedido.id)).padStart(3, '0');
   var ahora    = new Date();
@@ -578,7 +585,10 @@ function buildCocina(data) {
   t.rule('#');
 
   // ── Tipo de orden + identificación ────────────────────────────────────────
-  if (esLlevar) {
+  if (esDelivery) {
+    t.center().dbl().bold(true).line('DELIVERY').normal().bold(false);
+    t.center().dbl().bold(true).line('# ' + nOrden).normal().bold(false);
+  } else if (esLlevar) {
     t.center().dbl().bold(true).line('PARA LLEVAR').normal().bold(false);
     t.center().dbl().bold(true).line('# ' + nOrden).normal().bold(false);
   } else {
@@ -589,7 +599,13 @@ function buildCocina(data) {
   t.rule('#');
 
   // ── Info ──────────────────────────────────────────────────────────────────
-  if (esLlevar) t.left().bold(true).dblH().line('Cliente: ' + (pedido.nombre_cliente || '-')).normal().bold(false);
+  if (esDelivery) {
+    t.left().bold(true).dblH().line('Cliente: ' + (pedido.nombre_cliente || '-')).normal().bold(false);
+    if (pedido.direccion_entrega) t.left().line(pedido.direccion_entrega);
+    if (pedido.telefono_cliente) t.left().line('Tel: ' + pedido.telefono_cliente);
+  } else if (esLlevar) {
+    t.left().bold(true).dblH().line('Cliente: ' + (pedido.nombre_cliente || '-')).normal().bold(false);
+  }
   t.left().line('Hora: ' + hora);
   t.rule('#');
 

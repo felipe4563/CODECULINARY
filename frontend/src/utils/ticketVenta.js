@@ -34,10 +34,12 @@ export function imprimirTicketVenta(pedido, pago, config = {}, numeroOrdenDiario
   const hora  = ahora.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' });
 
   const esLlevar = pedido.tipo === 'llevar';
+  const esDelivery = pedido.tipo === 'delivery';
   const nOrden   = String(
     numeroOrdenDiario != null ? numeroOrdenDiario : (esLlevar ? (pedido.numero_llevar ?? pedido.id) : pedido.id)
   ).padStart(3, '0');
-  const metodoPagoLabel = pago.metodo_pago === 'qr' ? 'QR / Transferencia' : 'Efectivo';
+  const METODO_PAGO_LABEL = { qr: 'QR / Transferencia', app_externa: 'Pagado en la app', diferido: 'Pendiente de cobro' };
+  const metodoPagoLabel = METODO_PAGO_LABEL[pago.metodo_pago] ?? 'Efectivo';
 
   const detalles = pedido.detalles ?? [];
   const subtotalLineas = detalles.reduce((s, d) => s + parseFloat(d.precio) * d.cantidad, 0);
@@ -249,12 +251,17 @@ ${['', ''].map((_, i) => `
 
   <hr class="sep"/>
 
-  <div class="badge ${esLlevar ? 'llevar' : ''}">
-    ${esLlevar
-      ? `<div class="badge-tipo">— Para Llevar —</div>
-         <div class="badge-numero">${pedido.cliente?.numero_documento ?? pedido.nombre_cliente ?? '—'} &nbsp;·&nbsp; # ${nOrden}</div>`
-      : `<div class="badge-tipo">— Orden de Mesa —</div>
-         <div class="badge-numero">${pedido.mesa?.nombre ?? '—'} &nbsp;·&nbsp; # ${nOrden}</div>`}
+  <div class="badge ${esLlevar || esDelivery ? 'llevar' : ''}">
+    ${esDelivery
+      ? `<div class="badge-tipo">— Delivery${pedido.origen_app ? ' · ' + pedido.origen_app : ''} —</div>
+         <div class="badge-numero">${pedido.nombre_cliente ?? '—'} &nbsp;·&nbsp; # ${nOrden}</div>
+         ${pedido.direccion_entrega ? `<div class="badge-numero">${pedido.direccion_entrega}</div>` : ''}
+         ${pedido.telefono_cliente ? `<div class="badge-numero">Tel: ${pedido.telefono_cliente}</div>` : ''}`
+      : esLlevar
+        ? `<div class="badge-tipo">— Para Llevar${pedido.origen_app ? ' · ' + pedido.origen_app : ''} —</div>
+           <div class="badge-numero">${pedido.cliente?.numero_documento ?? pedido.nombre_cliente ?? '—'} &nbsp;·&nbsp; # ${nOrden}</div>`
+        : `<div class="badge-tipo">— Orden de Mesa —</div>
+           <div class="badge-numero">${pedido.mesa?.nombre ?? '—'} &nbsp;·&nbsp; # ${nOrden}</div>`}
   </div>
 
   <div style="margin: 2px 0 4px">
