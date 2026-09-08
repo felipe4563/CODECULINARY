@@ -55,7 +55,10 @@ async function crearPedido(req, res, next) {
       items, tipo, direccion_entrega, telefono_cliente, nombre_cliente, pago, cupon_codigo,
       origen_app: req.integracionNombreApp,
     });
-    res.status(201).json({ ok: true, datos });
+    // No exponer el pedido completo ni datos_impresion (esto último trae una
+    // segunda copia entera del pedido más config del negocio) — el contrato
+    // público es el mismo shape mínimo que devuelve GET /pedidos/:id/estado.
+    res.status(201).json({ ok: true, datos: { id: datos.id, estado: datos.estado, total: datos.total } });
   } catch (err) { next(err); }
 }
 

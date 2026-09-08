@@ -62,9 +62,18 @@ describe('API pública de integraciones', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.datos.estado).toBe('completado');
-    expect(res.body.datos.origen).toBe('app_externa');
-    expect(res.body.datos.origen_app).toBe('PedidosYa Test');
-    expect(res.body.datos.direccion_entrega).toBe('Calle Falsa 123');
+    // La respuesta pública es intencionalmente mínima (id/estado/total, igual
+    // que GET /pedidos/:id/estado) — no debe traer el pedido completo ni
+    // datos_impresion. Campos internos como origen/origen_app/direccion_entrega
+    // se verifican directo contra la fila de la base.
+    expect(res.body.datos.origen).toBeUndefined();
+    expect(res.body.datos.datos_impresion).toBeUndefined();
+    expect(Object.keys(res.body.datos).sort()).toEqual(['estado', 'id', 'total']);
+
+    const fila = await Pedido.findByPk(res.body.datos.id);
+    expect(fila.origen).toBe('app_externa');
+    expect(fila.origen_app).toBe('PedidosYa Test');
+    expect(fila.direccion_entrega).toBe('Calle Falsa 123');
   });
 
   it('POST /pedidos con pago contra_entrega → pedido pendiente', async () => {
