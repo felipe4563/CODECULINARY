@@ -847,6 +847,7 @@ function ModalReporte({ reporte, config = {}, onClose }) {
 
   const totalEfectivo = ventas_por_metodo.find(v => v.metodo_pago === 'efectivo');
   const totalQR       = ventas_por_metodo.find(v => v.metodo_pago === 'qr');
+  const totalApp      = ventas_por_metodo.find(v => v.metodo_pago === 'app_externa');
   const totalVentas   = parseFloat(sesion.total_ventas);
   const totalGastos   = parseFloat(sesion.total_gastos);
   const apertura      = parseFloat(sesion.monto_apertura);
@@ -890,6 +891,17 @@ function ModalReporte({ reporte, config = {}, onClose }) {
               <span className="text-xs text-muted-foreground ml-1">({totalQR?.cantidad ?? 0} órdenes)</span>
             </span>
           </div>
+          {totalApp && (
+          <div className="flex justify-between text-sm text-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-purple-500" /> Pagado en app
+            </span>
+            <span className="font-medium">
+              Bs {parseFloat(totalApp?.total ?? 0).toFixed(2)}
+              <span className="text-xs text-muted-foreground ml-1">({totalApp?.cantidad ?? 0} órdenes)</span>
+            </span>
+          </div>
+          )}
           <div className="border-t border-border pt-2 flex justify-between font-bold text-foreground">
             <span>Total ventas</span>
             <span>Bs {totalVentas.toFixed(2)}</span>

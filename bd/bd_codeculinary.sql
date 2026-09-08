@@ -424,7 +424,7 @@ CREATE TABLE `libro_caja` (
   `tipo` enum('ingreso','egreso') NOT NULL,
   `concepto` varchar(255) NOT NULL,
   `monto` decimal(10,2) NOT NULL,
-  `metodo_pago` enum('efectivo','qr') NOT NULL DEFAULT 'efectivo',
+  `metodo_pago` enum('efectivo','qr','app_externa') NOT NULL DEFAULT 'efectivo',
   `referencia_id` int(10) UNSIGNED DEFAULT NULL,
   `creado_en` timestamp NOT NULL DEFAULT current_timestamp(),
   `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()

@@ -22,6 +22,7 @@ export function imprimirTicketCierreCaja(reporte, config = {}) {
 
   const totalEfectivo = ventas_por_metodo.find(v => v.metodo_pago === 'efectivo');
   const totalQR       = ventas_por_metodo.find(v => v.metodo_pago === 'qr');
+  const totalApp      = ventas_por_metodo.find(v => v.metodo_pago === 'app_externa');
 
   const fmtHora = (f) => f
     ? new Date(f).toLocaleString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -216,6 +217,11 @@ export function imprimirTicketCierreCaja(reporte, config = {}) {
     <div class="resumen-row">
       <span>QR / Transf. (${totalQR.cantidad} órd.)</span>
       <span>${simbolo} ${parseFloat(totalQR.total).toFixed(2)}</span>
+    </div>` : ''}
+    ${totalApp ? `
+    <div class="resumen-row">
+      <span>Pagado en app (${totalApp.cantidad} órd.)</span>
+      <span>${simbolo} ${parseFloat(totalApp.total).toFixed(2)}</span>
     </div>` : ''}
     <div class="resumen-row total-ventas">
       <span>TOTAL VENTAS</span>
