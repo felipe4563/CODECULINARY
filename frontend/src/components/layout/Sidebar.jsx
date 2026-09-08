@@ -17,6 +17,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/',           label: 'Dashboard',    Icono: LayoutDashboard, siempre: true },
       { to: '/ventas',     label: 'Ventas / POS',  Icono: UtensilsCrossed, modulo: 'ventas',     accion: 'ver' },
+      { to: '/pedidos-externos', label: 'Pedidos externos', Icono: Truck, modulo: 'ventas', accion: 'ver' },
       { to: '/cocina',     label: 'Cocina',        Icono: ChefHat,         modulo: 'cocina',     accion: 'ver' },
       { to: '/pantalla-cocina-impresion', label: 'Pantalla Cocina (BT)', Icono: Printer, modulo: 'cocina', accion: 'ver' },
       { to: '/caja',       label: 'Caja',          Icono: Wallet,          modulo: 'caja',       accion: 'ver' },
