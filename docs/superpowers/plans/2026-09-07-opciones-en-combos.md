@@ -409,7 +409,18 @@ git commit -m "feat(combos): incluir grupos_opciones por producto componente"
 - Consumes: modelo `DetallePedidoComboOpcion` (Tarea 1), modelo `ComboProducto` (ya existente, solo hace falta importarlo en este archivo).
 - Produces: el ítem de combo en el payload de `POST /ventas/completa` acepta `opciones_por_producto: [{producto_id, opcion_ids}]`. Función interna nueva `_validarOpcionesCombo(combo_id, opcionesPorProducto)` — devuelve el array validado o lanza 400. La Tarea 4 (`agregarItem`) reusa esta misma función.
 
-- [ ] **Step 1: Escribir el test que falla (happy path + precio)**
+- [ ] **Step 1: Agregar los modelos que faltan al import de `backend/tests/ventas.test.js`**
+
+La línea 22 actual es:
+```js
+const { Sucursal, Area, Mesa, Categoria, Producto, ProductoStockSucursal, Usuario, Rol, SesionCaja, Pedido, RegistroInventario, LibroCaja, Caja, PagoQr } = require('../src/models');
+```
+Reemplazarla por (agrega `GrupoOpciones, Opcion, Combo, ComboProducto, DetallePedidoComboOpcion` — los test nuevos de esta tarea, la Tarea 4 y la Tarea 5 los necesitan):
+```js
+const { Sucursal, Area, Mesa, Categoria, Producto, ProductoStockSucursal, Usuario, Rol, SesionCaja, Pedido, RegistroInventario, LibroCaja, Caja, PagoQr, GrupoOpciones, Opcion, Combo, ComboProducto, DetallePedidoComboOpcion } = require('../src/models');
+```
+
+- [ ] **Step 2: Escribir el test que falla (happy path + precio)**
 
 Agregar a `backend/tests/ventas.test.js`, en un describe nuevo al final del archivo:
 
@@ -508,7 +519,6 @@ describe('Ventas — opciones por producto dentro de un combo', () => {
       });
     expect(res.status).toBe(201);
 
-    const { DetallePedido, DetallePedidoComboOpcion } = require('../src/models');
     const detalle = await DetallePedido.findOne({ where: { pedido_id: res.body.datos.id, combo_id: comboId } });
     const filas = await DetallePedidoComboOpcion.findAll({ where: { detalle_pedido_id: detalle.id } });
     expect(filas.map(f => `${f.producto_id}:${f.opcion_id}`).sort()).toEqual(
@@ -532,12 +542,12 @@ describe('Ventas — opciones por producto dentro de un combo', () => {
 });
 ```
 
-- [ ] **Step 2: Correr los tests para verificar que fallan**
+- [ ] **Step 3: Correr los tests para verificar que fallan**
 
 Run: `cd backend && npx jest tests/ventas.test.js -t "opciones por producto dentro de un combo"`
 Expected: FAIL — el total no incluye el extra (el backend ignora `opciones_por_producto` hoy), y el 4to test no rechaza nada (falta la validación).
 
-- [ ] **Step 3: Agregar `ComboProducto` y `DetallePedidoComboOpcion` a los imports**
+- [ ] **Step 4: Agregar `ComboProducto` y `DetallePedidoComboOpcion` a los imports**
 
 En `backend/src/modules/ventas/ventas.service.js:1-5`, el bloque actual es:
 ```js
@@ -556,7 +566,7 @@ const {
 } = require('../../models');
 ```
 
-- [ ] **Step 4: Agregar la función de validación**
+- [ ] **Step 5: Agregar la función de validación**
 
 Justo después de la función `_extraPorOpciones` (la que suma `precio_adicional`, alrededor de la línea 34), agregar:
 ```js
@@ -578,7 +588,7 @@ async function _validarOpcionesCombo(combo_id, opcionesPorProducto = []) {
 }
 ```
 
-- [ ] **Step 5: Usar la validación y calcular el extra en el bucle de `crearCompleta`**
+- [ ] **Step 6: Usar la validación y calcular el extra en el bucle de `crearCompleta`**
 
 En `backend/src/modules/ventas/ventas.service.js:807-826`, el bloque actual es:
 ```js
@@ -613,7 +623,7 @@ Reemplazarlo por:
     }
 ```
 
-- [ ] **Step 6: Persistir las filas de opciones al crear el `DetallePedido` del combo**
+- [ ] **Step 7: Persistir las filas de opciones al crear el `DetallePedido` del combo**
 
 En `backend/src/modules/ventas/ventas.service.js:866-881`, el bloque actual es:
 ```js
@@ -660,17 +670,17 @@ Reemplazarlo por:
     }
 ```
 
-- [ ] **Step 7: Correr los tests para verificar que pasan**
+- [ ] **Step 8: Correr los tests para verificar que pasan**
 
 Run: `cd backend && npx jest tests/ventas.test.js -t "opciones por producto dentro de un combo"`
 Expected: 4 passing.
 
-- [ ] **Step 8: Correr toda la suite de ventas para descartar regresiones**
+- [ ] **Step 9: Correr toda la suite de ventas para descartar regresiones**
 
 Run: `cd backend && npx jest tests/ventas.test.js`
 Expected: todo en verde (salvo el flake preexistente de `numero_orden_diario` bajo orden completo de suite, ya documentado — confirmar corriéndolo aislado si aparece).
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
 git add backend/src/modules/ventas/ventas.service.js backend/tests/ventas.test.js
@@ -708,7 +718,6 @@ Agregar al describe `Ventas — opciones por producto dentro de un combo` (mismo
     expect(res.status).toBe(201);
     expect(parseFloat(res.body.datos.precio)).toBe(23);
 
-    const { DetallePedidoComboOpcion } = require('../src/models');
     const filas = await DetallePedidoComboOpcion.findAll({ where: { detalle_pedido_id: res.body.datos.id } });
     expect(filas).toHaveLength(1);
     expect(filas[0].opcion_id).toBe(opcionId);
@@ -1092,6 +1101,7 @@ Agregar inmediatamente después (mismo nivel de indentación):
 ```jsx
       {colaOpcionesCombo && (
         <SelectorOpcionModal
+          key={colaOpcionesCombo.pendientes[0]?.id}
           producto={colaOpcionesCombo.pendientes[0]}
           subtitulo={`Combo: ${colaOpcionesCombo.combo.nombre} — Producto ${colaOpcionesCombo.resueltas.length + 1} de ${colaOpcionesCombo.pendientes.length + colaOpcionesCombo.resueltas.length}`}
           onElegir={elegirOpcionCombo}
@@ -1308,6 +1318,7 @@ Agregar inmediatamente después (mismo nivel de indentación):
 ```jsx
       {colaOpcionesCombo && (
         <SelectorOpcionModal
+          key={colaOpcionesCombo.pendientes[0]?.id}
           producto={colaOpcionesCombo.pendientes[0]}
           subtitulo={`Combo: ${colaOpcionesCombo.combo.nombre} — Producto ${colaOpcionesCombo.resueltas.length + 1} de ${colaOpcionesCombo.pendientes.length + colaOpcionesCombo.resueltas.length}`}
           onElegir={elegirOpcionCombo}
