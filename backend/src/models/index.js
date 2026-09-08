@@ -61,6 +61,7 @@ const InsumoMovimiento = require('./InsumoMovimiento');
 const RecetaInsumo = require('./RecetaInsumo');
 const DetallePedidoOpcion = require('./DetallePedidoOpcion');
 const DetallePedidoComboOpcion = require('./DetallePedidoComboOpcion');
+const IntegracionApiKey = require('./IntegracionApiKey');
 
 // Roles y Permisos
 Rol.belongsToMany(Permiso, { through: RolesPermisos, foreignKey: 'rol_id', otherKey: 'permiso_id', as: 'permisos' });
@@ -210,6 +211,10 @@ Pedido.hasMany(PagoQr, { foreignKey: 'pedido_id', as: 'pagosQr' });
 PagoQr.belongsTo(Pedido, { foreignKey: 'pedido_id', as: 'pedido' });
 PagoQr.belongsTo(Sucursal, { foreignKey: 'sucursal_id', as: 'sucursal' });
 
+// Integraciones API keys por sucursal
+IntegracionApiKey.belongsTo(Sucursal, { foreignKey: 'sucursal_id', as: 'sucursal' });
+Sucursal.hasMany(IntegracionApiKey, { foreignKey: 'sucursal_id', as: 'integraciones_api_keys' });
+
 module.exports = {
   sequelize,
   Rol, Permiso, Usuario,
@@ -230,4 +235,5 @@ module.exports = {
   Cupon,
   RuletaPremio, RuletaGiro,
   Insumo, InsumoStockSucursal, InsumoMovimiento, RecetaInsumo, DetallePedidoOpcion, DetallePedidoComboOpcion,
+  IntegracionApiKey,
 };

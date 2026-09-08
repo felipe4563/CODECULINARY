@@ -398,6 +398,22 @@ CREATE TABLE `insumo_stock_sucursal` (
 -- --------------------------------------------------------
 
 --
+-- Estructura de tabla para la tabla `integraciones_api_keys`
+--
+
+CREATE TABLE `integraciones_api_keys` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `sucursal_id` int(10) UNSIGNED NOT NULL,
+  `nombre_app` varchar(100) NOT NULL,
+  `api_key_hash` varchar(255) NOT NULL,
+  `activo` tinyint(1) NOT NULL DEFAULT 1,
+  `creado_en` timestamp NOT NULL DEFAULT current_timestamp(),
+  `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Estructura de tabla para la tabla `libro_caja`
 --
 
@@ -502,12 +518,15 @@ CREATE TABLE `pedidos` (
   `cliente_id` int(10) UNSIGNED DEFAULT NULL,
   `sesion_caja_id` int(10) UNSIGNED DEFAULT NULL,
   `estado` enum('pendiente','listo','pendiente_pago','completado','cancelado') NOT NULL DEFAULT 'pendiente',
-  `tipo` enum('mesa','llevar') NOT NULL DEFAULT 'mesa',
-  `origen` enum('staff','autoservicio') NOT NULL DEFAULT 'staff',
+  `tipo` enum('mesa','llevar','delivery') NOT NULL DEFAULT 'mesa',
+  `origen` enum('staff','autoservicio','app_externa') NOT NULL DEFAULT 'staff',
+  `origen_app` varchar(100) DEFAULT NULL,
   `numero_llevar` int(10) UNSIGNED DEFAULT NULL,
   `tipo_documento` varchar(50) NOT NULL DEFAULT 'Ticket',
   `nombre_cliente` varchar(255) NOT NULL DEFAULT 'Público General',
   `documento_cliente` varchar(50) DEFAULT NULL,
+  `direccion_entrega` varchar(255) DEFAULT NULL,
+  `telefono_cliente` varchar(50) DEFAULT NULL,
   `total` decimal(10,2) NOT NULL DEFAULT 0.00,
   `descuento` decimal(10,2) NOT NULL DEFAULT 0.00,
   `propina` decimal(10,2) NOT NULL DEFAULT 0.00,
@@ -515,7 +534,7 @@ CREATE TABLE `pedidos` (
   `puntos_canjeados` int(11) NOT NULL DEFAULT 0,
   `cupon_id` int(10) UNSIGNED DEFAULT NULL,
   `descuento_cupon` decimal(10,2) NOT NULL DEFAULT 0.00,
-  `metodo_pago` enum('efectivo','qr') NOT NULL DEFAULT 'efectivo',
+  `metodo_pago` enum('efectivo','qr','app_externa') NOT NULL DEFAULT 'efectivo',
   `monto_recibido` decimal(10,2) DEFAULT NULL,
   `cambio` decimal(10,2) NOT NULL DEFAULT 0.00,
   `notas` text DEFAULT NULL,
@@ -1139,6 +1158,14 @@ ALTER TABLE `insumo_stock_sucursal`
   ADD KEY `sucursal_id` (`sucursal_id`);
 
 --
+-- Indices de la tabla `integraciones_api_keys`
+--
+ALTER TABLE `integraciones_api_keys`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `api_key_hash` (`api_key_hash`),
+  ADD KEY `sucursal_id` (`sucursal_id`);
+
+--
 -- Indices de la tabla `libro_caja`
 --
 ALTER TABLE `libro_caja`
@@ -1418,6 +1445,12 @@ ALTER TABLE `insumo_movimientos`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT de la tabla `integraciones_api_keys`
+--
+ALTER TABLE `integraciones_api_keys`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT de la tabla `libro_caja`
 --
 ALTER TABLE `libro_caja`
@@ -1633,6 +1666,12 @@ ALTER TABLE `insumo_movimientos`
 ALTER TABLE `insumo_stock_sucursal`
   ADD CONSTRAINT `insumo_stock_sucursal_ibfk_1` FOREIGN KEY (`insumo_id`) REFERENCES `insumos` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `insumo_stock_sucursal_ibfk_2` FOREIGN KEY (`sucursal_id`) REFERENCES `sucursales` (`id`) ON DELETE CASCADE;
+
+--
+-- Filtros para la tabla `integraciones_api_keys`
+--
+ALTER TABLE `integraciones_api_keys`
+  ADD CONSTRAINT `integraciones_api_keys_ibfk_1` FOREIGN KEY (`sucursal_id`) REFERENCES `sucursales` (`id`) ON DELETE CASCADE;
 
 --
 -- Filtros para la tabla `libro_caja`
