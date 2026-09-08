@@ -179,6 +179,10 @@ Sucursal.hasMany(Caja, { foreignKey: 'sucursal_id', as: 'cajas' });
 Caja.hasMany(SesionCaja, { foreignKey: 'caja_id', as: 'sesiones' });
 SesionCaja.belongsTo(Caja, { foreignKey: 'caja_id', as: 'caja' });
 
+// Integraciones API keys por sucursal
+IntegracionApiKey.belongsTo(Sucursal, { foreignKey: 'sucursal_id', as: 'sucursal' });
+Sucursal.hasMany(IntegracionApiKey, { foreignKey: 'sucursal_id', as: 'integraciones_api_keys' });
+
 // Insumos (ingredientes, no vendibles) y su stock/movimientos por sucursal
 Insumo.hasMany(InsumoStockSucursal, { foreignKey: 'insumo_id', as: 'stock_sucursales' });
 InsumoStockSucursal.belongsTo(Insumo, { foreignKey: 'insumo_id', as: 'insumo' });
@@ -210,10 +214,6 @@ DetallePedidoComboOpcion.belongsTo(Opcion, { foreignKey: 'opcion_id', as: 'opcio
 Pedido.hasMany(PagoQr, { foreignKey: 'pedido_id', as: 'pagosQr' });
 PagoQr.belongsTo(Pedido, { foreignKey: 'pedido_id', as: 'pedido' });
 PagoQr.belongsTo(Sucursal, { foreignKey: 'sucursal_id', as: 'sucursal' });
-
-// Integraciones API keys por sucursal
-IntegracionApiKey.belongsTo(Sucursal, { foreignKey: 'sucursal_id', as: 'sucursal' });
-Sucursal.hasMany(IntegracionApiKey, { foreignKey: 'sucursal_id', as: 'integraciones_api_keys' });
 
 module.exports = {
   sequelize,
