@@ -150,8 +150,6 @@ async function seed() {
       ('flujo_cocina', 'digital')
   `);
 
-  await db.query(`ALTER TABLE pedidos MODIFY COLUMN estado ENUM('pendiente','listo','completado','cancelado') NOT NULL DEFAULT 'pendiente'`);
-
   console.log('Seed completado');
   process.exit(0);
 }
