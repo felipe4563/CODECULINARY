@@ -887,3 +887,154 @@ describe('Ventas — opciones por producto dentro de un combo', () => {
     expect(detalleCombo.combo_opciones[0].opcion.nombre).toBe('Grande');
   });
 });
+
+describe('crearCompleta — delivery y pago diferido', () => {
+  let sucursalId, usuarioId, cajaId, sesionId, token, productoId;
+
+  beforeAll(async () => {
+    const sucursal = await Sucursal.create({ nombre: 'Sucursal Delivery Diferido Test' });
+    sucursalId = sucursal.id;
+    const rol = await Rol.findOne({ where: { nombre: 'Cajero' } });
+    const hash = await bcrypt.hash('clave123', 10);
+    const usuario = await Usuario.create({ rol_id: rol.id, nombre: 'Delivery Diferido Test', email: 'delivery-diferido-test@restaurante.com', contrasena: hash });
+    usuarioId = usuario.id;
+    await usuario.addSucursal(sucursal);
+    const login = await request(app).post('/api/v1/auth/login').send({ email: 'delivery-diferido-test@restaurante.com', contrasena: 'clave123' });
+    token = login.body.datos.token;
+
+    const caja = await Caja.create({ sucursal_id: sucursalId, nombre: 'Caja Delivery Diferido Test' });
+    cajaId = caja.id;
+    const sesion = await SesionCaja.create({ usuario_id: usuarioId, sucursal_id: sucursalId, caja_id: cajaId, monto_apertura: 0 });
+    sesionId = sesion.id;
+
+    const categoria = await Categoria.create({ nombre: 'Categoria Delivery Diferido Test' });
+    const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Delivery Diferido Test', precio: 10, stock: 0 });
+    productoId = producto.id;
+    await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 20 });
+  });
+
+  afterAll(async () => {
+    await Pedido.destroy({ where: { usuario_id: usuarioId } });
+    await LibroCaja.destroy({ where: { usuario_id: usuarioId } });
+    await SesionCaja.destroy({ where: { id: sesionId } });
+    await Caja.destroy({ where: { id: cajaId } });
+    await ProductoStockSucursal.destroy({ where: { producto_id: productoId } });
+    await Producto.destroy({ where: { id: productoId } });
+    await Usuario.destroy({ where: { id: usuarioId } });
+    await Sucursal.destroy({ where: { id: sucursalId } });
+  });
+
+  it("tipo 'delivery' sin direccion_entrega → 400", async () => {
+    const res = await request(app)
+      .post('/api/v1/ventas/completa')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        tipo: 'delivery', items: [{ producto_id: productoId, cantidad: 1 }],
+        metodo_pago: 'diferido', sesion_caja_id: sesionId,
+      });
+    expect(res.status).toBe(400);
+  });
+
+  it("tipo 'delivery' con metodo_pago 'diferido' → pedido queda pendiente, sin cobrar", async () => {
+    const res = await request(app)
+      .post('/api/v1/ventas/completa')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        tipo: 'delivery', items: [{ producto_id: productoId, cantidad: 1 }],
+        metodo_pago: 'diferido', sesion_caja_id: sesionId,
+        direccion_entrega: 'Av. Siempre Viva 742', telefono_cliente: '70012345', origen_app: 'PedidosYa',
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.datos.estado).toBe('pendiente');
+    expect(res.body.datos.direccion_entrega).toBe('Av. Siempre Viva 742');
+    expect(res.body.datos.telefono_cliente).toBe('70012345');
+    expect(res.body.datos.origen_app).toBe('PedidosYa');
+  });
+
+  it("metodo_pago 'app_externa' → pedido queda completado de una (prepago)", async () => {
+    const res = await request(app)
+      .post('/api/v1/ventas/completa')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        tipo: 'llevar', items: [{ producto_id: productoId, cantidad: 1 }],
+        metodo_pago: 'app_externa', sesion_caja_id: sesionId, origen_app: 'PedidosYa',
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.datos.estado).toBe('completado');
+  });
+
+  it("un pedido 'diferido' se puede cobrar después con POST /ventas/:id/cobrar", async () => {
+    const creado = await request(app)
+      .post('/api/v1/ventas/completa')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        tipo: 'llevar', items: [{ producto_id: productoId, cantidad: 1 }],
+        metodo_pago: 'diferido', sesion_caja_id: sesionId,
+      });
+    const pedidoId = creado.body.datos.id;
+
+    const cobrado = await request(app)
+      .post(`/api/v1/ventas/${pedidoId}/cobrar`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ metodo_pago: 'efectivo', monto_recibido: 9999 });
+
+    expect(cobrado.status).toBe(200);
+    expect(cobrado.body.datos.estado).toBe('completado');
+    expect(cobrado.body.datos.metodo_pago).toBe('efectivo');
+  });
+});
+
+describe('listar — filtro por origen', () => {
+  let sucursalId, usuarioId, cajaId, sesionId, token, productoId;
+
+  beforeAll(async () => {
+    const sucursal = await Sucursal.create({ nombre: 'Sucursal Listar Origen Test' });
+    sucursalId = sucursal.id;
+    const rol = await Rol.findOne({ where: { nombre: 'Cajero' } });
+    const hash = await bcrypt.hash('clave123', 10);
+    const usuario = await Usuario.create({ rol_id: rol.id, nombre: 'Listar Origen Test', email: 'listar-origen-test@restaurante.com', contrasena: hash });
+    usuarioId = usuario.id;
+    await usuario.addSucursal(sucursal);
+    const login = await request(app).post('/api/v1/auth/login').send({ email: 'listar-origen-test@restaurante.com', contrasena: 'clave123' });
+    token = login.body.datos.token;
+
+    const caja = await Caja.create({ sucursal_id: sucursalId, nombre: 'Caja Listar Origen Test' });
+    cajaId = caja.id;
+    const sesion = await SesionCaja.create({ usuario_id: usuarioId, sucursal_id: sucursalId, caja_id: cajaId, monto_apertura: 0 });
+    sesionId = sesion.id;
+
+    const categoria = await Categoria.create({ nombre: 'Categoria Listar Origen Test' });
+    const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Listar Origen Test', precio: 10, stock: 0 });
+    productoId = producto.id;
+    await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 20 });
+  });
+
+  afterAll(async () => {
+    await Pedido.destroy({ where: { usuario_id: usuarioId } });
+    await LibroCaja.destroy({ where: { usuario_id: usuarioId } });
+    await SesionCaja.destroy({ where: { id: sesionId } });
+    await Caja.destroy({ where: { id: cajaId } });
+    await ProductoStockSucursal.destroy({ where: { producto_id: productoId } });
+    await Producto.destroy({ where: { id: productoId } });
+    await Usuario.destroy({ where: { id: usuarioId } });
+    await Sucursal.destroy({ where: { id: sucursalId } });
+  });
+
+  it('devuelve solo pedidos del origen pedido', async () => {
+    await request(app)
+      .post('/api/v1/ventas/completa')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        tipo: 'llevar', items: [{ producto_id: productoId, cantidad: 1 }],
+        metodo_pago: 'app_externa', sesion_caja_id: sesionId, origen: 'app_externa',
+      });
+
+    const res = await request(app)
+      .get('/api/v1/ventas?origen=app_externa')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.datos.every((p) => p.origen === 'app_externa')).toBe(true);
+    expect(res.body.datos.length).toBeGreaterThan(0);
+  });
+});

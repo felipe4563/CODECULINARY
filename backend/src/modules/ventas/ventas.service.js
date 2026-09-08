@@ -183,13 +183,14 @@ const INCLUDE_PEDIDO_COMPLETO = [
   { model: Cupon, as: 'cupon', attributes: ['id', 'codigo', 'tipo', 'valor'], required: false },
 ];
 
-async function listar({ estado, mesa_id, sucursal_id, cliente_id, acceso_todas } = {}) {
+async function listar({ estado, mesa_id, sucursal_id, cliente_id, origen, acceso_todas } = {}) {
   const where = {};
   if (estado) {
     where.estado = estado.includes(',') ? { [Op.in]: estado.split(',') } : estado;
   }
   if (mesa_id) where.mesa_id = mesa_id;
   if (cliente_id) where.cliente_id = cliente_id;
+  if (origen) where.origen = origen;
   if (!acceso_todas) where.sucursal_id = sucursal_id;
   return Pedido.findAll({ where, include: INCLUDE_PEDIDO_COMPLETO, order: [['creado_en', 'DESC']] });
 }
@@ -813,7 +814,7 @@ async function procesarWebhookPagoQr({ event, order_id }) {
   }
 }
 
-async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente, tipo_documento, notas, items, metodo_pago, monto_recibido, descuento = 0, propina = 0, sesion_caja_id, usuario_id, cliente_id, puntos_canjear = 0, cupon_codigo, mesa_sesion_id = null, origen = 'staff' }) {
+async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente, tipo_documento, notas, items, metodo_pago, monto_recibido, descuento = 0, propina = 0, sesion_caja_id, usuario_id, cliente_id, puntos_canjear = 0, cupon_codigo, mesa_sesion_id = null, origen = 'staff', direccion_entrega = null, telefono_cliente = null, origen_app = null }) {
   if (!sesion_caja_id) {
     throw Object.assign(new Error('No hay caja abierta. Abre la caja antes de crear una orden.'), { status: 409 });
   }
@@ -858,8 +859,10 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
     if (!mesa_sesion_id && mesa.estado !== 'disponible') {
       throw Object.assign(new Error('Mesa ya ocupada'), { status: 409 });
     }
+  } else if (tipo === 'delivery') {
+    if (!direccion_entrega) throw Object.assign(new Error('direccion_entrega es requerida para pedidos de delivery'), { status: 400 });
   } else if (tipo !== 'llevar') {
-    throw Object.assign(new Error("tipo debe ser 'mesa' o 'llevar'"), { status: 400 });
+    throw Object.assign(new Error("tipo debe ser 'mesa', 'llevar' o 'delivery'"), { status: 400 });
   }
 
   const cfgFidelidad = await _configFidelidad();
@@ -874,17 +877,19 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
     throw Object.assign(new Error('Monto recibido insuficiente'), { status: 400 });
   }
 
-  const numero_llevar = tipo === 'llevar' ? await _siguienteNumeroLlevar() : null;
-  const estadoInicial = metodo_pago === 'qr' ? 'pendiente' : 'completado';
+  const numero_llevar = (tipo === 'llevar' || tipo === 'delivery') ? await _siguienteNumeroLlevar() : null;
+  const estadoInicial = (metodo_pago === 'qr' || metodo_pago === 'diferido') ? 'pendiente' : 'completado';
 
   const pedidoId = await sequelize.transaction(async (t) => {
     const pedido = await Pedido.create({
       mesa_id: tipo === 'mesa' ? mesa_id : null,
       mesa_sesion_id: tipo === 'mesa' ? mesa_sesion_id : null,
-      tipo, origen, numero_llevar, usuario_id, cliente_id: cliente_id || null, sesion_caja_id, sucursal_id, notas,
+      tipo, origen, origen_app, numero_llevar, usuario_id, cliente_id: cliente_id || null, sesion_caja_id, sucursal_id, notas,
       estado: estadoInicial, total, descuento, propina, metodo_pago: 'efectivo',
-      nombre_cliente: nombre_cliente || (tipo === 'llevar' ? 'Cliente' : 'Público General'),
+      nombre_cliente: nombre_cliente || (tipo === 'mesa' ? 'Público General' : 'Cliente'),
       documento_cliente,
+      telefono_cliente,
+      direccion_entrega: tipo === 'delivery' ? direccion_entrega : null,
       tipo_documento: tipo_documento || 'Ticket',
     }, { transaction: t });
 
@@ -911,7 +916,7 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
       detalles.push({ id: detallePedido.id, producto_id: combo ? null : item.producto_id, combo_id: combo ? item.combo_id : null, cantidad: linea.cantidad, precio: linea.precio });
     }
 
-    if (metodo_pago !== 'qr') {
+    if (metodo_pago !== 'qr' && metodo_pago !== 'diferido') {
       await _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, descuento, propina, usuario_id, puntos_canjear, cupon_codigo }, t);
     }
 
@@ -923,6 +928,17 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
     const pago_qr = await iniciarPagoQr(pedidoPendiente, { descuento, propina, puntos_canjear, cupon_codigo, items: itemsCupon });
     emitir('restaurante:actualizar', { tipo: 'pedido_nuevo' }, sucursal_id);
     return { pedido: await obtener(pedidoId), pago_qr };
+  }
+
+  if (metodo_pago === 'diferido') {
+    const creado = await obtener(pedidoId);
+    emitir('restaurante:actualizar', { tipo: 'pedido_nuevo' }, sucursal_id);
+    // A diferencia del QR pendiente (que espera confirmación de pago antes de
+    // imprimir), acá la comida hay que empezar a prepararla ya — el cobro
+    // llega después, al entregar — así que se imprime cocina (y el ticket de
+    // cliente, si la caja no lo desactivó) de una.
+    const datos_impresion = await _emitirImpresion(creado, metodo_pago, 0, sucursal_id);
+    return { ...creado.toJSON(), datos_impresion };
   }
 
   const creado = await obtener(pedidoId);
