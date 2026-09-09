@@ -5,10 +5,13 @@ import { getInventario, registrarEntrada, registrarSalida, registrarAjuste } fro
 import { getProductos } from '../../api/productos';
 import { useAuthStore } from '../../store/authStore';
 import { getSucursales } from '../../api/sucursales';
+import Paginacion from '../../components/ui/Paginacion';
 import {
   Boxes, ArrowDownCircle, ArrowUpCircle, SlidersHorizontal,
   Search, X, ChevronDown, ChevronUp, PackageOpen, AlertTriangle,
 } from 'lucide-react';
+
+const POR_PAGINA = 20;
 
 /* ─── helpers ─── */
 const fmt = (n) => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 0 });
@@ -282,6 +285,7 @@ export default function InventarioPage() {
 
   const [buscar, setBuscar] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('todos');
+  const [pagina, setPagina] = useState(1);
   const [modal, setModal] = useState(false);
   const [toast, setToast] = useState(null);
 
@@ -332,6 +336,20 @@ export default function InventarioPage() {
     }
     return r;
   }, [registros, filtroTipo, buscar]);
+
+  // resetea a la página 1 cada vez que cambia el filtro/búsqueda
+  const filtrosKey = `${filtroTipo}|${buscar}`;
+  const [prevFiltrosKey, setPrevFiltrosKey] = useState(filtrosKey);
+  if (filtrosKey !== prevFiltrosKey) {
+    setPrevFiltrosKey(filtrosKey);
+    setPagina(1);
+  }
+
+  const totalPaginas = Math.max(1, Math.ceil(registrosFiltrados.length / POR_PAGINA));
+  const registrosPagina = useMemo(
+    () => registrosFiltrados.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA),
+    [registrosFiltrados, pagina]
+  );
 
   // resumen stock actual por producto
   const productosConStock = useMemo(() =>
@@ -470,9 +488,12 @@ export default function InventarioPage() {
           <>
             {/* mobile */}
             <div className="sm:hidden space-y-2">
-              {registrosFiltrados.map((reg, i) => (
+              {registrosPagina.map((reg, i) => (
                 <RegistroCard key={reg.id} reg={reg} idx={i} />
               ))}
+            </div>
+            <div className="sm:hidden">
+              <Paginacion pagina={pagina} totalPaginas={totalPaginas} onCambiar={setPagina} />
             </div>
 
             {/* desktop tabla */}
@@ -492,7 +513,7 @@ export default function InventarioPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {registrosFiltrados.map((reg, i) => (
+                    {registrosPagina.map((reg, i) => (
                       <tr
                         key={reg.id}
                         className="hover:bg-muted/50 transition-colors"
@@ -521,9 +542,10 @@ export default function InventarioPage() {
                   </tbody>
                 </table>
               </div>
-              <div className="px-4 py-2 border-t border-border text-xs text-muted-foreground">
-                {registrosFiltrados.length} movimiento{registrosFiltrados.length !== 1 ? 's' : ''}
+              <div className="px-4 py-2 border-t border-border text-xs text-muted-foreground flex items-center justify-between">
+                <span>{registrosFiltrados.length} movimiento{registrosFiltrados.length !== 1 ? 's' : ''}</span>
               </div>
+              <Paginacion pagina={pagina} totalPaginas={totalPaginas} onCambiar={setPagina} />
             </div>
           </>
         )}

@@ -464,10 +464,16 @@ async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, 
             usuario_id, nota: `Venta #${pedido.id} (combo ${combo.nombre})`, transaction,
           });
         }
-        // Los combos no tienen opciones propias — solo aplica la receta base
-        // de cada producto componente (ver spec del 2026-08-08, fuera de alcance).
+        // Opciones que el cliente eligió para ESTE producto dentro del combo
+        // (ver docs/superpowers/specs/2026-09-07-opciones-en-combos-design.md).
+        // Antes se ignoraban acá y solo se aplicaba la receta base.
+        const opcionesElegidas = detalle.id
+          ? (await DetallePedidoComboOpcion.findAll({
+              where: { detalle_pedido_id: detalle.id, producto_id: p.id }, transaction,
+            })).map(o => o.opcion_id)
+          : [];
         await _descontarInsumosPorVenta({
-          producto_id: p.id, cantidadVendida: cantidadComponente, sucursal_id: pedido.sucursal_id,
+          producto_id: p.id, opcion_ids: opcionesElegidas, cantidadVendida: cantidadComponente, sucursal_id: pedido.sucursal_id,
           usuario_id, notaBase: `Venta #${pedido.id} (combo ${combo.nombre})`, transaction,
         });
       }
