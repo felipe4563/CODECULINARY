@@ -9,8 +9,14 @@ import { useThemeStore } from '../store/themeStore';
 import { getVentas } from '../api/ventas';
 import { getEstadoCajas } from '../api/caja';
 import { getLibroCaja } from '../api/libroCaja';
+import { getUsuarios } from '../api/usuarios';
+import { getInsumos } from '../api/insumos';
+import { getSucursales } from '../api/sucursales';
 import socket from '../socket';
-import { TrendingUp, TrendingDown, PiggyBank, ShoppingBag, Wallet, XCircle, CalendarDays } from 'lucide-react';
+import {
+  TrendingUp, TrendingDown, PiggyBank, ShoppingBag, Wallet, XCircle, CalendarDays, Receipt, ArrowUpRight, ArrowDownRight,
+  Trophy, Ticket, Gift, UserPlus, UserCheck, Wheat,
+} from 'lucide-react';
 import EstadoAgentesImpresion from '../components/dashboard/EstadoAgentesImpresion';
 
 /* ─── Paleta de colores ───────────────────────────────────────── */
@@ -24,6 +30,7 @@ const COLORES_METODO = {
 };
 
 const COLOR_GASTOS = '#f97316';
+const DIAS_SEMANA = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
 const MESES      = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const MESES_FULL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -99,9 +106,33 @@ const CARD_PALETTE = {
   amber:   { bg: 'bg-amber-50 dark:bg-amber-500/10',  icon: 'text-amber-600 dark:text-amber-400',  bar: 'bg-amber-500',   val: 'text-amber-700 dark:text-amber-300' },
   red:     { bg: 'bg-red-50 dark:bg-red-500/10',      icon: 'text-red-500 dark:text-red-400',      bar: 'bg-red-500',     val: 'text-red-700 dark:text-red-300' },
   orange:  { bg: 'bg-orange-50 dark:bg-orange-500/10', icon: 'text-orange-600 dark:text-orange-400', bar: 'bg-orange-500', val: 'text-orange-700 dark:text-orange-300' },
+  violet:  { bg: 'bg-violet-50 dark:bg-violet-500/10', icon: 'text-violet-600 dark:text-violet-400', bar: 'bg-violet-500', val: 'text-violet-700 dark:text-violet-300' },
 };
 
-function StatCard({ icono: Icono, titulo, valor, sub, color, cargando, delay = 0 }) {
+// Compara el valor actual contra el del período anterior. `anterior === 0`
+// no tiene base para calcular un % (división por cero), así que se muestra
+// "Nuevo" en vez de un porcentaje engañoso. `positivoEsBueno = false` invierte
+// los colores para métricas donde subir es malo (gastos, cancelaciones).
+function DeltaBadge({ actual, anterior, positivoEsBueno = true }) {
+  if (!anterior && !actual) return null;
+  if (!anterior) {
+    return <span className="text-[11px] font-semibold text-muted-foreground">Nuevo</span>;
+  }
+  const pct = ((actual - anterior) / anterior) * 100;
+  const subio = pct >= 0;
+  const esBueno = positivoEsBueno ? subio : !subio;
+  const Icono = subio ? ArrowUpRight : ArrowDownRight;
+  return (
+    <span
+      title="vs. período anterior"
+      className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${esBueno ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
+    >
+      <Icono className="w-3 h-3" />{Math.abs(pct).toFixed(1)}%
+    </span>
+  );
+}
+
+function StatCard({ icono: Icono, titulo, valor, sub, color, cargando, delay = 0, delta }) {
   const c = CARD_PALETTE[color];
   return (
     <div
@@ -116,7 +147,12 @@ function StatCard({ icono: Icono, titulo, valor, sub, color, cargando, delay = 0
         <p className="text-xs font-medium text-muted-foreground">{titulo}</p>
         {cargando
           ? <div className="h-7 w-24 mt-1 rounded-lg bg-muted animate-pulse" />
-          : <p className={`text-xl sm:text-2xl font-bold leading-tight mt-0.5 ${c.val}`}>{valor}</p>
+          : (
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className={`text-xl sm:text-2xl font-bold leading-tight mt-0.5 ${c.val}`}>{valor}</p>
+              {delta}
+            </div>
+          )
         }
         {sub && !cargando && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
       </div>
@@ -136,6 +172,37 @@ function ChartCard({ titulo, accent = 'hsl(var(--primary))', children, delay = 0
         <h3 className="text-sm font-semibold text-foreground">{titulo}</h3>
       </div>
       {children}
+    </div>
+  );
+}
+
+/* ─── Leaderboard (top cajeros / top sucursales) ─────────────────── */
+const MEDALLAS = ['🥇', '🥈', '🥉'];
+
+function Leaderboard({ items, colorBarra = 'bg-primary' }) {
+  if (items.length === 0) {
+    return <p className="text-xs text-muted-foreground text-center py-10">Sin datos en el período</p>;
+  }
+  const max = Math.max(...items.map(i => i.valor));
+  return (
+    <div className="space-y-2.5">
+      {items.map((it, i) => (
+        <div key={it.nombre + i} className="flex items-center gap-2.5">
+          <span className="w-5 text-center text-xs shrink-0">{MEDALLAS[i] ?? `${i + 1}º`}</span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <span className="text-xs font-medium text-foreground truncate">{it.nombre}</span>
+              <span className="text-xs font-semibold text-foreground shrink-0">{fmt(it.valor)}</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+              <div
+                className={`h-full rounded-full ${colorBarra} transition-all duration-700`}
+                style={{ width: `${max > 0 ? (it.valor / max) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -181,9 +248,12 @@ export default function Dashboard() {
   const yAxisWProd = isXs ? 70 : isSm ? 80 : 95;
   const yAxisWNum  = isSm ? 22 : 28;
 
-  const puedeVerVentas = tiene(usuario, 'ventas', 'ver');
-  const puedeVerCaja   = tiene(usuario, 'caja', 'ver');
-  const puedeVerGastos = tiene(usuario, 'libro_caja', 'ver');
+  const puedeVerVentas   = tiene(usuario, 'ventas', 'ver');
+  const puedeVerCaja     = tiene(usuario, 'caja', 'ver');
+  const puedeVerGastos   = tiene(usuario, 'libro_caja', 'ver');
+  const puedeVerUsuarios = tiene(usuario, 'usuarios', 'ver');
+  const puedeVerInsumos  = tiene(usuario, 'insumos', 'ver');
+  const accesoTodas      = usuario?.sucursal_activa?.id == null;
 
   const hoy = new Date();
   const [tipo,   setTipo]   = useState('mes');
@@ -211,6 +281,27 @@ export default function Dashboard() {
     staleTime: 30_000,
   });
 
+  const { data: usuarios = [] } = useQuery({
+    queryKey: ['usuarios-dashboard'],
+    queryFn: getUsuarios,
+    enabled: puedeVerVentas && puedeVerUsuarios,
+    staleTime: 5 * 60_000,
+  });
+
+  const { data: insumos = [] } = useQuery({
+    queryKey: ['insumos-dashboard'],
+    queryFn: getInsumos,
+    enabled: puedeVerInsumos,
+    staleTime: 60_000,
+  });
+
+  const { data: sucursales = [] } = useQuery({
+    queryKey: ['sucursales-dashboard'],
+    queryFn: getSucursales,
+    enabled: puedeVerVentas && accesoTodas,
+    staleTime: 5 * 60_000,
+  });
+
   // Rango de fechas ISO que cubre el período elegido en el selector
   // día/mes/año — mismo criterio que ya usan los reportes.
   const rangoLibroCaja = useMemo(() => {
@@ -223,6 +314,27 @@ export default function Dashboard() {
     return { desde: `${añoVal}-01-01`, hasta: `${añoVal}-12-31` };
   }, [tipo, diaVal, mesVal, añoVal]);
 
+  // Mismo período pero desplazado hacia atrás (día/mes/año anterior) — es la
+  // base de las comparativas "+12% vs período anterior" de las stat cards.
+  const rangoAnterior = useMemo(() => {
+    if (tipo === 'dia') {
+      const d = new Date(diaVal + 'T12:00:00');
+      d.setDate(d.getDate() - 1);
+      const s = fechaLocalYMD(d);
+      return { desde: s, hasta: s };
+    }
+    if (tipo === 'mes') {
+      const [y, m] = mesVal.split('-').map(Number);
+      const prevM = m === 1 ? 12 : m - 1;
+      const prevY = m === 1 ? y - 1 : y;
+      const prevMesVal = `${prevY}-${String(prevM).padStart(2, '0')}`;
+      const ultimoDia = new Date(prevY, prevM, 0).getDate();
+      return { desde: `${prevMesVal}-01`, hasta: `${prevMesVal}-${String(ultimoDia).padStart(2, '0')}` };
+    }
+    const y = Number(añoVal) - 1;
+    return { desde: `${y}-01-01`, hasta: `${y}-12-31` };
+  }, [tipo, diaVal, mesVal, añoVal]);
+
   const { data: movimientosCajaResp, isLoading: cvGastos } = useQuery({
     queryKey: ['libro-caja-dashboard', rangoLibroCaja],
     queryFn: () => getLibroCaja({ ...rangoLibroCaja, tipo: 'egreso', limite: 0 }),
@@ -232,10 +344,22 @@ export default function Dashboard() {
   });
   const movimientosCaja = useMemo(() => movimientosCajaResp?.filas ?? [], [movimientosCajaResp]);
 
+  const { data: movimientosCajaAnteriorResp } = useQuery({
+    queryKey: ['libro-caja-dashboard-anterior', rangoAnterior],
+    queryFn: () => getLibroCaja({ ...rangoAnterior, tipo: 'egreso', limite: 0 }),
+    enabled: puedeVerGastos,
+    staleTime: 30_000,
+  });
+  const totalGastosPeriodoAnterior = useMemo(
+    () => (movimientosCajaAnteriorResp?.filas ?? []).reduce((s, m) => s + parseFloat(m.monto ?? 0), 0),
+    [movimientosCajaAnteriorResp]
+  );
+
   const invalidarDashboard = useCallback(() => {
     qc.invalidateQueries({ queryKey: ['ventas-dashboard'] });
     qc.invalidateQueries({ queryKey: ['caja-estado'] });
     qc.invalidateQueries({ queryKey: ['libro-caja-dashboard'] });
+    qc.invalidateQueries({ queryKey: ['libro-caja-dashboard-anterior'] });
   }, [qc]);
 
   useEffect(() => {
@@ -254,49 +378,46 @@ export default function Dashboard() {
   }, [cajas]);
 
   /* ─── filtrado ──────────────────────────────────────────────── */
+  // Compara por fecha local YYYY-MM-DD contra un rango {desde, hasta}: al ser
+  // strings con ese formato, la comparación lexicográfica coincide con la
+  // cronológica. Se usa tanto para el período elegido como para el anterior.
+  const enRangoFecha = useCallback((fechaISO, desde, hasta) => {
+    const ymd = fechaLocalYMD(new Date(fechaISO));
+    return ymd >= desde && ymd <= hasta;
+  }, []);
+
   const ventasFiltradas = useMemo(() =>
-    ventas.filter(v => {
-      if (v.estado !== 'completado') return false;
-      const d = new Date(v.creado_en);
-      if (tipo === 'dia') return fechaLocalYMD(d) === diaVal;
-      if (tipo === 'mes') {
-        const [y, m] = mesVal.split('-').map(Number);
-        return d.getFullYear() === y && d.getMonth() === m - 1;
-      }
-      return d.getFullYear() === Number(añoVal);
-    }),
-  [ventas, tipo, diaVal, mesVal, añoVal]);
+    ventas.filter(v => v.estado === 'completado' && enRangoFecha(v.creado_en, rangoLibroCaja.desde, rangoLibroCaja.hasta)),
+  [ventas, rangoLibroCaja, enRangoFecha]);
 
   const canceladasFiltradas = useMemo(() =>
-    ventas.filter(v => {
-      if (v.estado !== 'cancelado') return false;
-      const d = new Date(v.creado_en);
-      if (tipo === 'dia') return fechaLocalYMD(d) === diaVal;
-      if (tipo === 'mes') {
-        const [y, m] = mesVal.split('-').map(Number);
-        return d.getFullYear() === y && d.getMonth() === m - 1;
-      }
-      return d.getFullYear() === Number(añoVal);
-    }),
-  [ventas, tipo, diaVal, mesVal, añoVal]);
+    ventas.filter(v => v.estado === 'cancelado' && enRangoFecha(v.creado_en, rangoLibroCaja.desde, rangoLibroCaja.hasta)),
+  [ventas, rangoLibroCaja, enRangoFecha]);
 
   const egresosFiltrados = useMemo(() =>
-    movimientosCaja.filter(m => {
-      if (m.tipo !== 'egreso') return false;
-      const d = new Date(m.creado_en);
-      if (tipo === 'dia') return fechaLocalYMD(d) === diaVal;
-      if (tipo === 'mes') {
-        const [y, mm] = mesVal.split('-').map(Number);
-        return d.getFullYear() === y && d.getMonth() === mm - 1;
-      }
-      return d.getFullYear() === Number(añoVal);
-    }),
-  [movimientosCaja, tipo, diaVal, mesVal, añoVal]);
+    movimientosCaja.filter(m => m.tipo === 'egreso' && enRangoFecha(m.creado_en, rangoLibroCaja.desde, rangoLibroCaja.hasta)),
+  [movimientosCaja, rangoLibroCaja, enRangoFecha]);
+
+  // Mismas ventas, pero recortadas al período anterior — solo para las
+  // comparativas de las stat cards (no alimentan ningún gráfico).
+  const ventasAnteriores = useMemo(() =>
+    ventas.filter(v => v.estado === 'completado' && enRangoFecha(v.creado_en, rangoAnterior.desde, rangoAnterior.hasta)),
+  [ventas, rangoAnterior, enRangoFecha]);
+
+  const canceladasAnteriores = useMemo(() =>
+    ventas.filter(v => v.estado === 'cancelado' && enRangoFecha(v.creado_en, rangoAnterior.desde, rangoAnterior.hasta)),
+  [ventas, rangoAnterior, enRangoFecha]);
 
   /* ─── métricas ──────────────────────────────────────────────── */
   const totalPeriodo = ventasFiltradas.reduce((s, v) => s + parseFloat(v.total ?? 0), 0);
   const totalGastosPeriodo = egresosFiltrados.reduce((s, m) => s + parseFloat(m.monto ?? 0), 0);
   const margenNeto = totalPeriodo - totalGastosPeriodo;
+
+  const totalPeriodoAnterior = ventasAnteriores.reduce((s, v) => s + parseFloat(v.total ?? 0), 0);
+  const margenNetoAnterior = totalPeriodoAnterior - totalGastosPeriodoAnterior;
+
+  const ticketPromedio = ventasFiltradas.length ? totalPeriodo / ventasFiltradas.length : 0;
+  const ticketPromedioAnterior = ventasAnteriores.length ? totalPeriodoAnterior / ventasAnteriores.length : 0;
 
   /* ─── datosArea ─────────────────────────────────────────────── */
   const datosArea = useMemo(() => {
@@ -386,6 +507,70 @@ export default function Dashboard() {
       .map(([nombre, cantidad], i) => ({ nombre, cantidad, fill: PALETA[i % PALETA.length] }));
   }, [ventasFiltradas]);
 
+  /* ─── rankingCajeros ──────────────────────────────────────────── */
+  const rankingCajeros = useMemo(() => {
+    const map = {};
+    ventasFiltradas.forEach(v => {
+      if (!v.usuario_id) return;
+      map[v.usuario_id] = (map[v.usuario_id] ?? 0) + parseFloat(v.total ?? 0);
+    });
+    return Object.entries(map)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([usuario_id, valor]) => ({
+        nombre: usuarios.find(u => u.id === Number(usuario_id))?.nombre ?? `Usuario #${usuario_id}`,
+        valor,
+      }));
+  }, [ventasFiltradas, usuarios]);
+
+  /* ─── rankingSucursales (solo con acceso a todas) ────────────── */
+  const rankingSucursales = useMemo(() => {
+    const map = {};
+    ventasFiltradas.forEach(v => {
+      map[v.sucursal_id] = (map[v.sucursal_id] ?? 0) + parseFloat(v.total ?? 0);
+    });
+    return Object.entries(map)
+      .sort((a, b) => b[1] - a[1])
+      .map(([sucursal_id, valor]) => ({
+        nombre: sucursales.find(s => s.id === Number(sucursal_id))?.nombre ?? `Sucursal #${sucursal_id}`,
+        valor,
+      }));
+  }, [ventasFiltradas, sucursales]);
+
+  /* ─── cupones y fidelidad ─────────────────────────────────────── */
+  const datosFidelidad = useMemo(() => {
+    const conCupon = ventasFiltradas.filter(v => v.cupon_id);
+    const conPuntos = ventasFiltradas.filter(v => (v.puntos_canjeados ?? 0) > 0);
+    return {
+      cantidadCupones: conCupon.length,
+      totalDescontadoCupon: conCupon.reduce((s, v) => s + parseFloat(v.descuento_cupon ?? 0), 0),
+      cantidadPuntos: conPuntos.length,
+      totalPuntosCanjeados: conPuntos.reduce((s, v) => s + (v.puntos_canjeados ?? 0), 0),
+    };
+  }, [ventasFiltradas]);
+
+  /* ─── clientes nuevos vs recurrentes ──────────────────────────── */
+  // "Recurrente" = ya tenía una venta completada ANTES de que empezara el
+  // período elegido. No hace falta pedir nada nuevo: se resuelve con el
+  // mismo historial completo de `ventas` que ya se carga para todo lo demás.
+  const clientesPeriodo = useMemo(() => {
+    const idsUnicos = [...new Set(ventasFiltradas.filter(v => v.cliente_id).map(v => v.cliente_id))];
+    let nuevos = 0, recurrentes = 0;
+    idsUnicos.forEach(id => {
+      const yaCompróAntes = ventas.some(v =>
+        v.cliente_id === id && v.estado === 'completado' && fechaLocalYMD(new Date(v.creado_en)) < rangoLibroCaja.desde
+      );
+      if (yaCompróAntes) recurrentes++; else nuevos++;
+    });
+    return { nuevos, recurrentes, total: idsUnicos.length };
+  }, [ventasFiltradas, ventas, rangoLibroCaja]);
+
+  /* ─── insumos con stock bajo (umbral fijo, igual que Inventario) ─ */
+  const UNIDAD_ABREV = { kilogramo: 'kg', gramo: 'g', litro: 'L', mililitro: 'mL', arroba: '@', libra: 'lb', unidad: 'u' };
+  const insumosBajoStock = useMemo(() =>
+    insumos.filter(i => i.activo !== false && Number(i.stock ?? 0) <= 5),
+  [insumos]);
+
   /* ─── datosPedidos (cobrados vs cancelados) ─────────────────── */
   const datosPedidos = useMemo(() => {
     if (tipo === 'dia') {
@@ -427,6 +612,26 @@ export default function Dashboard() {
   }, [tipo, diaVal, mesVal, añoVal]);
 
   const haySuficientesDatos = ventasFiltradas.length > 0 || canceladasFiltradas.length > 0;
+
+  /* ─── datosHeatmap: patrón día de semana × hora, todo el historial ───
+     A diferencia del resto del dashboard, no se recorta al período elegido
+     — es un widget de "mejores horarios" de siempre, no del filtro actual. */
+  const HEATMAP_HORAS = useMemo(() => Array.from({ length: 18 }, (_, i) => i + 6), []);
+
+  const datosHeatmap = useMemo(() => {
+    const grid = DIAS_SEMANA.map(() => HEATMAP_HORAS.map(() => 0));
+    ventas.forEach(v => {
+      if (v.estado !== 'completado') return;
+      const d = new Date(v.creado_en);
+      const idxHora = d.getHours() - 6;
+      if (idxHora < 0 || idxHora > 17) return;
+      grid[d.getDay()][idxHora] += parseFloat(v.total ?? 0);
+    });
+    return grid;
+  }, [ventas, HEATMAP_HORAS]);
+
+  const maxHeatmap = Math.max(1, ...datosHeatmap.flat());
+  const hayVentasHistoricas = ventas.some(v => v.estado === 'completado');
 
   /* ─── render ────────────────────────────────────────────────── */
   return (
@@ -516,12 +721,36 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* ── Alerta insumos con stock bajo ─────────────────────── */}
+        {puedeVerInsumos && insumosBajoStock.length > 0 && (
+          <div
+            className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-4 flex items-start gap-3"
+            style={{ animation: 'dashFadeUp 0.4s ease both', animationDelay: '90ms' }}
+          >
+            <Wheat className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+                {insumosBajoStock.length} insumo{insumosBajoStock.length > 1 ? 's' : ''} con stock bajo (≤ 5)
+              </p>
+              <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5">
+                {insumosBajoStock.map(i => `${i.nombre} (${Number(i.stock ?? 0).toLocaleString('es-BO', { maximumFractionDigits: 2 })}${UNIDAD_ABREV[i.unidad_medida] ?? ''})`).join(', ')}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* ── Stat cards ──────────────────────────────────────── */}
         {puedeVerVentas && (
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
             <StatCard icono={TrendingUp} titulo="Ingresos del período" valor={fmt(totalPeriodo)}
               sub={`${ventasFiltradas.length} venta${ventasFiltradas.length !== 1 ? 's' : ''}`}
+              delta={<DeltaBadge actual={totalPeriodo} anterior={totalPeriodoAnterior} />}
               color="blue" cargando={cvVentas} delay={100}
+            />
+            <StatCard icono={Receipt} titulo="Ticket promedio" valor={fmt(ticketPromedio)}
+              sub="Ingreso por venta"
+              delta={<DeltaBadge actual={ticketPromedio} anterior={ticketPromedioAnterior} />}
+              color="violet" cargando={cvVentas} delay={160}
             />
             <StatCard
               icono={Wallet}
@@ -532,16 +761,19 @@ export default function Dashboard() {
             />
             <StatCard icono={XCircle} titulo="Canceladas" valor={canceladasFiltradas.length}
               sub={canceladasFiltradas.length > 0 ? 'En el período' : 'Sin cancelaciones'}
+              delta={<DeltaBadge actual={canceladasFiltradas.length} anterior={canceladasAnteriores.length} positivoEsBueno={false} />}
               color="red" cargando={cvVentas} delay={280}
             />
             {puedeVerGastos && (
               <>
                 <StatCard icono={TrendingDown} titulo="Gastos del período" valor={fmt(totalGastosPeriodo)}
                   sub={`${egresosFiltrados.length} egreso${egresosFiltrados.length !== 1 ? 's' : ''}`}
+                  delta={<DeltaBadge actual={totalGastosPeriodo} anterior={totalGastosPeriodoAnterior} positivoEsBueno={false} />}
                   color="orange" cargando={cvGastos} delay={320}
                 />
                 <StatCard icono={PiggyBank} titulo="Margen neto" valor={fmt(margenNeto)}
                   sub="Ingresos - gastos"
+                  delta={<DeltaBadge actual={margenNeto} anterior={margenNetoAnterior} />}
                   color={margenNeto >= 0 ? 'emerald' : 'red'} cargando={cvVentas || cvGastos} delay={360}
                 />
               </>
@@ -767,6 +999,90 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* ── Fila: Ranking de cajeros + Clientes del período ──── */}
+        {puedeVerVentas && ventasFiltradas.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {puedeVerUsuarios && (
+              <ChartCard titulo="Ranking de cajeros" accent="#f59e0b" delay={620}>
+                <Leaderboard items={rankingCajeros} colorBarra="bg-amber-500" />
+              </ChartCard>
+            )}
+
+            <ChartCard titulo="Clientes del período" accent="#3b82f6" delay={660}>
+              {clientesPeriodo.total === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-10">Sin clientes identificados en el período</p>
+              ) : (
+                <div className="space-y-4 py-2">
+                  <div className="flex items-center justify-around text-center">
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-500/10">
+                        <UserPlus className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <p className="text-xl font-bold text-foreground">{clientesPeriodo.nuevos}</p>
+                      <p className="text-xs text-muted-foreground">Nuevos</p>
+                    </div>
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10">
+                        <UserCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                      </div>
+                      <p className="text-xl font-bold text-foreground">{clientesPeriodo.recurrentes}</p>
+                      <p className="text-xs text-muted-foreground">Recurrentes</p>
+                    </div>
+                  </div>
+                  <div className="h-2 rounded-full bg-blue-100 dark:bg-blue-500/15 overflow-hidden flex">
+                    <div className="h-full bg-blue-500" style={{ width: `${(clientesPeriodo.nuevos / clientesPeriodo.total) * 100}%` }} />
+                    <div className="h-full bg-emerald-500" style={{ width: `${(clientesPeriodo.recurrentes / clientesPeriodo.total) * 100}%` }} />
+                  </div>
+                </div>
+              )}
+            </ChartCard>
+          </div>
+        )}
+
+        {/* ── Fila: Cupones y fidelidad + Ranking de sucursales ─── */}
+        {puedeVerVentas && ventasFiltradas.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <ChartCard titulo="Cupones y fidelidad" accent="#ec4899" delay={700}>
+              <div className="grid grid-cols-2 gap-3 py-2">
+                <div className="bg-muted rounded-xl p-3 flex items-center gap-2.5">
+                  <Ticket className="w-4 h-4 text-pink-600 dark:text-pink-400 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-base font-bold text-foreground leading-tight">{datosFidelidad.cantidadCupones}</p>
+                    <p className="text-[11px] text-muted-foreground">Ventas con cupón</p>
+                  </div>
+                </div>
+                <div className="bg-muted rounded-xl p-3 flex items-center gap-2.5">
+                  <Gift className="w-4 h-4 text-pink-600 dark:text-pink-400 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-base font-bold text-foreground leading-tight">{fmt(datosFidelidad.totalDescontadoCupon)}</p>
+                    <p className="text-[11px] text-muted-foreground">Descontado por cupón</p>
+                  </div>
+                </div>
+                <div className="bg-muted rounded-xl p-3 flex items-center gap-2.5">
+                  <Trophy className="w-4 h-4 text-pink-600 dark:text-pink-400 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-base font-bold text-foreground leading-tight">{datosFidelidad.cantidadPuntos}</p>
+                    <p className="text-[11px] text-muted-foreground">Ventas con puntos</p>
+                  </div>
+                </div>
+                <div className="bg-muted rounded-xl p-3 flex items-center gap-2.5">
+                  <Trophy className="w-4 h-4 text-pink-600 dark:text-pink-400 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-base font-bold text-foreground leading-tight">{datosFidelidad.totalPuntosCanjeados}</p>
+                    <p className="text-[11px] text-muted-foreground">Puntos canjeados</p>
+                  </div>
+                </div>
+              </div>
+            </ChartCard>
+
+            {accesoTodas && (
+              <ChartCard titulo="Ranking de sucursales" accent="#6366f1" delay={740}>
+                <Leaderboard items={rankingSucursales} colorBarra="bg-indigo-500" />
+              </ChartCard>
+            )}
+          </div>
+        )}
+
         {/* ── Cobrados vs Cancelados ───────────────────────────── */}
         {puedeVerVentas && haySuficientesDatos && (
           <ChartCard titulo="Pedidos cobrados vs cancelados" accent="#10b981" delay={560}>
@@ -803,6 +1119,44 @@ export default function Dashboard() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
+          </ChartCard>
+        )}
+
+        {/* ── Mapa de calor: mejores horarios (histórico) ──────── */}
+        {puedeVerVentas && hayVentasHistoricas && (
+          <ChartCard titulo="Mejores horarios (histórico)" accent="#8b5cf6" delay={620}>
+            <div className="overflow-x-auto">
+              <table className="mx-auto" style={{ borderSpacing: 3, borderCollapse: 'separate' }}>
+                <thead>
+                  <tr>
+                    <th className="w-8" />
+                    {HEATMAP_HORAS.map(h => (
+                      <th key={h} className="text-[9px] font-normal text-muted-foreground px-0.5 pb-1">
+                        {isSm ? (h % 2 === 0 ? h : '') : h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {DIAS_SEMANA.map((dia, i) => (
+                    <tr key={dia}>
+                      <td className="text-[10px] text-muted-foreground pr-1.5 text-right whitespace-nowrap">{dia}</td>
+                      {datosHeatmap[i].map((valor, j) => (
+                        <td
+                          key={j}
+                          title={`${dia} ${HEATMAP_HORAS[j]}:00 — ${fmt(valor)}`}
+                          className={`${isSm ? 'w-4 h-4' : 'w-5 h-5 sm:w-6 sm:h-6'} rounded`}
+                          style={{ backgroundColor: `rgba(139, 92, 246, ${valor === 0 ? 0.06 : 0.15 + (valor / maxHeatmap) * 0.75})` }}
+                        />
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-3 text-center">
+              Suma de ventas completadas por día de la semana y hora — todo el historial, no solo {labelPeriodo.toLowerCase()}
+            </p>
           </ChartCard>
         )}
 
