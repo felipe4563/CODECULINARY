@@ -540,16 +540,24 @@ async function _emitirImpresion(pedido, metodo_pago, cambio, sucursal_id, numero
   // La reimpresión manual ("Imprimir de nuevo") ignora el flag a propósito:
   // el cajero puede necesitar dar el comprobante puntualmente aunque esa
   // caja no lo imprima sola en cada venta.
+  // `caja_id` viaja también DENTRO del payload (no solo como parámetro de
+  // enrutamiento del socket) porque el camino principal de impresión es HTTP
+  // directo del navegador a http://127.0.0.1 (ver impresionLocal.js) — ese
+  // POST no pasa por las salas de socket.io, así que el agente de impresión
+  // necesita el dato en el propio cuerpo para poder rechazar un ticket que
+  // no le corresponde (ver agent.js). `null` en cocina compartida es
+  // intencional: significa "cualquier agente de la sucursal debe imprimirlo".
   let datosCaja = null;
   if (imprimirTicketCliente || esReimpresion) {
-    datosCaja = { pedido: pedido.toJSON(), metodo_pago, cambio, config: cfg, numero_orden_diario, modo_impresion, ancho_papel_bluetooth };
+    datosCaja = { pedido: pedido.toJSON(), metodo_pago, cambio, config: cfg, numero_orden_diario, modo_impresion, ancho_papel_bluetooth, caja_id };
     emitir('print:caja', datosCaja, sucursal_id, caja_id);
   }
 
   let datosCocina = null;
   if (cfg.flujo_cocina === 'fisico' && !suprimirCocina) {
-    datosCocina = { pedido: pedido.toJSON(), config: cfg, numero_orden_diario, modo_impresion, ancho_papel_bluetooth };
-    if (cfg.cocina_destino === 'por_caja') {
+    const cocinaPorCaja = cfg.cocina_destino === 'por_caja';
+    datosCocina = { pedido: pedido.toJSON(), config: cfg, numero_orden_diario, modo_impresion, ancho_papel_bluetooth, caja_id: cocinaPorCaja ? caja_id : null };
+    if (cocinaPorCaja) {
       // Cada caja imprime su propio ticket de cocina junto con el de venta
       // — para negocios chicos sin una estación de cocina fija compartida.
       emitir('print:cocina', datosCocina, sucursal_id, caja_id);

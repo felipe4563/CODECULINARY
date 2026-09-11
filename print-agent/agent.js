@@ -146,6 +146,11 @@ function liberar(tipo, pedidoId) {
 
 async function imprimirCaja(datos, origen, forzar) {
   var pid = datos.pedido ? datos.pedido.id : '?';
+  var motivo = motivoNoPertenece(datos);
+  if (motivo) {
+    console.log('[' + ts() + '] .. print:caja Pedido #' + pid + ' es de ' + motivo + ' (' + origen + ', omitido)');
+    return;
+  }
   if (!forzar && yaImpreso('caja', pid)) {
     console.log('[' + ts() + '] .. print:caja Pedido #' + pid + ' ya impreso (' + origen + ', omitido)');
     return;
@@ -163,6 +168,11 @@ async function imprimirCaja(datos, origen, forzar) {
 
 async function imprimirCocina(datos, origen, forzar) {
   var pid = datos.pedido ? datos.pedido.id : '?';
+  var motivo = motivoNoPertenece(datos);
+  if (motivo) {
+    console.log('[' + ts() + '] .. print:cocina Pedido #' + pid + ' es de ' + motivo + ' (' + origen + ', omitido)');
+    return;
+  }
   if (!forzar && yaImpreso('cocina', pid)) {
     console.log('[' + ts() + '] .. print:cocina Pedido #' + pid + ' ya impreso (' + origen + ', omitido)');
     return;
@@ -199,6 +209,35 @@ const socket = io(config.servidor, {
 // Compatibilidad con instalaciones previas a la selección múltiple de cajas,
 // que guardaban un único `caja_id` en vez de `caja_ids`.
 const cajaIds = config.caja_ids || (config.caja_id ? [config.caja_id] : []);
+
+// Filtro central para imprimirCaja/imprimirCocina — evita que un ticket de
+// OTRA caja (o de otra sucursal) se imprima acá. Antes solo el canal
+// socket.io filtraba (por las salas de socket.js); el canal local (el
+// navegador de esta misma PC pegándole directo a http://127.0.0.1) no
+// filtraba nada, así que si dos cajas — o dos sucursales distintas, ej. un
+// admin que atiende varias sucursales desde una PC que también tiene el
+// agente instalado para UNA de ellas — comparten la misma PC para vender, el
+// ticket ajeno igual se imprimía acá. `sucursal_id` sale de `datos.pedido`
+// (ya viaja ahí, es un atributo propio del pedido — no hace falta agregarlo
+// aparte al payload). `caja_id` null en el payload significa "cocina
+// compartida, cualquier agente de la sucursal debe imprimirlo" (ver
+// _emitirImpresion en ventas.service.js); `cajaIds` vacío significa una
+// instalación vieja sin caja asignada. En ambos casos no se filtra por caja,
+// para no romper comportamiento existente — pero la sucursal SIEMPRE se
+// valida si el agente tiene una configurada.
+// Devuelve null si el ticket es para este agente, o un motivo corto (para
+// loguear) si hay que omitirlo.
+function motivoNoPertenece(datos) {
+  var sucursalPedido = datos.pedido ? datos.pedido.sucursal_id : null;
+  if (config.sucursal_id && sucursalPedido && sucursalPedido !== config.sucursal_id) {
+    return 'otra sucursal (' + sucursalPedido + ', esta PC es de la ' + config.sucursal_id + ')';
+  }
+  var caja_id = datos.caja_id;
+  if (caja_id && cajaIds.length && cajaIds.indexOf(caja_id) === -1) {
+    return 'otra caja (' + caja_id + ', esta PC atiende ' + cajaIds.join(',') + ')';
+  }
+  return null;
+}
 
 socket.on('connect', () => {
   console.log(`[${ts()}] ✓ Conectado (id: ${socket.id})`);
