@@ -4,11 +4,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   RefreshCw, AlertCircle, Package, ShoppingCart, ShoppingBag,
   Plus, Minus, Trash2, CreditCard, Wallet, ChevronRight, LayoutGrid, CheckCircle2, Gift, Disc3,
+  Eye, EyeOff,
 } from 'lucide-react';
 import { getMesas } from '../../api/mesas';
 import { getVentas, crearVentaCompleta, cobrarVenta, reimprimirVenta } from '../../api/ventas';
 import { getEstadoCajas } from '../../api/caja';
-import { getProductos } from '../../api/productos';
+import { getProductos, actualizarDisponibilidad } from '../../api/productos';
 import { getCategorias } from '../../api/categorias';
 import { getCombosActivos } from '../../api/combos';
 import { getPromocionesActivas } from '../../api/promociones';
@@ -43,6 +44,7 @@ export default function VentasPage() {
   const puedeVer    = tienePermiso('ventas', 'ver');
   const puedeCrear  = tienePermiso('ventas', 'crear');
   const puedeCobrar = tienePermiso('ventas', 'cobrar');
+  const puedeDisponibilidad = tienePermiso('productos', 'disponibilidad');
 
   const [categoriaActiva, setCategoriaActiva] = useState(null);
   const [carrito, setCarrito] = useState([]); // [{linea_id, producto_id, nombre, precio, cantidad, nota, peso?, precio_kg?}]
@@ -122,6 +124,11 @@ export default function VentasPage() {
     socket.on('restaurante:actualizar', onActualizar);
     return () => socket.off('restaurante:actualizar', onActualizar);
   }, [queryClient]);
+
+  const toggleDisponibilidad = useMutation({
+    mutationFn: ({ id, disponible_hoy }) => actualizarDisponibilidad(id, disponible_hoy),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['productos-pos'] }),
+  });
 
   const pedidoPorMesa = pedidosActivos.reduce((acc, p) => {
     if (p.mesa_id) acc[p.mesa_id] = p;
@@ -388,6 +395,15 @@ export default function VentasPage() {
                           : 'border-border bg-card hover:border-primary/50 hover:shadow-sm'
                       }`}
                     >
+                      {puedeDisponibilidad && (
+                        <span
+                          onClick={(e) => { e.stopPropagation(); toggleDisponibilidad.mutate({ id: prod.id, disponible_hoy: !prod.disponible_hoy }); }}
+                          title={prod.disponible_hoy ? 'Marcar no disponible hoy' : 'Marcar disponible hoy'}
+                          className="absolute top-2 left-2 z-10 w-6 h-6 rounded-full flex items-center justify-center bg-black/50 hover:bg-black/70 text-white cursor-pointer"
+                        >
+                          {prod.disponible_hoy ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                        </span>
+                      )}
                       <div className="w-full aspect-square bg-muted overflow-hidden">
                         {prod.imagen ? (
                           <img src={prod.imagen} alt={prod.nombre} className="w-full h-full object-cover" />
@@ -399,6 +415,9 @@ export default function VentasPage() {
                       </div>
                       <div className="p-2.5">
                         <p className="text-sm font-medium text-foreground leading-tight line-clamp-2">{prod.nombre}</p>
+                        {prod.disponible_hoy === false && (
+                          <p className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 mt-0.5">No disponible hoy</p>
+                        )}
                         {promoPorProducto[prod.id] ? (
                           <div className="mt-1">
                             <p className="text-xs text-muted-foreground line-through">Bs {parseFloat(prod.precio).toFixed(2)}</p>
