@@ -628,7 +628,8 @@ INSERT INTO `permisos` (`id`, `modulo`, `accion`, `descripcion`) VALUES
 (65, 'insumos', 'ver', 'Ver insumos'),
 (66, 'insumos', 'crear', 'Crear insumos'),
 (67, 'insumos', 'editar', 'Editar insumos (incluye receta y ajustes de stock)'),
-(68, 'insumos', 'eliminar', 'Desactivar insumos');
+(68, 'insumos', 'eliminar', 'Desactivar insumos'),
+(69, 'productos', 'disponibilidad', 'Marcar productos como no disponibles hoy');
 
 -- --------------------------------------------------------
 
@@ -646,6 +647,7 @@ CREATE TABLE `productos` (
   `es_vendible` tinyint(1) NOT NULL DEFAULT 1,
   `imagen` varchar(255) DEFAULT NULL,
   `activo` tinyint(1) NOT NULL DEFAULT 1,
+  `disponible_hoy` tinyint(1) NOT NULL DEFAULT 1,
   `creado_en` timestamp NOT NULL DEFAULT current_timestamp(),
   `actualizado_en` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -879,7 +881,9 @@ INSERT INTO `roles_permisos` (`rol_id`, `permiso_id`) VALUES
 (2, 28),
 (2, 29),
 (2, 30),
-(2, 31);
+(2, 31),
+(1, 69),
+(2, 69);
 
 -- --------------------------------------------------------
 
