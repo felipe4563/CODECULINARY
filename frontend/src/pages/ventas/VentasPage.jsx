@@ -415,7 +415,7 @@ export default function VentasPage() {
                       </div>
                       <div className="p-2.5">
                         <p className="text-sm font-medium text-foreground leading-tight line-clamp-2">{prod.nombre}</p>
-                        {prod.disponible_hoy === false && (
+                        {!prod.disponible_hoy && (
                           <p className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 mt-0.5">No disponible hoy</p>
                         )}
                         {promoPorProducto[prod.id] ? (

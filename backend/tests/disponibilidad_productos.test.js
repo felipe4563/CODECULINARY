@@ -1,8 +1,7 @@
 // backend/tests/disponibilidad_productos.test.js
 const request = require('supertest');
-const bcrypt = require('bcryptjs');
 const app = require('../src/app');
-const { Categoria, Producto, Rol, Usuario } = require('../src/models');
+const { Categoria, Producto } = require('../src/models');
 const { listarProductos } = require('../src/modules/productos/productos.service');
 
 describe('Disponibilidad diaria de productos', () => {

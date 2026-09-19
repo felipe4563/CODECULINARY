@@ -360,6 +360,9 @@ export default function PedidoPage() {
                       {/* Info */}
                       <div className="p-2.5">
                         <p className="text-sm font-medium text-gray-800 dark:text-gray-100 leading-tight line-clamp-2">{prod.nombre}</p>
+                        {!prod.disponible_hoy && (
+                          <p className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 mt-0.5">No disponible hoy</p>
+                        )}
                         <p className="text-sm font-bold text-blue-600 dark:text-blue-400 mt-1">
                           Bs {parseFloat(prod.precio).toFixed(2)}{prod.es_pesable ? '/kg' : ''}
                         </p>

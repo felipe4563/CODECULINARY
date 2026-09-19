@@ -48,8 +48,14 @@ sequelize.authenticate()
     cron.schedule('*/5 * * * *', _correrJobExpirarPagosQr);
 
     // Corre todas las noches a las 06:00 hora Bolivia para resetear la
-    // disponibilidad diaria de todos los productos.
-    _correrJobResetDisponibilidad();
+    // disponibilidad diaria de todos los productos. A diferencia de los
+    // otros jobs de este archivo, este NO corre también al iniciar el
+    // servidor — es destructivo (borra las marcas de "no disponible" del
+    // día), así que un reinicio a mitad de turno no debe pisar lo que el
+    // personal ya configuró hoy. El costo de un 06:00 perdido (el servidor
+    // estuvo caído) es que ayer's flags persisten un rato de más — el lado
+    // seguro del error, porque oculta un plato de más en vez de vender uno
+    // que no existe.
     cron.schedule('0 6 * * *', _correrJobResetDisponibilidad, { timezone: 'America/La_Paz' });
   })
   .catch(err => {

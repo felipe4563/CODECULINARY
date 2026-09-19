@@ -279,7 +279,7 @@ async function actualizarDisponibilidad(id, disponible_hoy) {
   if (!p) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
   await p.update({ disponible_hoy: !!disponible_hoy });
   _avisarCambioProducto('actualizado', id);
-  return { id: p.id, disponible_hoy: p.disponible_hoy };
+  return { id: p.id, disponible_hoy: !!p.disponible_hoy };
 }
 
 module.exports = { listarCategorias, crearCategoria, actualizarCategoria, eliminarCategoria, listarGruposOpciones, crearGrupoOpciones, actualizarGrupoOpciones, eliminarGrupoOpciones, listarProductos, obtenerProducto, crearProducto, actualizarProducto, eliminarProducto, actualizarDisponibilidad, _normalizarGruposOpciones };
