@@ -11,6 +11,7 @@ const Producto = sequelize.define('Producto', {
   es_vendible: { type: DataTypes.TINYINT(1), defaultValue: 1 },
   imagen: { type: DataTypes.STRING(255) },
   activo: { type: DataTypes.TINYINT(1), defaultValue: 1 },
+  disponible_hoy: { type: DataTypes.TINYINT(1), defaultValue: 1 },
 }, {
   tableName: 'productos',
   createdAt: 'creado_en',

@@ -10,6 +10,7 @@ router.get('/', verificarPermiso('productos', 'ver'), ctrl.listarProductos);
 router.post('/', verificarPermiso('productos', 'crear'), ctrl.crearProducto);
 router.get('/:id', verificarPermiso('productos', 'ver'), ctrl.obtenerProducto);
 router.put('/:id', verificarPermiso('productos', 'editar'), ctrl.actualizarProducto);
+router.put('/:id/disponibilidad', verificarPermiso('productos', 'disponibilidad'), ctrl.actualizarDisponibilidad);
 router.delete('/:id', verificarPermiso('productos', 'eliminar'), ctrl.eliminarProducto);
 
 module.exports = router;

@@ -157,7 +157,7 @@ function _normalizarGruposOpciones(producto) {
 
 // --- Productos ---
 
-async function listarProductos({ categoria_id, solo_vendibles, solo_disponibles, order_by, solo_inactivos } = {}, alcance) {
+async function listarProductos({ categoria_id, solo_vendibles, solo_disponibles, solo_disponibles_hoy, order_by, solo_inactivos } = {}, alcance) {
   const where = {};
   where.activo = (solo_inactivos === 'true' || solo_inactivos === true) ? 0 : 1;
   if (categoria_id) where.categoria_id = categoria_id;
@@ -191,10 +191,14 @@ async function listarProductos({ categoria_id, solo_vendibles, solo_disponibles,
   const conStock = await mezclarStockPorSucursal(productos, alcance);
   conStock.forEach(_normalizarGruposOpciones);
 
+  let resultado = conStock;
   if (solo_disponibles === 'true' || solo_disponibles === true) {
-    return conStock.filter((p) => p.stock === null || p.stock > 0);
+    resultado = resultado.filter((p) => p.stock === null || p.stock > 0);
   }
-  return conStock;
+  if (solo_disponibles_hoy === 'true' || solo_disponibles_hoy === true) {
+    resultado = resultado.filter((p) => p.disponible_hoy);
+  }
+  return resultado;
 }
 
 async function obtenerProducto(id, alcance) {
@@ -270,4 +274,12 @@ async function eliminarProducto(id) {
   return { eliminado: true };
 }
 
-module.exports = { listarCategorias, crearCategoria, actualizarCategoria, eliminarCategoria, listarGruposOpciones, crearGrupoOpciones, actualizarGrupoOpciones, eliminarGrupoOpciones, listarProductos, obtenerProducto, crearProducto, actualizarProducto, eliminarProducto, _normalizarGruposOpciones };
+async function actualizarDisponibilidad(id, disponible_hoy) {
+  const p = await Producto.findByPk(id);
+  if (!p) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
+  await p.update({ disponible_hoy: !!disponible_hoy });
+  _avisarCambioProducto('actualizado', id);
+  return { id: p.id, disponible_hoy: p.disponible_hoy };
+}
+
+module.exports = { listarCategorias, crearCategoria, actualizarCategoria, eliminarCategoria, listarGruposOpciones, crearGrupoOpciones, actualizarGrupoOpciones, eliminarGrupoOpciones, listarProductos, obtenerProducto, crearProducto, actualizarProducto, eliminarProducto, actualizarDisponibilidad, _normalizarGruposOpciones };

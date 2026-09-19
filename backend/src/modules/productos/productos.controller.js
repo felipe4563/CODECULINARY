@@ -89,4 +89,10 @@ async function eliminarProducto(req, res, next) {
   catch (err) { next(err); }
 }
 
-module.exports = { listarCategorias, crearCategoria, actualizarCategoria, eliminarCategoria, listarGruposOpciones, crearGrupoOpciones, actualizarGrupoOpciones, eliminarGrupoOpciones, listarProductos, obtenerProducto, crearProducto, actualizarProducto, eliminarProducto };
+async function actualizarDisponibilidad(req, res, next) {
+  try {
+    res.json({ ok: true, datos: await svc.actualizarDisponibilidad(req.params.id, req.body.disponible_hoy) });
+  } catch (err) { next(err); }
+}
+
+module.exports = { listarCategorias, crearCategoria, actualizarCategoria, eliminarCategoria, listarGruposOpciones, crearGrupoOpciones, actualizarGrupoOpciones, eliminarGrupoOpciones, listarProductos, obtenerProducto, crearProducto, actualizarProducto, eliminarProducto, actualizarDisponibilidad };
