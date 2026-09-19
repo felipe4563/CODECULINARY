@@ -23,7 +23,7 @@ async function obtenerMenu(codigo_qr) {
   const { mesa } = await _mesaConSesionActiva(codigo_qr);
   const alcance = { sucursal_id: mesa.area.sucursal_id, acceso_todas: false };
   const [productos, combos, promociones] = await Promise.all([
-    listarProductos({ solo_vendibles: true, solo_disponibles: true }, alcance),
+    listarProductos({ solo_vendibles: true, solo_disponibles: true, solo_disponibles_hoy: true }, alcance),
     listarCombosActivos(),
     listarPromocionesActivas(),
   ]);

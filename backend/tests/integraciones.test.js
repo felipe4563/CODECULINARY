@@ -50,6 +50,18 @@ describe('API pública de integraciones', () => {
     expect(res.body.datos.productos.some((p) => p.id === producto.id)).toBe(true);
   });
 
+  it('GET /menu excluye un producto marcado como no disponible hoy', async () => {
+    const noDisponible = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Integracion No Disponible Test', precio: 15, es_vendible: 1, disponible_hoy: false });
+    await ProductoStockSucursal.create({ producto_id: noDisponible.id, sucursal_id: sucursal.id, stock: 100 });
+
+    const res = await request(app).get('/api/v1/integraciones/menu').set('X-Api-Key', apiKey);
+    expect(res.status).toBe(200);
+    expect(res.body.datos.productos.some((p) => p.id === noDisponible.id)).toBe(false);
+
+    await ProductoStockSucursal.destroy({ where: { producto_id: noDisponible.id } });
+    await Producto.destroy({ where: { id: noDisponible.id } });
+  });
+
   it('POST /pedidos con tipo delivery y prepago → pedido completado con dirección', async () => {
     const res = await request(app)
       .post('/api/v1/integraciones/pedidos')
