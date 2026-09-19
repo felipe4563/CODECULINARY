@@ -6,6 +6,7 @@ const { init: initSocket } = require('./socket');
 const { sequelize } = require('./models');
 const { generarCuponesCumpleanos } = require('./jobs/cumpleanos.job');
 const { expirarPagosQrVencidos } = require('./jobs/expirarPagosQr.job');
+const { resetDisponibilidadDiaria } = require('./jobs/resetDisponibilidad.job');
 
 const PORT = process.env.PORT || 3001;
 
@@ -24,6 +25,12 @@ function _correrJobExpirarPagosQr() {
     .catch(err => console.error('Error revirtiendo pagos QR vencidos:', err));
 }
 
+function _correrJobResetDisponibilidad() {
+  resetDisponibilidadDiaria()
+    .then(({ afectados }) => { if (afectados > 0) console.log(`Disponibilidad diaria reseteada: ${afectados} producto(s)`); })
+    .catch(err => console.error('Error reseteando disponibilidad diaria:', err));
+}
+
 sequelize.authenticate()
   .then(() => {
     console.log('DB conectada');
@@ -39,6 +46,11 @@ sequelize.authenticate()
     // Corre cada 5 minutos para limpiar pagos QR vencidos. No depende de
     // hora de negocio, así que corre siempre sin timezone.
     cron.schedule('*/5 * * * *', _correrJobExpirarPagosQr);
+
+    // Corre todas las noches a las 06:00 hora Bolivia para resetear la
+    // disponibilidad diaria de todos los productos.
+    _correrJobResetDisponibilidad();
+    cron.schedule('0 6 * * *', _correrJobResetDisponibilidad, { timezone: 'America/La_Paz' });
   })
   .catch(err => {
     console.error('Error DB:', err);
