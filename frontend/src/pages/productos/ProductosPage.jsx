@@ -1,8 +1,8 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Package, Tag, ListChecks, ChevronUp, ChevronDown, AlertCircle, RefreshCw, ImagePlus, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Tag, ListChecks, ChevronUp, ChevronDown, AlertCircle, RefreshCw, ImagePlus, X, Eye, EyeOff } from 'lucide-react';
 import { getCategorias, crearCategoria, actualizarCategoria, eliminarCategoria } from '../../api/categorias';
-import { getProductos, crearProducto, actualizarProducto, eliminarProducto, subirImagenProducto } from '../../api/productos';
+import { getProductos, crearProducto, actualizarProducto, eliminarProducto, subirImagenProducto, actualizarDisponibilidad } from '../../api/productos';
 import { getGruposOpciones, crearGrupoOpciones, actualizarGrupoOpciones, eliminarGrupoOpciones } from '../../api/gruposOpciones';
 import { usePermisos } from '../../hooks/usePermisos';
 import { useAuthStore } from '../../store/authStore';
@@ -25,6 +25,7 @@ export default function ProductosPage() {
   const puedeCrear  = tienePermiso('productos', 'crear');
   const puedeEditar = tienePermiso('productos', 'editar');
   const puedeEliminar = tienePermiso('productos', 'eliminar');
+  const puedeDisponibilidad = tienePermiso('productos', 'disponibilidad');
   const [tab, setTab] = useState('categorias');
 
   if (!puedeVer) {
@@ -58,7 +59,7 @@ export default function ProductosPage() {
       </div>
 
       {tab === 'categorias' && <TabCategorias puedeCrear={puedeCrear} puedeEditar={puedeEditar} puedeEliminar={puedeEliminar} />}
-      {tab === 'productos'  && <TabProductos  puedeCrear={puedeCrear} puedeEditar={puedeEditar} puedeEliminar={puedeEliminar} />}
+      {tab === 'productos'  && <TabProductos  puedeCrear={puedeCrear} puedeEditar={puedeEditar} puedeEliminar={puedeEliminar} puedeDisponibilidad={puedeDisponibilidad} />}
       {tab === 'opciones' && <TabOpciones puedeCrear={puedeCrear} puedeEditar={puedeEditar} puedeEliminar={puedeEliminar} />}
     </div>
   );
@@ -218,7 +219,7 @@ function FormCategoriaModal({ cat, onClose, onGuardar, guardando, error }) {
 
 /* ─── Tab Productos ──────────────────────────────────────────────────────── */
 
-function TabProductos({ puedeCrear, puedeEditar, puedeEliminar }) {
+function TabProductos({ puedeCrear, puedeEditar, puedeEliminar, puedeDisponibilidad }) {
   const accesoTodas = useAuthStore((s) => s.usuario?.sucursal_activa?.id == null);
   const { data: sucursales = [] } = useQuery({
     queryKey: ['sucursales'],
@@ -249,6 +250,11 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar }) {
   const eliminar = useMutation({
     mutationFn: (id) => eliminarProducto(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['productos'] }); setConfirmEliminar(null); },
+  });
+
+  const toggleDisponibilidad = useMutation({
+    mutationFn: (prod) => actualizarDisponibilidad(prod.id, !prod.disponible_hoy),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['productos'] }),
   });
 
   return (
@@ -325,6 +331,11 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar }) {
                         Inactivo
                       </span>
                     )}
+                    {prod.activo && !prod.disponible_hoy && (
+                      <span className="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400">
+                        No disponible hoy
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {prod.categoria?.nombre ?? '-'}
@@ -334,8 +345,17 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar }) {
                     Bs {parseFloat(prod.precio).toFixed(2)}{prod.es_pesable ? '/kg' : ''}
                   </p>
                 </div>
-                {(puedeEditar || puedeEliminar) && (
+                {(puedeEditar || puedeEliminar || puedeDisponibilidad) && (
                   <div className="flex flex-col gap-1 shrink-0">
+                    {puedeDisponibilidad && (
+                      <button
+                        onClick={() => toggleDisponibilidad.mutate(prod)}
+                        title={prod.disponible_hoy ? 'Marcar no disponible hoy' : 'Marcar disponible hoy'}
+                        className={`p-1.5 rounded-lg transition-colors ${prod.disponible_hoy ? 'text-muted-foreground hover:text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-500/15' : 'text-amber-600 bg-amber-100 dark:bg-amber-500/15'}`}
+                      >
+                        {prod.disponible_hoy ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                      </button>
+                    )}
                     {puedeEditar && (
                       <button
                         onClick={() => setModal({ modo: 'editar', prod })}
@@ -368,7 +388,7 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar }) {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Categoría</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">Precio</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Stock</th>
-                    {(puedeEditar || puedeEliminar) && <th className="px-4 py-3 w-20" />}
+                    {(puedeEditar || puedeEliminar || puedeDisponibilidad) && <th className="px-4 py-3 w-20" />}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -395,6 +415,11 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar }) {
                                   Inactivo
                                 </span>
                               )}
+                              {prod.activo && !prod.disponible_hoy && (
+                                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400">
+                                  No disponible hoy
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -419,9 +444,18 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar }) {
                             : prod.stock
                         }
                       </td>
-                      {(puedeEditar || puedeEliminar) && (
+                      {(puedeEditar || puedeEliminar || puedeDisponibilidad) && (
                         <td className="px-4 py-3">
                           <div className="flex gap-1 justify-end">
+                            {puedeDisponibilidad && (
+                              <button
+                                onClick={() => toggleDisponibilidad.mutate(prod)}
+                                title={prod.disponible_hoy ? 'Marcar no disponible hoy' : 'Marcar disponible hoy'}
+                                className={`p-1.5 rounded-lg transition-colors ${prod.disponible_hoy ? 'text-muted-foreground hover:text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-500/15' : 'text-amber-600 bg-amber-100 dark:bg-amber-500/15'}`}
+                              >
+                                {prod.disponible_hoy ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                              </button>
+                            )}
                             {puedeEditar && (
                               <button
                                 onClick={() => setModal({ modo: 'editar', prod })}

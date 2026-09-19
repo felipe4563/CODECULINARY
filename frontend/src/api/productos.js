@@ -4,6 +4,7 @@ export const getProductos = (params) => api.get('/productos', { params }).then(r
 export const getProducto = (id) => api.get(`/productos/${id}`).then(r => r.data.datos);
 export const crearProducto = (datos) => api.post('/productos', datos).then(r => r.data.datos);
 export const actualizarProducto = (id, datos) => api.put(`/productos/${id}`, datos).then(r => r.data.datos);
+export const actualizarDisponibilidad = (id, disponible_hoy) => api.put(`/productos/${id}/disponibilidad`, { disponible_hoy }).then(r => r.data.datos);
 export const eliminarProducto = (id) => api.delete(`/productos/${id}`).then(r => r.data.datos);
 
 export const subirImagenProducto = (archivo) => {
