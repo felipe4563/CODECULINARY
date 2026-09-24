@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
         registerType: 'autoUpdate',
         // Enable in dev so the SW is exercised without a production build
         devOptions: { enabled: true, type: 'module' },
-        includeAssets: ['favicon.svg', 'icons/icon.svg'],
+        includeAssets: ['favicon.svg', 'favicon.png', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-180.png'],
         manifest: {
           name: 'Sistema Restaurante',
           short_name: 'Restaurante',
@@ -35,9 +35,27 @@ export default defineConfig(({ mode }) => {
               purpose: 'any',
             },
             {
-              src: '/icons/icon.svg',
-              sizes: 'any',
-              type: 'image/svg+xml',
+              src: '/icons/icon-192.png',
+              sizes: '192x192',
+              type: 'image/png',
+              purpose: 'any',
+            },
+            {
+              src: '/icons/icon-512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'any',
+            },
+            {
+              src: '/icons/icon-192.png',
+              sizes: '192x192',
+              type: 'image/png',
+              purpose: 'maskable',
+            },
+            {
+              src: '/icons/icon-512.png',
+              sizes: '512x512',
+              type: 'image/png',
               purpose: 'maskable',
             },
           ],
