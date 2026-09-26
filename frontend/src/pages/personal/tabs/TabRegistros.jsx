@@ -22,7 +22,9 @@ function _fechaHora(iso) {
 function FilaResolver({ marcacion, onResuelto }) {
   const [hora, setHora] = useState(() => {
     const base = marcacion.hora_salida_propuesta || marcacion.hora_salida;
-    return base ? new Date(base).toISOString().slice(11, 16) : '';
+    return base
+      ? new Date(base).toLocaleTimeString('en-GB', { timeZone: 'America/La_Paz', hour: '2-digit', minute: '2-digit' })
+      : '';
   });
   const [error, setError] = useState(null);
 
