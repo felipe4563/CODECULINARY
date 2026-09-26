@@ -15,7 +15,7 @@ import { getSucursales } from '../api/sucursales';
 import socket from '../socket';
 import {
   TrendingUp, TrendingDown, PiggyBank, ShoppingBag, Wallet, XCircle, CalendarDays, Receipt, ArrowUpRight, ArrowDownRight,
-  Trophy, Ticket, Gift, UserPlus, UserCheck, Wheat,
+  Trophy, Ticket, Gift, UserPlus, UserCheck, Wheat, AlertCircle,
 } from 'lucide-react';
 import EstadoAgentesImpresion from '../components/dashboard/EstadoAgentesImpresion';
 
@@ -632,6 +632,16 @@ export default function Dashboard() {
 
   const maxHeatmap = Math.max(1, ...datosHeatmap.flat());
   const hayVentasHistoricas = ventas.some(v => v.estado === 'completado');
+
+  const puedeVerDashboard = tiene(usuario, 'dashboard', 'ver');
+  if (!puedeVerDashboard) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3 text-gray-400 dark:text-gray-600">
+        <AlertCircle className="w-10 h-10" />
+        <p className="font-medium">No tienes permiso para ver esta pantalla</p>
+      </div>
+    );
+  }
 
   /* ─── render ────────────────────────────────────────────────── */
   return (

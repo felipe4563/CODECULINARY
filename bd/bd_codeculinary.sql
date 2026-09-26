@@ -630,7 +630,8 @@ INSERT INTO `permisos` (`id`, `modulo`, `accion`, `descripcion`) VALUES
 (66, 'insumos', 'crear', 'Crear insumos'),
 (67, 'insumos', 'editar', 'Editar insumos (incluye receta y ajustes de stock)'),
 (68, 'insumos', 'eliminar', 'Desactivar insumos'),
-(69, 'productos', 'disponibilidad', 'Marcar productos como no disponibles hoy');
+(69, 'productos', 'disponibilidad', 'Marcar productos como no disponibles hoy'),
+(70, 'dashboard', 'ver', 'Ver el dashboard');
 
 -- --------------------------------------------------------
 
@@ -884,7 +885,9 @@ INSERT INTO `roles_permisos` (`rol_id`, `permiso_id`) VALUES
 (2, 30),
 (2, 31),
 (1, 69),
-(2, 69);
+(2, 69),
+(1, 70),
+(2, 70);
 
 -- --------------------------------------------------------
 
@@ -1498,7 +1501,7 @@ ALTER TABLE `pedidos`
 -- AUTO_INCREMENT de la tabla `permisos`
 --
 ALTER TABLE `permisos`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=70;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=71;
 
 --
 -- AUTO_INCREMENT de la tabla `productos`

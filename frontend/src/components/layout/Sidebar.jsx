@@ -15,7 +15,7 @@ const NAV_GROUPS = [
     key: 'operacion',
     label: 'Operación',
     items: [
-      { to: '/',           label: 'Dashboard',    Icono: LayoutDashboard, siempre: true },
+      { to: '/',           label: 'Dashboard',    Icono: LayoutDashboard, modulo: 'dashboard', accion: 'ver' },
       { to: '/ventas',     label: 'Ventas / POS',  Icono: UtensilsCrossed, modulo: 'ventas',     accion: 'ver' },
       { to: '/pedidos-externos', label: 'Pedidos externos', Icono: Truck, modulo: 'ventas', accion: 'ver' },
       { to: '/cocina',     label: 'Cocina',        Icono: ChefHat,         modulo: 'cocina',     accion: 'ver' },
