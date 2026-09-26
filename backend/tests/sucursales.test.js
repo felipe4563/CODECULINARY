@@ -46,6 +46,36 @@ describe('Sucursales API', () => {
     expect(eliminar.status).toBe(200);
   });
 
+  it('crea con radio_geocerca_metros y lo puede editar después', async () => {
+    const crear = await request(app)
+      .post('/api/v1/sucursales')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ nombre: 'Sucursal Geocerca Test', latitud: -17.3938, longitud: -63.1905, radio_geocerca_metros: 200 });
+    expect(crear.status).toBe(201);
+    expect(crear.body.datos.radio_geocerca_metros).toBe(200);
+    const id = crear.body.datos.id;
+
+    const editar = await request(app)
+      .put(`/api/v1/sucursales/${id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ radio_geocerca_metros: 75 });
+    expect(editar.status).toBe(200);
+    expect(editar.body.datos.radio_geocerca_metros).toBe(75);
+
+    await request(app).delete(`/api/v1/sucursales/${id}`).set('Authorization', `Bearer ${adminToken}`);
+  });
+
+  it('crea sin radio_geocerca_metros y queda en el default 150', async () => {
+    const crear = await request(app)
+      .post('/api/v1/sucursales')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ nombre: 'Sucursal Geocerca Default Test' });
+    expect(crear.status).toBe(201);
+    expect(crear.body.datos.radio_geocerca_metros).toBe(150);
+
+    await request(app).delete(`/api/v1/sucursales/${crear.body.datos.id}`).set('Authorization', `Bearer ${adminToken}`);
+  });
+
   it('rechaza crear sin nombre', async () => {
     const res = await request(app)
       .post('/api/v1/sucursales')

@@ -238,8 +238,31 @@ function ModalSucursal({ sucursal, onClose, onExito }) {
   const [telefono, setTelefono]   = useState(sucursal?.telefono ?? '');
   const [latitud, setLatitud]     = useState(sucursal?.latitud ?? '');
   const [longitud, setLongitud]   = useState(sucursal?.longitud ?? '');
+  const [radioGeocerca, setRadioGeocerca] = useState(sucursal?.radio_geocerca_metros ?? 150);
   const [activo, setActivo]       = useState(sucursal?.activo ?? 1);
   const [error, setError]         = useState(null);
+  const [buscandoUbicacion, setBuscandoUbicacion] = useState(false);
+
+  const usarUbicacionActual = () => {
+    if (!navigator.geolocation) {
+      setError('Tu navegador no soporta obtener la ubicación actual');
+      return;
+    }
+    setBuscandoUbicacion(true);
+    setError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLatitud(String(pos.coords.latitude));
+        setLongitud(String(pos.coords.longitude));
+        setBuscandoUbicacion(false);
+      },
+      () => {
+        setError('No se pudo obtener tu ubicación — revisá los permisos del navegador');
+        setBuscandoUbicacion(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   const guardar = useMutation({
     mutationFn: () => {
@@ -247,6 +270,7 @@ function ModalSucursal({ sucursal, onClose, onExito }) {
         nombre: nombre.trim(), direccion: direccion.trim(), telefono: telefono.trim(),
         latitud: latitud === '' ? null : parseFloat(latitud),
         longitud: longitud === '' ? null : parseFloat(longitud),
+        radio_geocerca_metros: radioGeocerca === '' ? 150 : parseInt(radioGeocerca, 10),
         activo,
       };
       return esNuevo ? crearSucursal(datos) : actualizarSucursal(sucursal.id, datos);
@@ -294,7 +318,7 @@ function ModalSucursal({ sucursal, onClose, onExito }) {
         </div>
         <div>
           <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
-            Ubicación (para la app de pedidos externa)
+            Ubicación (pedidos externos y control de personal)
           </label>
           <div className="grid grid-cols-2 gap-3">
             <input
@@ -314,8 +338,34 @@ function ModalSucursal({ sucursal, onClose, onExito }) {
               className="w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
             />
           </div>
+          <button
+            type="button"
+            onClick={usarUbicacionActual}
+            disabled={buscandoUbicacion}
+            className="mt-2 text-xs font-medium text-primary hover:underline disabled:opacity-60"
+          >
+            {buscandoUbicacion ? 'Buscando ubicación...' : '📍 Usar mi ubicación actual'}
+          </button>
           <p className="text-xs text-muted-foreground mt-1.5">
-            Opcional. Buscá la sucursal en Google Maps, clic derecho sobre el pin y copiá las coordenadas.
+            Opcional. Buscá la sucursal en Google Maps, clic derecho sobre el pin y copiá las coordenadas, o
+            usá el botón de arriba si estás físicamente en el local.
+          </p>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+            Radio de geocerca (metros)
+          </label>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={radioGeocerca}
+            onChange={e => setRadioGeocerca(e.target.value)}
+            className="w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
+          />
+          <p className="text-xs text-muted-foreground mt-1.5">
+            Distancia máxima a la ubicación de arriba para que el control de personal acepte una marcación
+            de entrada/salida como "dentro de rango". Por defecto 150m.
           </p>
         </div>
         {!esNuevo && (
