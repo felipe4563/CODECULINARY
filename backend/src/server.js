@@ -7,6 +7,7 @@ const { sequelize } = require('./models');
 const { generarCuponesCumpleanos } = require('./jobs/cumpleanos.job');
 const { expirarPagosQrVencidos } = require('./jobs/expirarPagosQr.job');
 const { resetDisponibilidadDiaria } = require('./jobs/resetDisponibilidad.job');
+const { cerrarMarcacionesAbandonadas } = require('./jobs/cierreAutomaticoPersonal.job');
 
 const PORT = process.env.PORT || 3001;
 
@@ -29,6 +30,12 @@ function _correrJobResetDisponibilidad() {
   resetDisponibilidadDiaria()
     .then(({ afectados }) => { if (afectados > 0) console.log(`Disponibilidad diaria reseteada: ${afectados} producto(s)`); })
     .catch(err => console.error('Error reseteando disponibilidad diaria:', err));
+}
+
+function _correrJobCierreAutomaticoPersonal() {
+  cerrarMarcacionesAbandonadas()
+    .then(({ cerrados }) => { if (cerrados > 0) console.log(`Marcaciones de personal cerradas automáticamente: ${cerrados}`); })
+    .catch(err => console.error('Error cerrando marcaciones de personal:', err));
 }
 
 sequelize.authenticate()
@@ -57,6 +64,14 @@ sequelize.authenticate()
     // seguro del error, porque oculta un plato de más en vez de vender uno
     // que no existe.
     cron.schedule('0 6 * * *', _correrJobResetDisponibilidad, { timezone: 'America/La_Paz' });
+
+    // Corre cada hora, las 24 horas — un cierre a hora fija cerraría por
+    // error un turno nocturno legítimo que cruza la medianoche. También
+    // corre una vez al iniciar: a diferencia de resetDisponibilidad, es
+    // seguro porque el umbral de 16 horas nunca toca un turno en curso,
+    // sin importar cuándo se ejecute.
+    _correrJobCierreAutomaticoPersonal();
+    cron.schedule('0 * * * *', _correrJobCierreAutomaticoPersonal);
   })
   .catch(err => {
     console.error('Error DB:', err);
