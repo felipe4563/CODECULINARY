@@ -50,6 +50,7 @@ const PERMISOS = [
   { modulo: 'cajas', accion: 'crear', descripcion: 'Crear cajas' },
   { modulo: 'cajas', accion: 'editar', descripcion: 'Editar cajas' },
   { modulo: 'cajas', accion: 'eliminar', descripcion: 'Eliminar cajas' },
+  { modulo: 'personal', accion: 'administrar', descripcion: 'Configurar horarios, ver y aprobar registros de asistencia de todos los empleados' },
 ];
 
 async function seed() {

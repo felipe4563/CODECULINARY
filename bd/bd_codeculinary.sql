@@ -631,7 +631,8 @@ INSERT INTO `permisos` (`id`, `modulo`, `accion`, `descripcion`) VALUES
 (67, 'insumos', 'editar', 'Editar insumos (incluye receta y ajustes de stock)'),
 (68, 'insumos', 'eliminar', 'Desactivar insumos'),
 (69, 'productos', 'disponibilidad', 'Marcar productos como no disponibles hoy'),
-(70, 'dashboard', 'ver', 'Ver el dashboard');
+(70, 'dashboard', 'ver', 'Ver el dashboard'),
+(71, 'personal', 'administrar', 'Configurar horarios, ver y aprobar registros de asistencia de todos los empleados');
 
 -- --------------------------------------------------------
 
@@ -887,7 +888,8 @@ INSERT INTO `roles_permisos` (`rol_id`, `permiso_id`) VALUES
 (1, 69),
 (2, 69),
 (1, 70),
-(2, 70);
+(2, 70),
+(1, 71);
 
 -- --------------------------------------------------------
 
@@ -960,6 +962,7 @@ CREATE TABLE `sucursales` (
   `telefono` varchar(50) DEFAULT NULL,
   `latitud` decimal(10,7) DEFAULT NULL,
   `longitud` decimal(10,7) DEFAULT NULL,
+  `radio_geocerca_metros` int(10) UNSIGNED NOT NULL DEFAULT 150,
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `creado_en` timestamp NULL DEFAULT current_timestamp(),
   `actualizado_en` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -969,8 +972,8 @@ CREATE TABLE `sucursales` (
 -- Volcado de datos para la tabla `sucursales`
 --
 
-INSERT INTO `sucursales` (`id`, `nombre`, `direccion`, `telefono`, `latitud`, `longitud`, `activo`, `creado_en`, `actualizado_en`) VALUES
-(1, 'Ivigarzama', '', '', NULL, NULL, 1, '2026-07-24 12:23:40', '2026-07-24 12:23:40');
+INSERT INTO `sucursales` (`id`, `nombre`, `direccion`, `telefono`, `latitud`, `longitud`, `radio_geocerca_metros`, `activo`, `creado_en`, `actualizado_en`) VALUES
+(1, 'Ivigarzama', '', '', NULL, NULL, 150, 1, '2026-07-24 12:23:40', '2026-07-24 12:23:40');
 
 -- --------------------------------------------------------
 
@@ -1501,7 +1504,7 @@ ALTER TABLE `pedidos`
 -- AUTO_INCREMENT de la tabla `permisos`
 --
 ALTER TABLE `permisos`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=71;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=72;
 
 --
 -- AUTO_INCREMENT de la tabla `productos`
@@ -1815,6 +1818,51 @@ ALTER TABLE `usuarios`
 ALTER TABLE `usuarios_sucursales`
   ADD CONSTRAINT `usuarios_sucursales_ibfk_1` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `usuarios_sucursales_ibfk_2` FOREIGN KEY (`sucursal_id`) REFERENCES `sucursales` (`id`) ON DELETE CASCADE;
+
+--
+-- Estructura para las tablas de Control de Personal (agregadas a mano,
+-- con restricciones en línea en vez de seguir el estilo de secciones
+-- separadas del resto de este volcado — ver migración 051)
+--
+
+CREATE TABLE `horarios_personal` (
+  `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `usuario_id` int(10) UNSIGNED NOT NULL,
+  `dia_semana` tinyint(3) UNSIGNED NOT NULL,
+  `trabaja` tinyint(1) NOT NULL DEFAULT 1,
+  `hora_entrada` time DEFAULT NULL,
+  `hora_salida` time DEFAULT NULL,
+  `creado_en` datetime NOT NULL DEFAULT current_timestamp(),
+  `actualizado_en` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  UNIQUE KEY `horario_usuario_dia` (`usuario_id`,`dia_semana`),
+  CONSTRAINT `horarios_personal_ibfk_1` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `marcaciones_personal` (
+  `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `usuario_id` int(10) UNSIGNED NOT NULL,
+  `sucursal_id` int(10) UNSIGNED NOT NULL,
+  `fecha` date NOT NULL,
+  `hora_entrada` datetime NOT NULL,
+  `lat_entrada` decimal(10,7) DEFAULT NULL,
+  `lng_entrada` decimal(10,7) DEFAULT NULL,
+  `verificacion_entrada` enum('ok','fuera_de_rango','sin_verificar') NOT NULL DEFAULT 'sin_verificar',
+  `hora_salida` datetime DEFAULT NULL,
+  `lat_salida` decimal(10,7) DEFAULT NULL,
+  `lng_salida` decimal(10,7) DEFAULT NULL,
+  `verificacion_salida` enum('ok','fuera_de_rango','sin_verificar') DEFAULT NULL,
+  `estado` enum('abierto','cerrado','cierre_automatico') NOT NULL DEFAULT 'abierto',
+  `hora_salida_propuesta` datetime DEFAULT NULL,
+  `nota_propuesta` varchar(255) DEFAULT NULL,
+  `aprobado_por` int(10) UNSIGNED DEFAULT NULL,
+  `aprobado_en` datetime DEFAULT NULL,
+  `creado_en` datetime NOT NULL DEFAULT current_timestamp(),
+  `actualizado_en` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  CONSTRAINT `marcaciones_personal_ibfk_1` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`id`),
+  CONSTRAINT `marcaciones_personal_ibfk_2` FOREIGN KEY (`sucursal_id`) REFERENCES `sucursales` (`id`),
+  CONSTRAINT `marcaciones_personal_ibfk_3` FOREIGN KEY (`aprobado_por`) REFERENCES `usuarios` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

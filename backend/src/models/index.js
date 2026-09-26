@@ -62,6 +62,8 @@ const RecetaInsumo = require('./RecetaInsumo');
 const DetallePedidoOpcion = require('./DetallePedidoOpcion');
 const DetallePedidoComboOpcion = require('./DetallePedidoComboOpcion');
 const IntegracionApiKey = require('./IntegracionApiKey');
+const HorarioPersonal = require('./HorarioPersonal');
+const MarcacionPersonal = require('./MarcacionPersonal');
 
 // Roles y Permisos
 Rol.belongsToMany(Permiso, { through: RolesPermisos, foreignKey: 'rol_id', otherKey: 'permiso_id', as: 'permisos' });
@@ -215,6 +217,15 @@ Pedido.hasMany(PagoQr, { foreignKey: 'pedido_id', as: 'pagosQr' });
 PagoQr.belongsTo(Pedido, { foreignKey: 'pedido_id', as: 'pedido' });
 PagoQr.belongsTo(Sucursal, { foreignKey: 'sucursal_id', as: 'sucursal' });
 
+// Control de personal (entrada/salida por GPS + horarios semanales)
+Usuario.hasMany(HorarioPersonal, { foreignKey: 'usuario_id', as: 'horarios_personal' });
+HorarioPersonal.belongsTo(Usuario, { foreignKey: 'usuario_id', as: 'usuario' });
+
+Usuario.hasMany(MarcacionPersonal, { foreignKey: 'usuario_id', as: 'marcaciones' });
+MarcacionPersonal.belongsTo(Usuario, { foreignKey: 'usuario_id', as: 'usuario' });
+MarcacionPersonal.belongsTo(Sucursal, { foreignKey: 'sucursal_id', as: 'sucursal' });
+MarcacionPersonal.belongsTo(Usuario, { foreignKey: 'aprobado_por', as: 'aprobador' });
+
 module.exports = {
   sequelize,
   Rol, Permiso, Usuario,
@@ -236,4 +247,5 @@ module.exports = {
   RuletaPremio, RuletaGiro,
   Insumo, InsumoStockSucursal, InsumoMovimiento, RecetaInsumo, DetallePedidoOpcion, DetallePedidoComboOpcion,
   IntegracionApiKey,
+  HorarioPersonal, MarcacionPersonal,
 };
