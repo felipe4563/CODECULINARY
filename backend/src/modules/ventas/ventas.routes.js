@@ -7,7 +7,7 @@ const { requiereSucursalActiva } = require('../../middlewares/sucursalActiva');
 const router = Router();
 router.use(auth);
 
-router.get('/cocina', verificarPermiso('ventas', 'ver'), ctrl.listarCocina);
+router.get('/cocina', verificarPermiso('cocina', 'ver'), ctrl.listarCocina);
 router.get('/', verificarPermiso('ventas', 'ver'), ctrl.listar);
 router.post('/', verificarPermiso('ventas', 'crear'), requiereSucursalActiva, ctrl.crear);
 router.post('/completa', verificarPermiso('ventas', 'crear'), requiereSucursalActiva, ctrl.crearCompleta);
@@ -20,7 +20,7 @@ router.post('/:id/cobrar', verificarPermiso('ventas', 'cobrar'), requiereSucursa
 router.get('/:id/pago-qr/estado', verificarPermiso('ventas', 'cobrar'), ctrl.estadoPagoQr);
 router.post('/:id/pago-qr/cancelar', verificarPermiso('ventas', 'cobrar'), ctrl.cancelarPagoQr);
 router.post('/:id/cancelar', verificarPermiso('ventas', 'cancelar'), ctrl.cancelar);
-router.patch('/:id/listo', verificarPermiso('ventas', 'ver'), ctrl.marcarListo);
-router.patch('/:id/entregado', verificarPermiso('ventas', 'ver'), ctrl.marcarEntregado);
+router.patch('/:id/listo', verificarPermiso('cocina', 'ver'), ctrl.marcarListo);
+router.patch('/:id/entregado', verificarPermiso('cocina', 'ver'), ctrl.marcarEntregado);
 
 module.exports = router;
