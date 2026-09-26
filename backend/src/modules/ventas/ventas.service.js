@@ -200,7 +200,7 @@ async function listar({ estado, mesa_id, sucursal_id, cliente_id, origen, acceso
 }
 
 async function listarCocina({ sucursal_id, acceso_todas } = {}) {
-  const where = { estado: { [Op.in]: ['pendiente', 'listo'] } };
+  const where = { estado_cocina: { [Op.in]: ['pendiente', 'listo'] } };
   if (!acceso_todas) where.sucursal_id = sucursal_id;
   return Pedido.findAll({
     where,
@@ -1150,8 +1150,8 @@ async function marcarListo(pedido_id, alcance) {
   const pedido = await Pedido.findByPk(pedido_id);
   if (!pedido) throw Object.assign(new Error('Pedido no encontrado'), { status: 404 });
   _verificarAlcance(pedido, alcance);
-  if (pedido.estado !== 'pendiente') throw Object.assign(new Error('Solo pedidos pendientes pueden marcarse como listos'), { status: 409 });
-  await pedido.update({ estado: 'listo' });
+  if (pedido.estado_cocina !== 'pendiente') throw Object.assign(new Error('Solo pedidos pendientes de cocina pueden marcarse como listos'), { status: 409 });
+  await pedido.update({ estado_cocina: 'listo' });
   const listo = await obtener(pedido_id);
   emitir('restaurante:actualizar', { tipo: 'pedido_listo' });
   return listo;
