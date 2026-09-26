@@ -8,9 +8,10 @@ jest.mock('../src/integrations/codepay/codepay.client', () => ({
 const request = require('supertest');
 const app = require('../src/app');
 const bcrypt = require('bcryptjs');
+const codepayClientMock = require('../src/integrations/codepay/codepay.client');
 const {
   Sucursal, Categoria, Producto, ProductoStockSucursal, Usuario, Rol,
-  Caja, SesionCaja, Pedido, LibroCaja, Configuracion,
+  Caja, SesionCaja, Pedido, LibroCaja, Configuracion, PagoQr,
 } = require('../src/models');
 
 describe('estado_cocina — independiente del cobro', () => {
@@ -41,6 +42,7 @@ describe('estado_cocina — independiente del cobro', () => {
   });
 
   afterAll(async () => {
+    await PagoQr.destroy({ where: { sucursal_id: sucursalId } });
     await Pedido.destroy({ where: { usuario_id: usuarioId } });
     await LibroCaja.destroy({ where: { usuario_id: usuarioId } });
     await SesionCaja.destroy({ where: { id: sesionId } });
@@ -209,6 +211,41 @@ describe('estado_cocina — independiente del cobro', () => {
     await Area.destroy({ where: { id: area.id } });
   });
 
+  it("agregarItem con producto invalido sobre un pedido listo NO lo reabre (I2)", async () => {
+    await Configuracion.upsert({ clave: 'flujo_cocina', valor: 'digital' });
+    const Mesa = require('../src/models').Mesa;
+    const Area = require('../src/models').Area;
+    const area = await Area.create({ nombre: 'Area I2 Test', sucursal_id: sucursalId });
+    const mesa = await Mesa.create({ nombre: 'Mesa I2 Test', area_id: area.id, sucursal_id: sucursalId, estado: 'disponible' });
+
+    const abierto = await request(app)
+      .post('/api/v1/ventas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ tipo: 'mesa', mesa_id: mesa.id, sesion_caja_id: sesionId });
+    const pedidoId = abierto.body.datos.id;
+
+    await request(app)
+      .post(`/api/v1/ventas/${pedidoId}/items`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ producto_id: productoId, cantidad: 1 });
+
+    await request(app)
+      .patch(`/api/v1/ventas/${pedidoId}/listo`)
+      .set('Authorization', `Bearer ${token}`);
+
+    const res = await request(app)
+      .post(`/api/v1/ventas/${pedidoId}/items`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ producto_id: 999999999, cantidad: 1 });
+    expect(res.status).toBe(404);
+
+    const pedido = await Pedido.findByPk(pedidoId);
+    expect(pedido.estado_cocina).toBe('listo');
+
+    await Mesa.destroy({ where: { id: mesa.id } });
+    await Area.destroy({ where: { id: area.id } });
+  });
+
   it("cancelar limpia estado_cocina junto con estado", async () => {
     await Configuracion.upsert({ clave: 'flujo_cocina', valor: 'digital' });
     const Mesa = require('../src/models').Mesa;
@@ -229,6 +266,81 @@ describe('estado_cocina — independiente del cobro', () => {
 
     const pedido = await Pedido.findByPk(pedidoId);
     expect(pedido.estado).toBe('cancelado');
+    expect(pedido.estado_cocina).toBeNull();
+
+    await Mesa.destroy({ where: { id: mesa.id } });
+    await Area.destroy({ where: { id: area.id } });
+  });
+
+  it("un pago QR de autoservicio abandonado limpia estado_cocina al cancelarse (C2)", async () => {
+    await Configuracion.upsert({ clave: 'flujo_cocina', valor: 'digital' });
+    const Mesa = require('../src/models').Mesa;
+    const Area = require('../src/models').Area;
+    const PagoQr = require('../src/models').PagoQr;
+    const area = await Area.create({ nombre: 'Area C2 Test', sucursal_id: sucursalId });
+    const mesa = await Mesa.create({ nombre: 'Mesa C2 Test', area_id: area.id, sucursal_id: sucursalId, estado: 'disponible' });
+
+    codepayClientMock.generarQr.mockResolvedValue({
+      qr_code: 'data:image/png;base64,abc', tx_id: 'tx_qr_c2', amount: 10.35, net_amount: 10, commission_amount: 0.35,
+    });
+
+    const creado = await request(app)
+      .post('/api/v1/ventas/completa')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        tipo: 'mesa', mesa_id: mesa.id, items: [{ producto_id: productoId, cantidad: 1 }],
+        metodo_pago: 'qr', sesion_caja_id: sesionId, origen: 'autoservicio',
+      });
+    expect(creado.status).toBe(201);
+    const pedidoId = creado.body.datos.pedido.id;
+    expect(creado.body.datos.pedido.estado_cocina).toBe('pendiente');
+
+    const pagoQr = await PagoQr.findOne({ where: { pedido_id: pedidoId } });
+    expect(pagoQr).not.toBeNull();
+
+    const res = await request(app)
+      .post(`/api/v1/ventas/${pedidoId}/pago-qr/cancelar`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+
+    const pedido = await Pedido.findByPk(pedidoId);
+    expect(pedido.estado).toBe('cancelado');
+    expect(pedido.estado_cocina).toBeNull();
+
+    await Mesa.destroy({ where: { id: mesa.id } });
+    await Area.destroy({ where: { id: area.id } });
+  });
+
+  it("cobrar limpia estado_cocina de una mesa que cocina ya marco lista (C1, caso cubierto)", async () => {
+    await Configuracion.upsert({ clave: 'flujo_cocina', valor: 'digital' });
+    const Mesa = require('../src/models').Mesa;
+    const Area = require('../src/models').Area;
+    const area = await Area.create({ nombre: 'Area C1 Test', sucursal_id: sucursalId });
+    const mesa = await Mesa.create({ nombre: 'Mesa C1 Test', area_id: area.id, sucursal_id: sucursalId, estado: 'disponible' });
+
+    const abierto = await request(app)
+      .post('/api/v1/ventas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ tipo: 'mesa', mesa_id: mesa.id, sesion_caja_id: sesionId });
+    const pedidoId = abierto.body.datos.id;
+
+    await request(app)
+      .post(`/api/v1/ventas/${pedidoId}/items`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ producto_id: productoId, cantidad: 1 });
+
+    await request(app)
+      .patch(`/api/v1/ventas/${pedidoId}/listo`)
+      .set('Authorization', `Bearer ${token}`);
+
+    const res = await request(app)
+      .post(`/api/v1/ventas/${pedidoId}/cobrar`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ metodo_pago: 'efectivo', monto_recibido: 100 });
+    expect(res.status).toBe(200);
+
+    const pedido = await Pedido.findByPk(pedidoId);
+    expect(pedido.estado).toBe('completado');
     expect(pedido.estado_cocina).toBeNull();
 
     await Mesa.destroy({ where: { id: mesa.id } });

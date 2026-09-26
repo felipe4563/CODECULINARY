@@ -720,8 +720,10 @@ async function _revertirPagoQr(pagoQrInicial, nuevoEstado) {
     // a estado_previo: ahí el pedido ya existía en cocina antes del intento
     // de cobro y el mozo sigue atendiendo la mesa.
     const esAutoservicio = pedido && pedido.origen === 'autoservicio';
+    const cambiosPedido = { estado: esAutoservicio ? 'cancelado' : pagoQr.estado_previo, puntos_canjeados: 0, cupon_id: null, descuento_cupon: 0 };
+    if (esAutoservicio) cambiosPedido.estado_cocina = null;
     await Pedido.update(
-      { estado: esAutoservicio ? 'cancelado' : pagoQr.estado_previo, puntos_canjeados: 0, cupon_id: null, descuento_cupon: 0 },
+      cambiosPedido,
       { where: { id: pagoQr.pedido_id }, transaction: t }
     );
 
@@ -769,6 +771,15 @@ async function _confirmarPagoQr(pagoQrInicial) {
       canjeYaReservado: true,
     }, t);
     await pagoQr.update({ estado: 'completado' }, { transaction: t });
+    // Un pago QR de autoservicio se confirma ANTES de que la comida se
+    // prepare (es el pago del pedido recién hecho, no el cierre de una
+    // cuenta abierta) — limpiar estado_cocina acá lo ocultaría de Cocina
+    // antes de que se cocine, reproduciendo el bug original para ese
+    // flujo. Para staff (una mesa que ya estaba en curso y se cobra por
+    // QR), este SÍ es el evento de "ya se pagó, sale de cocina".
+    if (pedido.origen !== 'autoservicio') {
+      await Pedido.update({ estado_cocina: null }, { where: { id: pedido.id }, transaction: t });
+    }
     return pedido.id;
   });
 
@@ -984,9 +995,6 @@ async function agregarItem(pedido_id, { producto_id, combo_id, cantidad = 1, not
   const pedido = await Pedido.findByPk(pedido_id);
   if (!pedido) throw Object.assign(new Error('Pedido no encontrado'), { status: 404 });
   _verificarAlcance(pedido, alcance);
-  if (pedido.estado_cocina === 'listo') {
-    await pedido.update({ estado_cocina: 'pendiente' });
-  }
   if (pedido.estado !== 'pendiente') throw Object.assign(new Error('El pedido no está pendiente'), { status: 409 });
 
   if (combo_id) {
@@ -1007,6 +1015,9 @@ async function agregarItem(pedido_id, { producto_id, combo_id, cantidad = 1, not
       if (filas.length) await DetallePedidoComboOpcion.bulkCreate(filas);
     }
     await _recalcularTotal(pedido_id);
+    if (pedido.estado_cocina === 'listo') {
+      await pedido.update({ estado_cocina: 'pendiente' });
+    }
     emitir('restaurante:actualizar', { tipo: 'pedido_items' });
     return item;
   }
@@ -1033,6 +1044,9 @@ async function agregarItem(pedido_id, { producto_id, combo_id, cantidad = 1, not
   }
 
   await _recalcularTotal(pedido_id);
+  if (pedido.estado_cocina === 'listo') {
+    await pedido.update({ estado_cocina: 'pendiente' });
+  }
   emitir('restaurante:actualizar', { tipo: 'pedido_items' });
   return item;
 }
@@ -1105,6 +1119,7 @@ async function cobrar(pedido_id, usuario_id, { metodo_pago, monto_recibido, desc
 
   const detalles = pedido.detalles.map((d) => ({ id: d.id, producto_id: d.producto_id, combo_id: d.combo_id, cantidad: d.cantidad, precio: parseFloat(d.precio) }));
   await sequelize.transaction((t) => _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, descuento, propina, usuario_id, puntos_canjear, cupon_codigo }, t));
+  await Pedido.update({ estado_cocina: null }, { where: { id: pedido_id } });
 
   const cobrado = await obtener(pedido_id);
   emitir('restaurante:actualizar', { tipo: 'pedido_cobrado' }, pedido.sucursal_id);

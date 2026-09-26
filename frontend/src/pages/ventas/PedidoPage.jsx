@@ -79,7 +79,7 @@ export default function PedidoPage() {
   const total = parseFloat(pedido?.total ?? 0);
   const esPendiente = pedido?.estado === 'pendiente';
   const esListo     = pedido?.estado_cocina === 'listo';
-  const puedeOperar = esPendiente || esListo;
+  const puedeOperar = esPendiente;
 
   // Mutaciones
   const agregar = useMutation({
