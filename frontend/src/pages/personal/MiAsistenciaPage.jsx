@@ -46,6 +46,8 @@ function AvisoCorreccion({ marcacion, onEnviado }) {
 
   const proponer = useMutation({
     mutationFn: () => proponerHoraSalida(marcacion.id, {
+      // -04:00 es la única zona horaria de esta app (Bolivia); si algún día
+      // se soportan otros países, este offset deberá volverse configurable.
       hora_salida_propuesta: `${marcacion.fecha}T${hora}:00-04:00`,
       nota_propuesta: nota || undefined,
     }),
@@ -83,7 +85,7 @@ export default function MiAsistenciaPage() {
   const qc = useQueryClient();
   const [error, setError] = useState(null);
 
-  const { data: estado, isLoading } = useQuery({
+  const { data: estado, isLoading, isError, error: errorEstado } = useQuery({
     queryKey: ['mi-estado-asistencia'],
     queryFn: getMiEstadoAsistencia,
   });
@@ -110,6 +112,11 @@ export default function MiAsistenciaPage() {
 
       {isLoading ? (
         <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">Cargando...</div>
+      ) : isError ? (
+        <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 flex items-center gap-2 text-sm text-destructive">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          {errorEstado?.response?.data?.mensaje ?? 'No se pudo cargar tu estado de asistencia'}
+        </div>
       ) : (
         <>
           {estado.correccion_pendiente && (
