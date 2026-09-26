@@ -56,10 +56,10 @@ export default function CocinaPage() {
     );
   }
 
-  const pendientesMesa   = pedidos.filter(p => p.estado === 'pendiente' && p.tipo === 'mesa');
-  const listosMesa       = pedidos.filter(p => p.estado === 'listo'     && p.tipo === 'mesa');
-  const pendientesLlevar = pedidos.filter(p => p.estado === 'pendiente' && p.tipo !== 'mesa');
-  const listosLlevar     = pedidos.filter(p => p.estado === 'listo'     && p.tipo !== 'mesa');
+  const pendientesMesa   = pedidos.filter(p => p.estado_cocina === 'pendiente' && p.tipo === 'mesa');
+  const listosMesa       = pedidos.filter(p => p.estado_cocina === 'listo'     && p.tipo === 'mesa');
+  const pendientesLlevar = pedidos.filter(p => p.estado_cocina === 'pendiente' && p.tipo !== 'mesa');
+  const listosLlevar     = pedidos.filter(p => p.estado_cocina === 'listo'     && p.tipo !== 'mesa');
 
   return (
     <div className="space-y-6">
@@ -193,7 +193,7 @@ export default function CocinaPage() {
 }
 
 function PedidoCard({ pedido, onListo, cargando, esLlevar }) {
-  const esNuevo = pedido.estado === 'pendiente';
+  const esNuevo = pedido.estado_cocina === 'pendiente';
 
   return (
     <div className={`rounded-2xl border p-4 space-y-3 transition-all ${

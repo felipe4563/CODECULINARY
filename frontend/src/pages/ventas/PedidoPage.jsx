@@ -78,7 +78,7 @@ export default function PedidoPage() {
 
   const total = parseFloat(pedido?.total ?? 0);
   const esPendiente = pedido?.estado === 'pendiente';
-  const esListo     = pedido?.estado === 'listo';
+  const esListo     = pedido?.estado_cocina === 'listo';
   const puedeOperar = esPendiente || esListo;
 
   // Mutaciones
@@ -218,12 +218,14 @@ export default function PedidoPage() {
                 : `${pedido.mesa?.nombre} — Orden #${pedido.id}`}
             </h1>
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-              pedido.estado === 'pendiente'   ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
-              pedido.estado === 'listo'       ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-              pedido.estado === 'completado'  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-              'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+              pedido.estado === 'completado'   ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+              pedido.estado === 'cancelado'    ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+              pedido.estado_cocina === 'listo' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+              'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
             }`}>
-              {pedido.estado === 'listo' ? '✓ Listo' : pedido.estado}
+              {pedido.estado === 'completado' ? 'completado' :
+               pedido.estado === 'cancelado'  ? 'cancelado' :
+               pedido.estado_cocina === 'listo' ? '✓ Listo' : 'pendiente'}
             </span>
             {pedido.notas && (
               <p className="text-xs text-amber-600 dark:text-amber-400 italic mt-0.5 truncate">Nota: {pedido.notas}</p>
