@@ -984,6 +984,9 @@ async function agregarItem(pedido_id, { producto_id, combo_id, cantidad = 1, not
   const pedido = await Pedido.findByPk(pedido_id);
   if (!pedido) throw Object.assign(new Error('Pedido no encontrado'), { status: 404 });
   _verificarAlcance(pedido, alcance);
+  if (pedido.estado_cocina === 'listo') {
+    await pedido.update({ estado_cocina: 'pendiente' });
+  }
   if (pedido.estado !== 'pendiente') throw Object.assign(new Error('El pedido no está pendiente'), { status: 409 });
 
   if (combo_id) {
@@ -1122,7 +1125,7 @@ async function cancelar(pedido_id, usuario_id, alcance) {
   _verificarAlcance(pedido, alcance);
   if (pedido.estado !== 'pendiente') throw Object.assign(new Error('Solo se pueden cancelar pedidos pendientes'), { status: 409 });
 
-  await pedido.update({ estado: 'cancelado' });
+  await pedido.update({ estado: 'cancelado', estado_cocina: null });
 
   if (pedido.tipo !== 'llevar' && pedido.mesa_id) {
     // Libera mesa.estado; la sesión de autoservicio se cierra solo a mano
