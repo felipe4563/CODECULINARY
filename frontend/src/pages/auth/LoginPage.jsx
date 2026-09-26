@@ -8,6 +8,20 @@ import {
 import api from '../../api/cliente';
 import { useAuthStore } from '../../store/authStore';
 import { getConfiguracionPublica, logoSrc } from '../../api/configuracion';
+import { NAV_GROUPS } from '../../components/layout/navGroups';
+
+// Tras loguearse, manda a la primera pantalla del menú a la que el usuario
+// realmente tiene acceso — no siempre "/" (Dashboard), porque ese permiso
+// se puede sacar por rol. Sin esto, un rol sin permiso de Dashboard vería
+// "No tienes permiso" apenas entra, en vez de la pantalla que sí le toca.
+function primeraRutaDisponible(permisos = []) {
+  for (const grupo of NAV_GROUPS) {
+    for (const item of grupo.items) {
+      if (item.modulo && permisos.includes(`${item.modulo}.${item.accion}`)) return item.to;
+    }
+  }
+  return '/perfil';
+}
 
 // Signature element: a rotating HUD ring + fine-dining medallion around the
 // logo — the fusion of "restaurant emblem" and "futuristic scanner target".
@@ -119,7 +133,7 @@ export default function LoginPage() {
         setPaso('sucursal');
       } else {
         setAuth(data.datos);
-        navigate('/');
+        navigate(primeraRutaDisponible(data.datos.usuario?.permisos));
       }
     } catch (err) {
       setError(err.response?.data?.mensaje ?? 'Error al iniciar sesión');
@@ -134,7 +148,7 @@ export default function LoginPage() {
     try {
       const { data } = await api.post('/auth/login/sucursal', { pre_token: preToken, sucursal_id: sucursalId });
       setAuth(data.datos);
-      navigate('/');
+      navigate(primeraRutaDisponible(data.datos.usuario?.permisos));
     } catch (err) {
       setError(err.response?.data?.mensaje ?? 'Error al seleccionar la sucursal');
       setPaso('credenciales');
