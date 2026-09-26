@@ -6,8 +6,14 @@ import { marcarAsistencia, getMiEstadoAsistencia, proponerHoraSalida } from '../
 // Nunca rechaza: si el navegador no soporta geolocalización, el usuario la
 // niega, o se agota el tiempo de espera, se resuelve con lat/lng null — la
 // marcación sigue adelante igual, solo queda "sin_verificar" (ver spec).
+// El timeout de la propia API de Geolocation NO cuenta el tiempo que el
+// navegador tarda en mostrar el diálogo de permiso (solo empieza a contar
+// una vez que arranca a obtener la posición) — en algunos navegadores un
+// diálogo de permiso sin responder deja la promesa colgada indefinidamente.
+// Este backstop garantiza que la marcación "nunca bloquea" (ver spec) aunque
+// el navegador se cuelgue esperando al usuario.
 function _obtenerUbicacion() {
-  return new Promise((resolve) => {
+  const conGeolocalizacion = new Promise((resolve) => {
     if (!navigator.geolocation) return resolve({ lat: null, lng: null });
     navigator.geolocation.getCurrentPosition(
       (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
@@ -15,18 +21,20 @@ function _obtenerUbicacion() {
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
     );
   });
+  const backstop = new Promise((resolve) => setTimeout(() => resolve({ lat: null, lng: null }), 10000));
+  return Promise.race([conGeolocalizacion, backstop]);
 }
 
 function _horasTrabajadas(entrada, salida) {
   if (!salida) return '—';
-  const ms = new Date(salida) - new Date(entrada);
-  const horas = Math.floor(ms / 3600000);
-  const minutos = Math.round((ms % 3600000) / 60000);
+  const totalMinutos = Math.round((new Date(salida) - new Date(entrada)) / 60000);
+  const horas = Math.floor(totalMinutos / 60);
+  const minutos = totalMinutos % 60;
   return `${horas}h ${minutos}m`;
 }
 
 function _fechaHora(iso) {
-  return new Date(iso).toLocaleString('es-BO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleString('es-BO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/La_Paz' });
 }
 
 function VerificacionBadge({ v }) {
@@ -121,6 +129,7 @@ export default function MiAsistenciaPage() {
         <>
           {estado.correccion_pendiente && (
             <AvisoCorreccion
+              key={estado.correccion_pendiente.id}
               marcacion={estado.correccion_pendiente}
               onEnviado={() => qc.invalidateQueries({ queryKey: ['mi-estado-asistencia'] })}
             />

@@ -86,6 +86,25 @@ async function miEstado(usuario_id) {
   return { marcacion_abierta, historial, correccion_pendiente };
 }
 
+// Reglas de "cuándo es la salida real" compartidas entre el cron (que ya las
+// implementaba) y las correcciones manuales — evita que una corrección o
+// aprobación pinee la salida al día de la entrada cuando el turno cruza la
+// medianoche.
+function _normalizarHoraSalida(horaEntrada, candidata) {
+  const entrada = new Date(horaEntrada);
+  let salida = new Date(candidata);
+  if (isNaN(salida.getTime())) {
+    throw Object.assign(new Error('Hora de salida inválida'), { status: 400 });
+  }
+  if (salida <= entrada) {
+    salida = new Date(salida.getTime() + 24 * 60 * 60 * 1000);
+  }
+  if (salida.getTime() - entrada.getTime() > 24 * 60 * 60 * 1000) {
+    throw Object.assign(new Error('La hora de salida no puede ser más de 24 horas después de la entrada'), { status: 400 });
+  }
+  return salida;
+}
+
 async function proponerSalida(usuario_id, marcacion_id, { hora_salida_propuesta, nota_propuesta } = {}) {
   const marcacion = await MarcacionPersonal.findOne({ where: { id: marcacion_id, usuario_id } });
   if (!marcacion) throw Object.assign(new Error('Marcación no encontrada'), { status: 404 });
@@ -95,7 +114,8 @@ async function proponerSalida(usuario_id, marcacion_id, { hora_salida_propuesta,
   if (!hora_salida_propuesta) {
     throw Object.assign(new Error('hora_salida_propuesta es requerida'), { status: 400 });
   }
-  await marcacion.update({ hora_salida_propuesta, nota_propuesta: nota_propuesta || null });
+  const salidaNormalizada = _normalizarHoraSalida(marcacion.hora_entrada, hora_salida_propuesta);
+  await marcacion.update({ hora_salida_propuesta: salidaNormalizada, nota_propuesta: nota_propuesta || null });
   return marcacion;
 }
 
@@ -194,8 +214,9 @@ async function resolverCierreAutomatico(marcacion_id, admin_usuario_id, { hora_s
     throw Object.assign(new Error('Esta marcación no está pendiente de revisión'), { status: 409 });
   }
   if (!hora_salida) throw Object.assign(new Error('hora_salida es requerida'), { status: 400 });
+  const salidaNormalizada = _normalizarHoraSalida(marcacion.hora_entrada, hora_salida);
   await marcacion.update({
-    hora_salida,
+    hora_salida: salidaNormalizada,
     estado: 'cerrado',
     aprobado_por: admin_usuario_id,
     aprobado_en: new Date(),

@@ -76,6 +76,24 @@ describe('Job: cierre automático de marcaciones de personal', () => {
     expect(nocturno.hora_salida.toISOString()).toBe(new Date(`${fechaSiguiente}T02:00:00-04:00`).toISOString());
   });
 
+  it('entrada tardía (después de la hora de salida programada) usa el tope de 8 horas, no el horario', async () => {
+    const fecha = _fechaHaceDias(8);
+    const diaSemana = _diaSemanaDeFecha(fecha);
+    await HorarioPersonal.create({ usuario_id: usuarioId, dia_semana: diaSemana, trabaja: 1, hora_entrada: '08:00:00', hora_salida: '17:00:00' });
+    // El empleado marcó entrada a las 20:00, después de la hora de salida
+    // programada (17:00) — sin el tope, el rollover empujaría la salida al
+    // día siguiente a las 17:00 (~21h), generando horas extra no aprobadas.
+    const entradaTardia = await MarcacionPersonal.create({
+      usuario_id: usuarioId, sucursal_id: sucursalId, fecha,
+      hora_entrada: new Date(`${fecha}T20:00:00-04:00`), estado: 'abierto',
+    });
+    const { cerrados } = await cerrarMarcacionesAbandonadas();
+    expect(cerrados).toBeGreaterThanOrEqual(1);
+    await entradaTardia.reload();
+    const fechaSiguiente = _fechaMasDias(fecha, 1);
+    expect(entradaTardia.hora_salida.toISOString()).toBe(new Date(`${fechaSiguiente}T04:00:00-04:00`).toISOString());
+  });
+
   it('sin horario configurado, usa entrada + 8 horas como tope', async () => {
     const fecha = _fechaHaceDias(6);
     const sinHorario = await MarcacionPersonal.create({

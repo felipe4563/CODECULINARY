@@ -35,6 +35,17 @@ async function cerrarMarcacionesAbandonadas() {
       if (horaSalida <= marcacion.hora_entrada) {
         horaSalida = new Date(horaSalida.getTime() + 24 * 60 * 60 * 1000);
       }
+      // Salvaguarda: si la entrada se marcó tarde (después de la hora de
+      // salida programada de ese mismo día), el rollover de arriba empujaría
+      // la salida calculada casi un día completo hacia adelante — eso
+      // generaría horas extra no aprobadas (ver spec, Goal 2). Si el cálculo
+      // por horario excede el umbral de cierre automático, o cae en el
+      // futuro, se descarta y se usa el tope por defecto.
+      const excedeUmbral = horaSalida.getTime() - marcacion.hora_entrada.getTime() > UMBRAL_CIERRE_AUTOMATICO_HORAS * 60 * 60 * 1000;
+      const enElFuturo = horaSalida.getTime() > Date.now();
+      if (excedeUmbral || enElFuturo) {
+        horaSalida = new Date(marcacion.hora_entrada.getTime() + HORAS_SALIDA_POR_DEFECTO_SIN_HORARIO * 60 * 60 * 1000);
+      }
     } else {
       horaSalida = new Date(marcacion.hora_entrada.getTime() + HORAS_SALIDA_POR_DEFECTO_SIN_HORARIO * 60 * 60 * 1000);
     }

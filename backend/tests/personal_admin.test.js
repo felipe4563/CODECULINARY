@@ -120,6 +120,33 @@ describe('Personal — administración (horarios, registros)', () => {
     expect(res.body.datos.aprobado_por).not.toBeNull();
   });
 
+  it('resolver corrige el día cuando la salida aprobada cruza la medianoche', async () => {
+    const marcacion = await MarcacionPersonal.create({
+      usuario_id: mozoId, sucursal_id: sucursal.id, fecha: '2026-09-16',
+      hora_entrada: new Date('2026-09-16T22:00:00-04:00'), hora_salida: new Date('2026-09-16T06:00:00-04:00'),
+      estado: 'cierre_automatico',
+    });
+    const res = await request(app)
+      .patch(`/api/v1/personal/marcaciones/${marcacion.id}/resolver`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ hora_salida: '2026-09-16T02:00:00-04:00' });
+    expect(res.status).toBe(200);
+    expect(new Date(res.body.datos.hora_salida).toISOString()).toBe(new Date('2026-09-17T02:00:00-04:00').toISOString());
+  });
+
+  it('resolver rechaza una hora_salida más de 24 horas después de la entrada', async () => {
+    const marcacion = await MarcacionPersonal.create({
+      usuario_id: mozoId, sucursal_id: sucursal.id, fecha: '2026-09-17',
+      hora_entrada: new Date('2026-09-17T08:00:00-04:00'), hora_salida: new Date('2026-09-17T20:00:00-04:00'),
+      estado: 'cierre_automatico',
+    });
+    const res = await request(app)
+      .patch(`/api/v1/personal/marcaciones/${marcacion.id}/resolver`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ hora_salida: '2026-09-19T09:00:00-04:00' });
+    expect(res.status).toBe(400);
+  });
+
   it('resolver sin hora_salida devuelve 400', async () => {
     const marcacion = await MarcacionPersonal.create({
       usuario_id: mozoId, sucursal_id: sucursal.id, fecha: '2026-09-19',

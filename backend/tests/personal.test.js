@@ -162,6 +162,41 @@ describe('Personal — marcar asistencia (empleado)', () => {
     expect(estado.body.datos.correccion_pendiente).toBeNull();
   });
 
+  it('proponer-salida corrige el día cuando el turno cruza la medianoche', async () => {
+    await MarcacionPersonal.destroy({ where: { usuario_id: usuarioId } });
+    const nocturna = await MarcacionPersonal.create({
+      usuario_id: usuarioId, sucursal_id: sucursal.id, fecha: '2026-09-15',
+      hora_entrada: new Date('2026-09-15T22:00:00-04:00'), hora_salida: new Date('2026-09-15T06:00:00-04:00'),
+      estado: 'cierre_automatico',
+    });
+
+    const res = await request(app)
+      .post(`/api/v1/personal/marcaciones/${nocturna.id}/proponer-salida`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ hora_salida_propuesta: '2026-09-15T02:00:00-04:00' });
+    expect(res.status).toBe(200);
+    expect(new Date(res.body.datos.hora_salida_propuesta).toISOString()).toBe(new Date('2026-09-16T02:00:00-04:00').toISOString());
+
+    await nocturna.destroy();
+  });
+
+  it('proponer-salida rechaza una hora más de 24 horas después de la entrada', async () => {
+    await MarcacionPersonal.destroy({ where: { usuario_id: usuarioId } });
+    const marcacion = await MarcacionPersonal.create({
+      usuario_id: usuarioId, sucursal_id: sucursal.id, fecha: '2026-09-14',
+      hora_entrada: new Date('2026-09-14T08:00:00-04:00'), hora_salida: new Date('2026-09-15T00:00:00-04:00'),
+      estado: 'cierre_automatico',
+    });
+
+    const res = await request(app)
+      .post(`/api/v1/personal/marcaciones/${marcacion.id}/proponer-salida`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ hora_salida_propuesta: '2026-09-16T09:00:00-04:00' });
+    expect(res.status).toBe(400);
+
+    await marcacion.destroy();
+  });
+
   it('un empleado no puede proponer una hora de salida sobre la marcación de otro empleado', async () => {
     const otroHash = await bcrypt.hash('clave123', 10);
     const rol = await Rol.findOne({ where: { nombre: 'Mozo' } });

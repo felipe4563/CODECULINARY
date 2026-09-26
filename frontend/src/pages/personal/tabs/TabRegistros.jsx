@@ -2,21 +2,21 @@ import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Download } from 'lucide-react';
 import { getFiltrosPersonal, getMarcacionesPersonal, resolverMarcacionPersonal } from '../../../api/personal';
-import { getConfiguracion, logoSrc } from '../../../api/configuracion';
+import { getConfiguracionPublica, logoSrc } from '../../../api/configuracion';
 import { useAuth } from '../../../hooks/useAuth';
 import { exportarPDF } from '../../reportes/utils/exportarPDF';
 
 function _horasTrabajadas(entrada, salida) {
   if (!salida) return '—';
-  const ms = new Date(salida) - new Date(entrada);
-  const horas = Math.floor(ms / 3600000);
-  const minutos = Math.round((ms % 3600000) / 60000);
+  const totalMinutos = Math.round((new Date(salida) - new Date(entrada)) / 60000);
+  const horas = Math.floor(totalMinutos / 60);
+  const minutos = totalMinutos % 60;
   return `${horas}h ${minutos}m`;
 }
 
 function _fechaHora(iso) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleString('es-BO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleString('es-BO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/La_Paz' });
 }
 
 function FilaResolver({ marcacion, onResuelto }) {
@@ -56,7 +56,7 @@ export default function TabRegistros() {
   const [exportando, setExportando] = useState(false);
 
   const { data: filtros } = useQuery({ queryKey: ['personal-filtros'], queryFn: getFiltrosPersonal });
-  const { data: config = {} } = useQuery({ queryKey: ['configuracion'], queryFn: getConfiguracion });
+  const { data: config = {} } = useQuery({ queryKey: ['configuracion-publica'], queryFn: getConfiguracionPublica });
 
   const params = {
     sucursal_id: sucursalId !== 'todas' ? sucursalId : undefined,
@@ -81,7 +81,7 @@ export default function TabRegistros() {
         direccion: config.direccion,
         telefono: config.telefono,
         generadoPor: usuario?.nombre,
-        columnas: ['Empleado', 'Sucursal', 'Fecha', 'Entrada', 'Salida', 'Horas', 'Estado', 'Verif. entrada', 'Verif. salida', 'Aprobado por'],
+        columnas: ['Empleado', 'Sucursal', 'Fecha', 'Entrada', 'Salida', 'Horas', 'Estado', 'Verif. entrada', 'Verif. salida', 'Aprobado por', 'Aprobado el'],
         filas: marcaciones.map((m) => [
           m.usuario?.nombre || '-',
           m.sucursal?.nombre || '-',
@@ -93,6 +93,7 @@ export default function TabRegistros() {
           m.verificacion_entrada,
           m.verificacion_salida || '-',
           m.aprobador?.nombre || '-',
+          _fechaHora(m.aprobado_en),
         ]),
         nombreArchivo: `registros-asistencia-${desde || 'todo'}-${hasta || 'hoy'}.pdf`,
       });
