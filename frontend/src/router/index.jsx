@@ -27,6 +27,7 @@ import RuletaPage from '../pages/ruleta/RuletaPage';
 import InsumosPage from '../pages/insumos/InsumosPage';
 import AutoservicioPage from '../pages/autoservicio/AutoservicioPage';
 import PedidosExternosPage from '../pages/pedidos-externos/PedidosExternosPage';
+import MiAsistenciaPage from '../pages/personal/MiAsistenciaPage';
 
 export const router = createBrowserRouter(
   [
@@ -63,6 +64,7 @@ export const router = createBrowserRouter(
             { path: '/cocina',           element: <CocinaPage /> },
             { path: '/pantalla-cocina-impresion', element: <PantallaCocinaImpresion /> },
             { path: '/perfil',           element: <PerfilPage /> },
+            { path: '/mi-asistencia',    element: <MiAsistenciaPage /> },
           ],
         },
       ],

@@ -3,6 +3,7 @@ import {
   Package, Boxes, Truck, Users, UserCog, Shield, Settings,
   BarChart2, ChefHat, Building2, Landmark, Store, Grid3x3,
   Gift, Tag, Star, Ticket, Cake, Disc3, Wheat, Printer, Plug,
+  Clock,
 } from 'lucide-react';
 
 // Estructura del menú lateral, reutilizada también por LoginPage para saber
@@ -19,6 +20,7 @@ export const NAV_GROUPS = [
       { to: '/pantalla-cocina-impresion', label: 'Pantalla Cocina (BT)', Icono: Printer, modulo: 'cocina', accion: 'ver' },
       { to: '/caja',       label: 'Caja',          Icono: Wallet,          modulo: 'caja',       accion: 'ver' },
       { to: '/libro-caja', label: 'Libro Caja',    Icono: BookOpen,        modulo: 'libro_caja', accion: 'ver' },
+      { to: '/mi-asistencia', label: 'Mi Asistencia', Icono: Clock, siempre: true },
     ],
   },
   {
