@@ -263,9 +263,9 @@ function PedidoCard({ pedido, onListo, cargando, esLlevar, onEntregado, cargando
           return (
           <li key={d.id} className="flex items-start gap-3">
             {d.producto?.imagen ? (
-              <div className="relative w-9 h-9 rounded-lg overflow-hidden shrink-0">
+              <div className="relative w-16 h-16 sm:w-9 sm:h-9 rounded-lg overflow-hidden shrink-0">
                 <img src={d.producto.imagen} alt={nombre} className="w-full h-full object-cover" />
-                <span className="absolute bottom-0 right-0 min-w-[16px] h-4 px-1 rounded-tl-md bg-black/70 text-white text-[10px] font-bold flex items-center justify-center">
+                <span className="absolute bottom-0 right-0 min-w-[18px] h-[18px] sm:min-w-[16px] sm:h-4 px-1 rounded-tl-md bg-black/70 text-white text-xs sm:text-[10px] font-bold flex items-center justify-center">
                   {d.peso != null ? `${parseFloat(d.peso).toFixed(3)}kg` : d.cantidad}
                 </span>
               </div>
