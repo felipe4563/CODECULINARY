@@ -262,13 +262,22 @@ function PedidoCard({ pedido, onListo, cargando, esLlevar, onEntregado, cargando
           const opcionesPorProducto = esCombo ? _opcionesPorProducto(d.combo_opciones) : {};
           return (
           <li key={d.id} className="flex items-start gap-3">
-            <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
-              esNuevo
-                ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
-                : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-            }`}>
-              {d.peso != null ? `${parseFloat(d.peso).toFixed(3)} kg` : d.cantidad}
-            </span>
+            {d.producto?.imagen ? (
+              <div className="relative w-9 h-9 rounded-lg overflow-hidden shrink-0">
+                <img src={d.producto.imagen} alt={nombre} className="w-full h-full object-cover" />
+                <span className="absolute bottom-0 right-0 min-w-[16px] h-4 px-1 rounded-tl-md bg-black/70 text-white text-[10px] font-bold flex items-center justify-center">
+                  {d.peso != null ? `${parseFloat(d.peso).toFixed(3)}kg` : d.cantidad}
+                </span>
+              </div>
+            ) : (
+              <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
+                esNuevo
+                  ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                  : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+              }`}>
+                {d.peso != null ? `${parseFloat(d.peso).toFixed(3)} kg` : d.cantidad}
+              </span>
+            )}
             <div className="flex-1 min-w-0">
               <div className="flex items-start gap-2">
                 <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">

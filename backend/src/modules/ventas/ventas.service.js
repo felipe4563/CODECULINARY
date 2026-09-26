@@ -166,7 +166,7 @@ const INCLUDE_PEDIDO_COMPLETO = [
   {
     model: DetallePedido, as: 'detalles',
     include: [
-      { model: Producto, as: 'producto', attributes: ['id', 'nombre', 'precio'], required: false },
+      { model: Producto, as: 'producto', attributes: ['id', 'nombre', 'precio', 'imagen'], required: false },
       {
         model: Combo, as: 'combo', attributes: ['id', 'nombre', 'descripcion'], required: false,
         include: [{ model: Producto, as: 'productos', attributes: ['id', 'nombre'], through: { attributes: ['cantidad'] } }],
@@ -199,14 +199,30 @@ async function listar({ estado, mesa_id, sucursal_id, cliente_id, origen, acceso
   return Pedido.findAll({ where, include: INCLUDE_PEDIDO_COMPLETO, order: [['creado_en', 'DESC']] });
 }
 
+// Arma la URL completa de la imagen del producto a partir de la ruta relativa
+// guardada en BD (ej. "/uploads/xxx.jpg"), igual que productos.service.js —
+// acá se repite en vez de importar porque solo Cocina necesita la imagen
+// absolutizada de las demás rutas que reutilizan INCLUDE_PEDIDO_COMPLETO.
+function _urlAbsolutaImagen(ruta) {
+  if (!ruta) return ruta;
+  const base = (process.env.PUBLIC_API_URL || '').replace(/\/+$/, '');
+  return `${base}${ruta}`;
+}
+
 async function listarCocina({ sucursal_id, acceso_todas } = {}) {
   const where = { estado_cocina: { [Op.in]: ['pendiente', 'listo'] } };
   if (!acceso_todas) where.sucursal_id = sucursal_id;
-  return Pedido.findAll({
+  const pedidos = await Pedido.findAll({
     where,
     include: INCLUDE_PEDIDO_COMPLETO,
     order: [['creado_en', 'ASC']],
   });
+  pedidos.forEach((pedido) => {
+    pedido.detalles.forEach((detalle) => {
+      if (detalle.producto) detalle.producto.imagen = _urlAbsolutaImagen(detalle.producto.imagen);
+    });
+  });
+  return pedidos;
 }
 
 function _verificarAlcance(pedido, alcance) {
