@@ -346,4 +346,58 @@ describe('estado_cocina — independiente del cobro', () => {
     await Mesa.destroy({ where: { id: mesa.id } });
     await Area.destroy({ where: { id: area.id } });
   });
+
+  it("marcarEntregado limpia estado_cocina de un pedido listo (venta instantanea de mostrador)", async () => {
+    await Configuracion.upsert({ clave: 'flujo_cocina', valor: 'digital' });
+    const creado = await request(app)
+      .post('/api/v1/ventas/completa')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        tipo: 'llevar', items: [{ producto_id: productoId, cantidad: 1 }],
+        metodo_pago: 'efectivo', monto_recibido: 10, sesion_caja_id: sesionId,
+      });
+    const pedidoId = creado.body.datos.id;
+    expect(creado.body.datos.estado).toBe('completado');
+    expect(creado.body.datos.estado_cocina).toBe('pendiente');
+
+    await request(app)
+      .patch(`/api/v1/ventas/${pedidoId}/listo`)
+      .set('Authorization', `Bearer ${token}`);
+
+    const res = await request(app)
+      .patch(`/api/v1/ventas/${pedidoId}/entregado`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.datos.estado_cocina).toBeNull();
+    expect(res.body.datos.estado).toBe('completado'); // sin cambios
+
+    const listado = await request(app)
+      .get('/api/v1/ventas/cocina')
+      .set('Authorization', `Bearer ${token}`);
+    const ids = listado.body.datos.map((p) => p.id);
+    expect(ids).not.toContain(pedidoId);
+  });
+
+  it("marcarEntregado sobre un pedido con estado_cocina ya NULL -> 409", async () => {
+    await Configuracion.upsert({ clave: 'flujo_cocina', valor: 'fisico' });
+    const creado = await request(app)
+      .post('/api/v1/ventas/completa')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        tipo: 'llevar', items: [{ producto_id: productoId, cantidad: 1 }],
+        metodo_pago: 'efectivo', monto_recibido: 10, sesion_caja_id: sesionId,
+      });
+    const pedidoId = creado.body.datos.id;
+    expect(creado.body.datos.estado_cocina).toBeNull();
+
+    const res = await request(app)
+      .patch(`/api/v1/ventas/${pedidoId}/entregado`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(409);
+  });
+
+  it("marcarEntregado sin token -> 401", async () => {
+    const res = await request(app).patch('/api/v1/ventas/1/entregado');
+    expect(res.status).toBe(401);
+  });
 });

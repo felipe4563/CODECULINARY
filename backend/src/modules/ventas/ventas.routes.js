@@ -21,5 +21,6 @@ router.get('/:id/pago-qr/estado', verificarPermiso('ventas', 'cobrar'), ctrl.est
 router.post('/:id/pago-qr/cancelar', verificarPermiso('ventas', 'cobrar'), ctrl.cancelarPagoQr);
 router.post('/:id/cancelar', verificarPermiso('ventas', 'cancelar'), ctrl.cancelar);
 router.patch('/:id/listo', verificarPermiso('ventas', 'ver'), ctrl.marcarListo);
+router.patch('/:id/entregado', verificarPermiso('ventas', 'ver'), ctrl.marcarEntregado);
 
 module.exports = router;

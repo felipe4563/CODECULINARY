@@ -1175,8 +1175,25 @@ async function marcarListo(pedido_id, alcance) {
   return listo;
 }
 
+// Botón manual para los casos donde nada más limpia estado_cocina solo:
+// una venta instantánea de mostrador (pagada al crearse, sin un evento de
+// cobro posterior) y un pedido de Autoservicio pagado por QR (el pago se
+// confirma antes de que la comida se prepare). Disponible sobre cualquier
+// pedido con estado_cocina en 'pendiente' o 'listo' — para una mesa que
+// de todas formas se limpia sola al cobrar, tocarlo antes no hace daño.
+async function marcarEntregado(pedido_id, alcance) {
+  const pedido = await Pedido.findByPk(pedido_id);
+  if (!pedido) throw Object.assign(new Error('Pedido no encontrado'), { status: 404 });
+  _verificarAlcance(pedido, alcance);
+  if (pedido.estado_cocina === null) throw Object.assign(new Error('Este pedido ya no está en Cocina'), { status: 409 });
+  await pedido.update({ estado_cocina: null });
+  const entregado = await obtener(pedido_id);
+  emitir('restaurante:actualizar', { tipo: 'pedido_entregado' });
+  return entregado;
+}
+
 module.exports = {
   listar, listarCocina, obtener, reimprimir, crear, crearCompleta, agregarItem, actualizarItem, eliminarItem,
-  cobrar, cancelar, marcarListo,
+  cobrar, cancelar, marcarListo, marcarEntregado,
   consultarEstadoPagoQr, cancelarPagoQr, procesarWebhookPagoQr, revertirPagosQrVencidos,
 };

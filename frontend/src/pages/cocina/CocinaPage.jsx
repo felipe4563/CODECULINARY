@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, CheckCircle2, ChefHat, Clock, RefreshCw, ShoppingBag } from 'lucide-react';
-import { getCocinaOrders, marcarListo } from '../../api/ventas';
+import { getCocinaOrders, marcarListo, marcarEntregado } from '../../api/ventas';
 import { usePermisos } from '../../hooks/usePermisos';
 import socket from '../../socket';
 
@@ -44,6 +44,11 @@ export default function CocinaPage() {
 
   const marcar = useMutation({
     mutationFn: (id) => marcarListo(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['cocina'] }),
+  });
+
+  const entregar = useMutation({
+    mutationFn: (id) => marcarEntregado(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['cocina'] }),
   });
 
@@ -137,7 +142,9 @@ export default function CocinaPage() {
                     Ninguno listo aún
                   </div>
                 ) : (
-                  listosMesa.map(p => <PedidoCard key={p.id} pedido={p} />)
+                  listosMesa.map(p => (
+                    <PedidoCard key={p.id} pedido={p} onEntregado={() => entregar.mutate(p.id)} cargandoEntrega={entregar.isPending && entregar.variables === p.id} />
+                  ))
                 )}
               </section>
             </div>
@@ -181,7 +188,9 @@ export default function CocinaPage() {
                     Ninguno listo aún
                   </div>
                 ) : (
-                  listosLlevar.map(p => <PedidoCard key={p.id} pedido={p} esLlevar />)
+                  listosLlevar.map(p => (
+                    <PedidoCard key={p.id} pedido={p} esLlevar onEntregado={() => entregar.mutate(p.id)} cargandoEntrega={entregar.isPending && entregar.variables === p.id} />
+                  ))
                 )}
               </section>
             </div>
@@ -192,7 +201,7 @@ export default function CocinaPage() {
   );
 }
 
-function PedidoCard({ pedido, onListo, cargando, esLlevar }) {
+function PedidoCard({ pedido, onListo, cargando, esLlevar, onEntregado, cargandoEntrega }) {
   const esNuevo = pedido.estado_cocina === 'pendiente';
 
   return (
@@ -306,6 +315,24 @@ function PedidoCard({ pedido, onListo, cargando, esLlevar }) {
             <><RefreshCw className="w-4 h-4 animate-spin" /> Marcando...</>
           ) : (
             <><CheckCircle2 className="w-4 h-4" /> Marcar como listo</>
+          )}
+        </button>
+      )}
+
+      {/* Botón marcar entregado — para los casos donde nada más limpia
+          esto solo (venta instantánea de mostrador, Autoservicio con QR).
+          Se ofrece en cualquier pedido "listo": para una mesa que de
+          todas formas se limpia sola al cobrar, tocarlo antes no hace daño. */}
+      {!esNuevo && onEntregado && (
+        <button
+          onClick={onEntregado}
+          disabled={cargandoEntrega}
+          className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+        >
+          {cargandoEntrega ? (
+            <><RefreshCw className="w-4 h-4 animate-spin" /> Marcando...</>
+          ) : (
+            <><ChefHat className="w-4 h-4" /> Marcar entregado</>
           )}
         </button>
       )}

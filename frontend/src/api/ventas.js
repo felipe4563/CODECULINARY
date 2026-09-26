@@ -33,5 +33,8 @@ export const getCocinaOrders = () =>
 export const marcarListo = (pedido_id) =>
   api.patch(`/ventas/${pedido_id}/listo`).then((r) => r.data.datos);
 
+export const marcarEntregado = (pedido_id) =>
+  api.patch(`/ventas/${pedido_id}/entregado`).then((r) => r.data.datos);
+
 export const crearVentaCompleta = (datos) =>
   api.post('/ventas/completa', datos).then((r) => r.data.datos);

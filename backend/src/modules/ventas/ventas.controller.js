@@ -80,6 +80,11 @@ async function marcarListo(req, res, next) {
   catch (err) { next(err); }
 }
 
+async function marcarEntregado(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.marcarEntregado(req.params.id, _alcance(req)) }); }
+  catch (err) { next(err); }
+}
+
 async function estadoPagoQr(req, res, next) {
   try { res.json({ ok: true, datos: await svc.consultarEstadoPagoQr(req.params.id, _alcance(req)) }); }
   catch (err) { next(err); }
@@ -90,4 +95,4 @@ async function cancelarPagoQr(req, res, next) {
   catch (err) { next(err); }
 }
 
-module.exports = { listar, obtener, reimprimir, crear, crearCompleta, agregarItem, actualizarItem, eliminarItem, cobrar, cancelar, listarCocina, marcarListo, estadoPagoQr, cancelarPagoQr };
+module.exports = { listar, obtener, reimprimir, crear, crearCompleta, agregarItem, actualizarItem, eliminarItem, cobrar, cancelar, listarCocina, marcarListo, marcarEntregado, estadoPagoQr, cancelarPagoQr };
