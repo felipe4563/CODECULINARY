@@ -519,6 +519,7 @@ CREATE TABLE `pedidos` (
   `cliente_id` int(10) UNSIGNED DEFAULT NULL,
   `sesion_caja_id` int(10) UNSIGNED DEFAULT NULL,
   `estado` enum('pendiente','listo','pendiente_pago','completado','cancelado') NOT NULL DEFAULT 'pendiente',
+  `estado_cocina` enum('pendiente','listo') DEFAULT NULL,
   `tipo` enum('mesa','llevar','delivery') NOT NULL DEFAULT 'mesa',
   `origen` enum('staff','autoservicio','app_externa') NOT NULL DEFAULT 'staff',
   `origen_app` varchar(100) DEFAULT NULL,

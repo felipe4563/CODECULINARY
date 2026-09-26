@@ -14,6 +14,7 @@ const Pedido = sequelize.define('Pedido', {
   origen_app: { type: DataTypes.STRING(100), allowNull: true },
   numero_llevar: { type: DataTypes.INTEGER.UNSIGNED, allowNull: true },
   estado: { type: DataTypes.ENUM('pendiente','listo','pendiente_pago','completado','cancelado'), defaultValue: 'pendiente' },
+  estado_cocina: { type: DataTypes.ENUM('pendiente','listo'), allowNull: true, defaultValue: null },
   tipo_documento: { type: DataTypes.STRING(50), defaultValue: 'Ticket' },
   nombre_cliente: { type: DataTypes.STRING(255), defaultValue: 'Público General' },
   documento_cliente: { type: DataTypes.STRING(50) },
