@@ -5,6 +5,17 @@ import { getCocinaOrders, marcarListo } from '../../api/ventas';
 import { usePermisos } from '../../hooks/usePermisos';
 import socket from '../../socket';
 
+// Agrupa las opciones elegidas de los productos DENTRO de un combo por
+// producto_id — ver misma función en ticketCocina.js/ticketVenta.js.
+function _opcionesPorProducto(comboOpciones) {
+  const mapa = {};
+  (comboOpciones || []).forEach((co) => {
+    if (!co.opcion?.nombre) return;
+    (mapa[co.producto_id] ??= []).push(co.opcion.nombre);
+  });
+  return mapa;
+}
+
 function tiempoTranscurrido(fecha) {
   const mins = Math.floor((Date.now() - new Date(fecha)) / 60000);
   if (mins < 1) return 'Ahora mismo';
@@ -236,8 +247,12 @@ function PedidoCard({ pedido, onListo, cargando, esLlevar }) {
 
       {/* Items */}
       <ul className="space-y-1.5">
-        {(pedido.detalles ?? []).map(d => (
-          <li key={d.id} className="flex items-center gap-3">
+        {(pedido.detalles ?? []).map(d => {
+          const esCombo = !!d.combo;
+          const nombre = d.producto?.nombre ?? (esCombo ? `Combo: ${d.combo.nombre}` : '');
+          const opcionesPorProducto = esCombo ? _opcionesPorProducto(d.combo_opciones) : {};
+          return (
+          <li key={d.id} className="flex items-start gap-3">
             <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
               esNuevo
                 ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
@@ -245,14 +260,32 @@ function PedidoCard({ pedido, onListo, cargando, esLlevar }) {
             }`}>
               {d.peso != null ? `${parseFloat(d.peso).toFixed(3)} kg` : d.cantidad}
             </span>
-            <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
-              {d.producto?.nombre}
-            </span>
-            {d.nota && (
-              <span className="text-xs text-gray-400 italic ml-auto truncate max-w-[120px]">{d.nota}</span>
-            )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start gap-2">
+                <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                  {nombre}
+                </span>
+                {d.nota && (
+                  <span className="text-xs text-gray-400 italic ml-auto truncate max-w-[120px]">{d.nota}</span>
+                )}
+              </div>
+              {esCombo && d.combo.productos?.length > 0 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 italic mt-0.5">
+                  {d.combo.productos.map(p => {
+                    const opciones = opcionesPorProducto[p.id];
+                    return `${p.ComboProducto?.cantidad ?? 1}x ${p.nombre}${opciones?.length ? ` (${opciones.join(', ')})` : ''}`;
+                  }).join(', ')}
+                </p>
+              )}
+              {!esCombo && d.opciones?.length > 0 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 italic mt-0.5">
+                  {d.opciones.map(o => o.nombre).join(', ')}
+                </p>
+              )}
+            </div>
           </li>
-        ))}
+          );
+        })}
       </ul>
 
       {/* Notas del pedido */}
