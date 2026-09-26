@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { usePermisos } from '../../hooks/usePermisos';
-import { getConfiguracion, logoSrc } from '../../api/configuracion';
+import { getConfiguracionPublica, logoSrc } from '../../api/configuracion';
 import { ChevronDown, ChevronRight, X, UtensilsCrossed } from 'lucide-react';
 import { NAV_GROUPS } from './navGroups';
 
@@ -35,8 +35,8 @@ export default function Sidebar({ visible, onCerrar }) {
   const { tienePermiso } = usePermisos();
   const location = useLocation();
   const { data: config = {}, isLoading: cargandoConfig } = useQuery({
-    queryKey: ['configuracion'],
-    queryFn: getConfiguracion,
+    queryKey: ['configuracion-publica'],
+    queryFn: getConfiguracionPublica,
     staleTime: 60_000,
   });
   const nombreNegocio = config.nombre_negocio || 'Restaurante';
