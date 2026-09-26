@@ -57,14 +57,16 @@ describe('Personal — marcar asistencia (empleado)', () => {
     expect(res.body.datos.verificacion_entrada).toBe('sin_verificar');
   });
 
-  it('lejos de la sucursal queda fuera_de_rango pero igual marca', async () => {
+  it('lejos de la sucursal se bloquea con 409 (fuera_de_rango sí bloquea)', async () => {
     await MarcacionPersonal.destroy({ where: { usuario_id: usuarioId } });
     const res = await request(app)
       .post('/api/v1/personal/marcar')
       .set('Authorization', `Bearer ${token}`)
       .send({ lat: -17.5, lng: -63.190500 });
-    expect(res.status).toBe(200);
-    expect(res.body.datos.verificacion_entrada).toBe('fuera_de_rango');
+    expect(res.status).toBe(409);
+
+    const marcaciones = await MarcacionPersonal.count({ where: { usuario_id: usuarioId } });
+    expect(marcaciones).toBe(0);
   });
 
   it('una sucursal sin latitud/longitud configuradas deja la marcación sin_verificar', async () => {

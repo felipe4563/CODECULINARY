@@ -38,6 +38,15 @@ async function marcar({ usuario_id, sucursal_id, lat, lng }) {
   const abierta = await MarcacionPersonal.findOne({ where: { usuario_id, estado: 'abierto' } });
   const verificacion = await _verificarUbicacion(sucursal_id, lat, lng);
 
+  // Solo se bloquea cuando el sistema está SEGURO de que está fuera del
+  // radio (hay GPS del navegador y coordenadas de la sucursal para
+  // comparar). 'sin_verificar' nunca bloquea — no hay con qué comparar, y
+  // bloquear ahí dejaría a alguien sin poder marcar por un problema técnico
+  // de su celular (GPS apagado, sin señal, permiso denegado).
+  if (verificacion === 'fuera_de_rango') {
+    throw Object.assign(new Error('Estás fuera del radio permitido para marcar en esta sucursal'), { status: 409 });
+  }
+
   if (!abierta) {
     return MarcacionPersonal.create({
       usuario_id,
