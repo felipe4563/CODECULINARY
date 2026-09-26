@@ -3,7 +3,7 @@ import {
   Package, Boxes, Truck, Users, UserCog, Shield, Settings,
   BarChart2, ChefHat, Building2, Landmark, Store, Grid3x3,
   Gift, Tag, Star, Ticket, Cake, Disc3, Wheat, Printer, Plug,
-  Clock,
+  Clock, UserCheck,
 } from 'lucide-react';
 
 // Estructura del menú lateral, reutilizada también por LoginPage para saber
@@ -47,6 +47,7 @@ export const NAV_GROUPS = [
       { to: '/roles',         label: 'Roles',         Icono: Shield,    modulo: 'roles',         accion: 'ver' },
       { to: '/sucursales',    label: 'Sucursales',    Icono: Building2, modulo: 'sucursales',    accion: 'ver' },
       { to: '/cajas',         label: 'Cajas',         Icono: Landmark,  modulo: 'cajas',         accion: 'ver' },
+      { to: '/personal',      label: 'Control de Personal', Icono: UserCheck, modulo: 'personal', accion: 'administrar' },
       {
         to: '/configuracion', label: 'Configuración', Icono: Settings, modulo: 'configuracion', accion: 'ver',
         subItems: [
