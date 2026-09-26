@@ -10,14 +10,14 @@ const MarcacionPersonal = sequelize.define('MarcacionPersonal', {
   hora_entrada: { type: DataTypes.DATE, allowNull: false },
   lat_entrada: { type: DataTypes.DECIMAL(10, 7), allowNull: true },
   lng_entrada: { type: DataTypes.DECIMAL(10, 7), allowNull: true },
-  verificacion_entrada: { type: DataTypes.ENUM('ok', 'fuera_de_rango', 'sin_verificar'), allowNull: false, defaultValue: 'sin_verificar' },
+  verificacion_entrada: { type: DataTypes.ENUM('ok', 'fuera_de_rango', 'sin_verificar'), allowNull: false, defaultValue: 'sin_verificar', validate: { isIn: [['ok', 'fuera_de_rango', 'sin_verificar']] } },
 
   hora_salida: { type: DataTypes.DATE, allowNull: true },
   lat_salida: { type: DataTypes.DECIMAL(10, 7), allowNull: true },
   lng_salida: { type: DataTypes.DECIMAL(10, 7), allowNull: true },
-  verificacion_salida: { type: DataTypes.ENUM('ok', 'fuera_de_rango', 'sin_verificar'), allowNull: true },
+  verificacion_salida: { type: DataTypes.ENUM('ok', 'fuera_de_rango', 'sin_verificar'), allowNull: true, validate: { isIn: [['ok', 'fuera_de_rango', 'sin_verificar']] } },
 
-  estado: { type: DataTypes.ENUM('abierto', 'cerrado', 'cierre_automatico'), allowNull: false, defaultValue: 'abierto' },
+  estado: { type: DataTypes.ENUM('abierto', 'cerrado', 'cierre_automatico'), allowNull: false, defaultValue: 'abierto', validate: { isIn: [['abierto', 'cerrado', 'cierre_automatico']] } },
 
   hora_salida_propuesta: { type: DataTypes.DATE, allowNull: true },
   nota_propuesta: { type: DataTypes.STRING(255), allowNull: true },
