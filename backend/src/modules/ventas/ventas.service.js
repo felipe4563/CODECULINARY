@@ -275,6 +275,16 @@ async function _siguienteNumeroLlevar() {
   return count + 1;
 }
 
+// El flujo de cocina digital necesita saber, en cuanto nace el pedido, si
+// tiene que aparecer en la pantalla de Cocina — independientemente de si
+// ya se cobró o no (ver spec: estado_cocina es un eje separado de estado).
+// Ausencia de configuración se trata como 'digital' (mismo default que ya
+// usa TabFlujo.jsx en el frontend).
+async function _estadoCocinaInicial() {
+  const cfg = await Configuracion.findOne({ where: { clave: 'flujo_cocina' } });
+  return (!cfg || cfg.valor === 'digital') ? 'pendiente' : null;
+}
+
 async function crear({ mesa_id, tipo = 'mesa', usuario_id, cliente_id, sesion_caja_id, notas, nombre_cliente, documento_cliente, tipo_documento }) {
   if (!sesion_caja_id) {
     throw Object.assign(new Error('No hay caja abierta. Abre la caja antes de crear una orden.'), { status: 409 });
@@ -308,8 +318,10 @@ async function crear({ mesa_id, tipo = 'mesa', usuario_id, cliente_id, sesion_ca
         );
       }
 
+      const estado_cocina = await _estadoCocinaInicial();
       const pedido = await Pedido.create({
         mesa_id, tipo: 'mesa', usuario_id, cliente_id, sesion_caja_id, sucursal_id, notas,
+        estado_cocina,
         nombre_cliente: nombre_cliente || 'Público General',
         documento_cliente,
         tipo_documento: tipo_documento || 'Ticket',
@@ -329,8 +341,10 @@ async function crear({ mesa_id, tipo = 'mesa', usuario_id, cliente_id, sesion_ca
 
   // tipo === 'llevar'
   const numero_llevar = await _siguienteNumeroLlevar();
+  const estado_cocina = await _estadoCocinaInicial();
   const pedido = await Pedido.create({
     mesa_id: null, tipo: 'llevar', numero_llevar, usuario_id, cliente_id, sesion_caja_id, sucursal_id, notas,
+    estado_cocina,
     nombre_cliente: nombre_cliente || 'Cliente',
     documento_cliente,
     tipo_documento: tipo_documento || 'Ticket',
@@ -897,13 +911,14 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
 
   const numero_llevar = (tipo === 'llevar' || tipo === 'delivery') ? await _siguienteNumeroLlevar() : null;
   const estadoInicial = (metodo_pago === 'qr' || metodo_pago === 'diferido') ? 'pendiente' : 'completado';
+  const estado_cocina = await _estadoCocinaInicial();
 
   const pedidoId = await sequelize.transaction(async (t) => {
     const pedido = await Pedido.create({
       mesa_id: tipo === 'mesa' ? mesa_id : null,
       mesa_sesion_id: tipo === 'mesa' ? mesa_sesion_id : null,
       tipo, origen, origen_app, numero_llevar, usuario_id, cliente_id: cliente_id || null, sesion_caja_id, sucursal_id, notas,
-      estado: estadoInicial, total, descuento, propina, metodo_pago: 'efectivo',
+      estado: estadoInicial, estado_cocina, total, descuento, propina, metodo_pago: 'efectivo',
       nombre_cliente: nombre_cliente || (tipo === 'mesa' ? 'Público General' : 'Cliente'),
       documento_cliente,
       telefono_cliente,
