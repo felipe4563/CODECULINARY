@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { MarcacionPersonal, Sucursal } = require('../../models');
+const { MarcacionPersonal, HorarioPersonal, Usuario, Rol, Sucursal } = require('../../models');
 
 // Mismo criterio que _rangoDiaBolivia en ventas.service.js: el día
 // calendario del turno se calcula en hora Bolivia (-04:00), no en la hora
@@ -99,4 +99,108 @@ async function proponerSalida(usuario_id, marcacion_id, { hora_salida_propuesta,
   return marcacion;
 }
 
-module.exports = { marcar, miEstado, proponerSalida };
+const DIAS_SEMANA = [0, 1, 2, 3, 4, 5, 6];
+
+// Para los selectores de sucursal/empleado de "Control de Personal" — se
+// devuelven acá (en vez de pedirle al frontend que use GET /sucursales o
+// GET /usuarios) para no acoplar esta pantalla a los permisos
+// sucursales.ver/usuarios.ver de otros módulos, que un rol con solo
+// personal.administrar no tendría por qué tener.
+async function filtros() {
+  const [sucursales, empleados] = await Promise.all([
+    Sucursal.findAll({ where: { activo: 1 }, attributes: ['id', 'nombre'], order: [['nombre', 'ASC']] }),
+    Usuario.findAll({
+      where: { activo: 1 },
+      attributes: ['id', 'nombre'],
+      include: [{ model: Rol, as: 'rol', attributes: ['id', 'nombre'] }],
+      order: [['nombre', 'ASC']],
+    }),
+  ]);
+  return { sucursales, empleados };
+}
+
+async function obtenerHorario(usuario_id) {
+  const usuario = await Usuario.findByPk(usuario_id);
+  if (!usuario) throw Object.assign(new Error('Usuario no encontrado'), { status: 404 });
+  const filas = await HorarioPersonal.findAll({ where: { usuario_id } });
+  const porDia = {};
+  filas.forEach((f) => { porDia[f.dia_semana] = f; });
+  return DIAS_SEMANA.map((dia_semana) => {
+    const f = porDia[dia_semana];
+    return {
+      dia_semana,
+      trabaja: f ? !!f.trabaja : true,
+      hora_entrada: f ? f.hora_entrada : null,
+      hora_salida: f ? f.hora_salida : null,
+    };
+  });
+}
+
+async function guardarHorario(usuario_id, dias) {
+  const usuario = await Usuario.findByPk(usuario_id);
+  if (!usuario) throw Object.assign(new Error('Usuario no encontrado'), { status: 404 });
+  if (!Array.isArray(dias) || dias.length !== 7) {
+    throw Object.assign(new Error('Se requieren los 7 días de la semana'), { status: 400 });
+  }
+  const diasVistos = new Set();
+  for (const d of dias) {
+    if (!DIAS_SEMANA.includes(d.dia_semana) || diasVistos.has(d.dia_semana)) {
+      throw Object.assign(new Error('dia_semana inválido o repetido'), { status: 400 });
+    }
+    diasVistos.add(d.dia_semana);
+    if (d.trabaja && (!d.hora_entrada || !d.hora_salida)) {
+      throw Object.assign(new Error('Los días laborales requieren hora de entrada y salida'), { status: 400 });
+    }
+  }
+  for (const d of dias) {
+    await HorarioPersonal.upsert({
+      usuario_id,
+      dia_semana: d.dia_semana,
+      trabaja: d.trabaja ? 1 : 0,
+      hora_entrada: d.trabaja ? d.hora_entrada : null,
+      hora_salida: d.trabaja ? d.hora_salida : null,
+    });
+  }
+  return obtenerHorario(usuario_id);
+}
+
+// Deliberadamente sin restricción de sucursal por acceso_todas_sucursales:
+// "Control de Personal" es cross-sucursal para cualquiera con
+// personal.administrar (ver spec y Global Constraints de este plan).
+async function listarMarcaciones({ sucursal_id, usuario_id, desde, hasta } = {}) {
+  const where = {};
+  if (sucursal_id) where.sucursal_id = sucursal_id;
+  if (usuario_id) where.usuario_id = usuario_id;
+  if (desde || hasta) {
+    where.fecha = {};
+    if (desde) where.fecha[Op.gte] = desde;
+    if (hasta) where.fecha[Op.lte] = hasta;
+  }
+  return MarcacionPersonal.findAll({
+    where,
+    include: [
+      { model: Usuario, as: 'usuario', attributes: ['id', 'nombre'] },
+      { model: Sucursal, as: 'sucursal', attributes: ['id', 'nombre'] },
+      { model: Usuario, as: 'aprobador', attributes: ['id', 'nombre'] },
+    ],
+    order: [['fecha', 'DESC'], ['hora_entrada', 'DESC']],
+  });
+}
+
+async function resolverCierreAutomatico(marcacion_id, admin_usuario_id, { hora_salida } = {}) {
+  const marcacion = await MarcacionPersonal.findByPk(marcacion_id);
+  if (!marcacion) throw Object.assign(new Error('Marcación no encontrada'), { status: 404 });
+  if (marcacion.estado !== 'cierre_automatico') {
+    throw Object.assign(new Error('Esta marcación no está pendiente de revisión'), { status: 409 });
+  }
+  if (!hora_salida) throw Object.assign(new Error('hora_salida es requerida'), { status: 400 });
+  await marcacion.update({
+    hora_salida,
+    estado: 'cerrado',
+    aprobado_por: admin_usuario_id,
+    aprobado_en: new Date(),
+  });
+  return marcacion;
+}
+
+module.exports = { marcar, miEstado, proponerSalida, filtros, obtenerHorario, guardarHorario, listarMarcaciones, resolverCierreAutomatico };
