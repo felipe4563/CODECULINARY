@@ -4,7 +4,7 @@ const app = require('../src/app');
 const { Sucursal, Rol, Usuario, MarcacionPersonal } = require('../src/models');
 
 describe('Personal — marcar asistencia (empleado)', () => {
-  let sucursal, token, usuarioId;
+  let sucursal, token, usuarioId, adminToken, adminId;
 
   beforeAll(async () => {
     const ts = Date.now();
@@ -23,11 +23,23 @@ describe('Personal — marcar asistencia (empleado)', () => {
 
     const login = await request(app).post('/api/v1/auth/login').send({ email: usuario.email, contrasena: 'clave123' });
     token = login.body.datos.token;
+
+    const rolAdmin = await Rol.findOne({ where: { nombre: 'Administrador' } });
+    const admin = await Usuario.create({
+      rol_id: rolAdmin.id, nombre: `Personal Editar Admin Test ${ts}`, acceso_todas_sucursales: 1,
+      email: `personal-editar-admin-test-${ts}@restaurante.com`, contrasena: hash,
+    });
+    adminId = admin.id;
+    const loginAdmin = await request(app).post('/api/v1/auth/login').send({ email: admin.email, contrasena: 'clave123' });
+    const { pre_token } = loginAdmin.body.datos;
+    const conSucursal = await request(app).post('/api/v1/auth/login/sucursal').send({ pre_token, sucursal_id: null });
+    adminToken = conSucursal.body.datos.token;
   });
 
   afterAll(async () => {
     await MarcacionPersonal.destroy({ where: { usuario_id: usuarioId } });
     await Usuario.destroy({ where: { id: usuarioId } });
+    await Usuario.destroy({ where: { id: adminId } });
     await Sucursal.destroy({ where: { id: sucursal.id } });
   });
 
@@ -235,5 +247,101 @@ describe('Personal — marcar asistencia (empleado)', () => {
 
     await MarcacionPersonal.destroy({ where: { id: ajena.id } });
     await Usuario.destroy({ where: { id: otro.id } });
+  });
+
+  it('un admin puede editar entrada y salida de una marcación cerrada', async () => {
+    const cerrada = await MarcacionPersonal.create({
+      usuario_id: usuarioId, sucursal_id: sucursal.id, fecha: '2026-09-10',
+      hora_entrada: new Date('2026-09-10T08:00:00-04:00'), hora_salida: new Date('2026-09-10T16:00:00-04:00'),
+      estado: 'cerrado',
+    });
+
+    const res = await request(app)
+      .patch(`/api/v1/personal/marcaciones/${cerrada.id}/editar`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ hora_entrada: '2026-09-10T08:30:00-04:00', hora_salida: '2026-09-10T17:00:00-04:00' });
+    expect(res.status).toBe(200);
+    expect(res.body.datos.estado).toBe('cerrado');
+    expect(new Date(res.body.datos.hora_entrada).toISOString()).toBe(new Date('2026-09-10T08:30:00-04:00').toISOString());
+    expect(new Date(res.body.datos.hora_salida).toISOString()).toBe(new Date('2026-09-10T17:00:00-04:00').toISOString());
+    expect(res.body.datos.aprobado_por).toBe(adminId);
+
+    await cerrada.destroy();
+  });
+
+  it('editar una marcación en cierre_automatico la deja en cerrado y limpia la propuesta', async () => {
+    const automatico = await MarcacionPersonal.create({
+      usuario_id: usuarioId, sucursal_id: sucursal.id, fecha: '2026-09-11',
+      hora_entrada: new Date('2026-09-11T08:00:00-04:00'), hora_salida: new Date('2026-09-11T00:00:00-04:00'),
+      hora_salida_propuesta: new Date('2026-09-11T17:00:00-04:00'), nota_propuesta: 'Cerrando caja',
+      estado: 'cierre_automatico',
+    });
+
+    const res = await request(app)
+      .patch(`/api/v1/personal/marcaciones/${automatico.id}/editar`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ hora_entrada: '2026-09-11T08:00:00-04:00', hora_salida: '2026-09-11T17:00:00-04:00' });
+    expect(res.status).toBe(200);
+    expect(res.body.datos.estado).toBe('cerrado');
+    expect(res.body.datos.hora_salida_propuesta).toBeNull();
+    expect(res.body.datos.nota_propuesta).toBeNull();
+
+    await automatico.destroy();
+  });
+
+  it('no se puede editar una marcación en estado abierto', async () => {
+    await MarcacionPersonal.destroy({ where: { usuario_id: usuarioId } });
+    const abierta = await MarcacionPersonal.create({
+      usuario_id: usuarioId, sucursal_id: sucursal.id, fecha: '2026-09-12',
+      hora_entrada: new Date('2026-09-12T08:00:00-04:00'), estado: 'abierto',
+    });
+
+    const res = await request(app)
+      .patch(`/api/v1/personal/marcaciones/${abierta.id}/editar`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ hora_entrada: '2026-09-12T08:00:00-04:00', hora_salida: '2026-09-12T16:00:00-04:00' });
+    expect(res.status).toBe(409);
+
+    await abierta.destroy();
+  });
+
+  it('editar sin hora_entrada u hora_salida devuelve 400', async () => {
+    const cerrada = await MarcacionPersonal.create({
+      usuario_id: usuarioId, sucursal_id: sucursal.id, fecha: '2026-09-13',
+      hora_entrada: new Date('2026-09-13T08:00:00-04:00'), hora_salida: new Date('2026-09-13T16:00:00-04:00'),
+      estado: 'cerrado',
+    });
+
+    const res = await request(app)
+      .patch(`/api/v1/personal/marcaciones/${cerrada.id}/editar`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ hora_entrada: '2026-09-13T08:00:00-04:00' });
+    expect(res.status).toBe(400);
+
+    await cerrada.destroy();
+  });
+
+  it('editar con una hora de salida más de 24 horas después de la entrada devuelve 400', async () => {
+    const cerrada = await MarcacionPersonal.create({
+      usuario_id: usuarioId, sucursal_id: sucursal.id, fecha: '2026-09-14',
+      hora_entrada: new Date('2026-09-14T08:00:00-04:00'), hora_salida: new Date('2026-09-14T16:00:00-04:00'),
+      estado: 'cerrado',
+    });
+
+    const res = await request(app)
+      .patch(`/api/v1/personal/marcaciones/${cerrada.id}/editar`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ hora_entrada: '2026-09-14T08:00:00-04:00', hora_salida: '2026-09-16T09:00:00-04:00' });
+    expect(res.status).toBe(400);
+
+    await cerrada.destroy();
+  });
+
+  it('editar una marcación inexistente devuelve 404', async () => {
+    const res = await request(app)
+      .patch('/api/v1/personal/marcaciones/999999/editar')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ hora_entrada: '2026-09-10T08:00:00-04:00', hora_salida: '2026-09-10T16:00:00-04:00' });
+    expect(res.status).toBe(404);
   });
 });

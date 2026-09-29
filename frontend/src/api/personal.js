@@ -25,3 +25,6 @@ export const getMarcacionesPersonal = (params) =>
 
 export const resolverMarcacionPersonal = (id, hora_salida) =>
   api.patch(`/personal/marcaciones/${id}/resolver`, { hora_salida }).then((r) => r.data.datos);
+
+export const editarMarcacionPersonal = (id, { hora_entrada, hora_salida }) =>
+  api.patch(`/personal/marcaciones/${id}/editar`, { hora_entrada, hora_salida }).then((r) => r.data.datos);

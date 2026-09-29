@@ -242,4 +242,35 @@ async function resolverCierreAutomatico(marcacion_id, admin_usuario_id, { hora_s
   return marcacion;
 }
 
-module.exports = { marcar, miEstado, proponerSalida, filtros, obtenerHorario, guardarHorario, listarMarcaciones, resolverCierreAutomatico };
+// Corrección manual completa: a diferencia de resolverCierreAutomatico (que
+// solo resuelve la salida propuesta), esto reescribe entrada y salida a la
+// vez — para cuando el error está en la hora de entrada, o en un registro
+// que ya estaba 'cerrado' normalmente. No aplica a 'abierto': un turno en
+// curso se corrige marcando o proponiendo salida, no editando a mano.
+async function editarMarcacion(marcacion_id, admin_usuario_id, { hora_entrada, hora_salida } = {}) {
+  const marcacion = await MarcacionPersonal.findByPk(marcacion_id);
+  if (!marcacion) throw Object.assign(new Error('Marcación no encontrada'), { status: 404 });
+  if (marcacion.estado === 'abierto') {
+    throw Object.assign(new Error('No se puede editar un turno en curso — marcá la salida primero'), { status: 409 });
+  }
+  if (!hora_entrada || !hora_salida) {
+    throw Object.assign(new Error('hora_entrada y hora_salida son requeridas'), { status: 400 });
+  }
+  const entradaNormalizada = new Date(hora_entrada);
+  if (isNaN(entradaNormalizada.getTime())) {
+    throw Object.assign(new Error('Hora de entrada inválida'), { status: 400 });
+  }
+  const salidaNormalizada = _normalizarHoraSalida(entradaNormalizada, hora_salida);
+  await marcacion.update({
+    hora_entrada: entradaNormalizada,
+    hora_salida: salidaNormalizada,
+    hora_salida_propuesta: null,
+    nota_propuesta: null,
+    estado: 'cerrado',
+    aprobado_por: admin_usuario_id,
+    aprobado_en: new Date(),
+  });
+  return marcacion;
+}
+
+module.exports = { marcar, miEstado, proponerSalida, filtros, obtenerHorario, guardarHorario, listarMarcaciones, resolverCierreAutomatico, editarMarcacion };

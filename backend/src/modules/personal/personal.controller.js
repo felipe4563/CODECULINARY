@@ -43,4 +43,9 @@ async function resolverCierreAutomatico(req, res, next) {
   catch (err) { next(err); }
 }
 
-module.exports = { marcar, miEstado, proponerSalida, filtros, obtenerHorario, guardarHorario, listarMarcaciones, resolverCierreAutomatico };
+async function editarMarcacion(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.editarMarcacion(req.params.id, req.usuario.id, req.body) }); }
+  catch (err) { next(err); }
+}
+
+module.exports = { marcar, miEstado, proponerSalida, filtros, obtenerHorario, guardarHorario, listarMarcaciones, resolverCierreAutomatico, editarMarcacion };

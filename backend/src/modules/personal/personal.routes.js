@@ -20,5 +20,6 @@ router.get('/horarios/:usuario_id', verificarPermiso('personal', 'administrar'),
 router.put('/horarios/:usuario_id', verificarPermiso('personal', 'administrar'), ctrl.guardarHorario);
 router.get('/marcaciones', verificarPermiso('personal', 'administrar'), ctrl.listarMarcaciones);
 router.patch('/marcaciones/:id/resolver', verificarPermiso('personal', 'administrar'), ctrl.resolverCierreAutomatico);
+router.patch('/marcaciones/:id/editar', verificarPermiso('personal', 'administrar'), ctrl.editarMarcacion);
 
 module.exports = router;
