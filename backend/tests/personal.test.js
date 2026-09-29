@@ -127,6 +127,21 @@ describe('Personal — marcar asistencia (empleado)', () => {
     expect(abiertas).toBe(0);
   });
 
+  it('no permite una segunda entrada el mismo día después de haber cerrado la primera', async () => {
+    await MarcacionPersonal.destroy({ where: { usuario_id: usuarioId } });
+    await request(app).post('/api/v1/personal/marcar').set('Authorization', `Bearer ${token}`).send({ lat: -17.393800, lng: -63.190500 });
+    await request(app).post('/api/v1/personal/marcar').set('Authorization', `Bearer ${token}`).send({ lat: -17.393800, lng: -63.190500 });
+
+    const res = await request(app)
+      .post('/api/v1/personal/marcar')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ lat: -17.393800, lng: -63.190500 });
+    expect(res.status).toBe(409);
+
+    const marcaciones = await MarcacionPersonal.count({ where: { usuario_id: usuarioId } });
+    expect(marcaciones).toBe(1);
+  });
+
   it('GET mi-estado devuelve la marcación abierta y el historial', async () => {
     await MarcacionPersonal.destroy({ where: { usuario_id: usuarioId } });
     await request(app).post('/api/v1/personal/marcar').set('Authorization', `Bearer ${token}`).send({ lat: -17.393800, lng: -63.190500 });

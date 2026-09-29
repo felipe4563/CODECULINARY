@@ -48,6 +48,15 @@ async function marcar({ usuario_id, sucursal_id, lat, lng }) {
   }
 
   if (!abierta) {
+    // El spec decidió una sola entrada/salida por día calendario, no
+    // turnos múltiples (ver "Fuera de alcance" del diseño) — si ya hay una
+    // marcación de hoy (cerrada o cerrada automáticamente), no se abre una
+    // entrada nueva.
+    const yaMarcoHoy = await MarcacionPersonal.findOne({ where: { usuario_id, fecha: _fechaBolivia() } });
+    if (yaMarcoHoy) {
+      throw Object.assign(new Error('Ya registraste tu entrada y salida de hoy — hablá con tu administrador si necesitás corregirlo'), { status: 409 });
+    }
+
     return MarcacionPersonal.create({
       usuario_id,
       sucursal_id,
