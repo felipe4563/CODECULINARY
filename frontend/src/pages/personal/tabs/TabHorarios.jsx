@@ -1,9 +1,20 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, User } from 'lucide-react';
+import { Search, User, Copy } from 'lucide-react';
 import { getFiltrosPersonal, getHorarioPersonal, guardarHorarioPersonal } from '../../../api/personal';
 
 const NOMBRES_DIA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+function _horasDia(entrada, salida) {
+  if (!entrada || !salida) return null;
+  const [he, me] = entrada.split(':').map(Number);
+  const [hs, ms] = salida.split(':').map(Number);
+  let minutos = (hs * 60 + ms) - (he * 60 + me);
+  if (minutos < 0) minutos += 24 * 60; // turno que cruza la medianoche
+  const horas = Math.floor(minutos / 60);
+  const resto = minutos % 60;
+  return resto === 0 ? `${horas}h` : `${horas}h ${resto}m`;
+}
 
 export default function TabHorarios() {
   const qc = useQueryClient();
@@ -58,6 +69,16 @@ export default function TabHorarios() {
     setGuardado(false);
   };
 
+  // Copia la entrada/salida de un día a todos los demás días marcados como
+  // laborales — así no hace falta tipear el mismo horario 7 veces cuando la
+  // semana es pareja.
+  const copiarATodos = (origen) => {
+    setDias((prev) => prev.map((d) => (
+      d.trabaja ? { ...d, hora_entrada: origen.hora_entrada, hora_salida: origen.hora_salida } : d
+    )));
+    setGuardado(false);
+  };
+
   return (
     <div className="flex flex-col md:flex-row gap-4">
       {/* Lista de empleados */}
@@ -73,7 +94,7 @@ export default function TabHorarios() {
           />
         </div>
 
-        <div className="space-y-1.5 max-h-[60vh] md:max-h-[65vh] overflow-y-auto">
+        <div className="space-y-1.5 max-h-[60vh] md:max-h-[65vh] overflow-y-auto scrollbar-hide">
           {empleadosFiltrados.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">Sin resultados</p>
           ) : empleadosFiltrados.map((e) => (
@@ -111,37 +132,63 @@ export default function TabHorarios() {
             Seleccioná un empleado de la lista
           </div>
         ) : dias && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           <h3 className="text-sm font-bold text-foreground mb-1">{empleadoSeleccionado?.nombre}</h3>
-          {dias.map((d) => (
-            <div key={d.dia_semana} className="flex flex-wrap items-center gap-3 p-3 rounded-xl border border-border">
-              <label className="flex items-center gap-2 w-32 shrink-0">
-                <input
-                  type="checkbox"
-                  checked={d.trabaja}
-                  onChange={(e) => actualizarDia(d.dia_semana, {
-                    trabaja: e.target.checked,
-                    hora_entrada: e.target.checked ? (d.hora_entrada || '08:00') : null,
-                    hora_salida: e.target.checked ? (d.hora_salida || '17:00') : null,
-                  })}
-                />
-                <span className="text-sm font-medium text-foreground">{NOMBRES_DIA[d.dia_semana]}</span>
-              </label>
-              {d.trabaja ? (
-                <div className="flex items-center gap-2">
-                  <input type="time" value={(d.hora_entrada || '').slice(0, 5)}
-                    onChange={(e) => actualizarDia(d.dia_semana, { hora_entrada: e.target.value })}
-                    className="px-2 py-1.5 text-sm rounded-lg border border-input bg-background text-foreground" />
-                  <span className="text-sm text-muted-foreground">a</span>
-                  <input type="time" value={(d.hora_salida || '').slice(0, 5)}
-                    onChange={(e) => actualizarDia(d.dia_semana, { hora_salida: e.target.value })}
-                    className="px-2 py-1.5 text-sm rounded-lg border border-input bg-background text-foreground" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {dias.map((d) => (
+              <div key={d.dia_semana} className="p-3 rounded-xl border border-border space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="flex items-center gap-2 min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={d.trabaja}
+                      onChange={(e) => actualizarDia(d.dia_semana, {
+                        trabaja: e.target.checked,
+                        hora_entrada: e.target.checked ? (d.hora_entrada || '08:00') : null,
+                        hora_salida: e.target.checked ? (d.hora_salida || '17:00') : null,
+                      })}
+                    />
+                    <span className="text-sm font-medium text-foreground truncate">{NOMBRES_DIA[d.dia_semana]}</span>
+                  </label>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {d.trabaja && _horasDia(d.hora_entrada, d.hora_salida) && (
+                      <span className="text-[11px] font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded-md">
+                        {_horasDia(d.hora_entrada, d.hora_salida)}
+                      </span>
+                    )}
+                    {d.trabaja && d.hora_entrada && d.hora_salida && (
+                      <button
+                        type="button"
+                        onClick={() => copiarATodos(d)}
+                        title="Copiar este horario a todos los días"
+                        className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                <span className="text-sm text-muted-foreground italic">Día libre</span>
-              )}
-            </div>
-          ))}
+                {d.trabaja ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] text-muted-foreground mb-0.5">Entrada</label>
+                      <input type="time" value={(d.hora_entrada || '').slice(0, 5)}
+                        onChange={(e) => actualizarDia(d.dia_semana, { hora_entrada: e.target.value })}
+                        className="w-full px-2 py-1.5 text-sm rounded-lg border border-input bg-background text-foreground" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-muted-foreground mb-0.5">Salida</label>
+                      <input type="time" value={(d.hora_salida || '').slice(0, 5)}
+                        onChange={(e) => actualizarDia(d.dia_semana, { hora_salida: e.target.value })}
+                        className="w-full px-2 py-1.5 text-sm rounded-lg border border-input bg-background text-foreground" />
+                    </div>
+                  </div>
+                ) : (
+                  <span className="text-sm text-muted-foreground italic">Día libre</span>
+                )}
+              </div>
+            ))}
+          </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
           {guardado && <p className="text-sm text-emerald-600 dark:text-emerald-400">Horario guardado</p>}
