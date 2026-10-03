@@ -8,6 +8,7 @@ const router = Router();
 router.use(auth);
 
 router.get('/cocina', verificarPermiso('cocina', 'ver'), ctrl.listarCocina);
+router.get('/mis-ventas-hoy', verificarPermiso('ventas', 'ver'), ctrl.misVentasHoy);
 router.get('/', verificarPermiso('ventas', 'ver'), ctrl.listar);
 router.post('/', verificarPermiso('ventas', 'crear'), requiereSucursalActiva, ctrl.crear);
 router.post('/completa', verificarPermiso('ventas', 'crear'), requiereSucursalActiva, ctrl.crearCompleta);

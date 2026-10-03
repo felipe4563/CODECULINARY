@@ -14,6 +14,11 @@ async function obtener(req, res, next) {
   catch (err) { next(err); }
 }
 
+async function misVentasHoy(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.misVentasHoy(req.usuario.id, _alcance(req), req.query) }); }
+  catch (err) { next(err); }
+}
+
 async function reimprimir(req, res, next) {
   try { res.json({ ok: true, datos: await svc.reimprimir(req.params.id, _alcance(req)) }); }
   catch (err) { next(err); }
@@ -95,4 +100,4 @@ async function cancelarPagoQr(req, res, next) {
   catch (err) { next(err); }
 }
 
-module.exports = { listar, obtener, reimprimir, crear, crearCompleta, agregarItem, actualizarItem, eliminarItem, cobrar, cancelar, listarCocina, marcarListo, marcarEntregado, estadoPagoQr, cancelarPagoQr };
+module.exports = { listar, obtener, misVentasHoy, reimprimir, crear, crearCompleta, agregarItem, actualizarItem, eliminarItem, cobrar, cancelar, listarCocina, marcarListo, marcarEntregado, estadoPagoQr, cancelarPagoQr };

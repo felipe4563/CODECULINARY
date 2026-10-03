@@ -231,6 +231,41 @@ function _verificarAlcance(pedido, alcance) {
   }
 }
 
+const MIS_VENTAS_LIMITE_DEFAULT = 15;
+const MIS_VENTAS_LIMITE_MAX = 50;
+
+function _paginaLimiteMisVentas({ pagina, limite } = {}) {
+  const p = Math.max(parseInt(pagina, 10) || 1, 1);
+  const l = Math.min(Math.max(parseInt(limite, 10) || MIS_VENTAS_LIMITE_DEFAULT, 1), MIS_VENTAS_LIMITE_MAX);
+  return { pagina: p, limite: l };
+}
+
+// "Mis Ventas" del POS: página dedicada (no modal) con paginación propia,
+// porque un cajero puede acumular muchas ventas en un solo día — a
+// diferencia de `listar` (tablero de mesas), que siempre necesita el
+// listado completo sin paginar.
+async function misVentasHoy(usuario_id, alcance, filtros = {}) {
+  const { pagina, limite } = _paginaLimiteMisVentas(filtros);
+  const { inicio, fin } = _rangoDiaBolivia();
+  const where = {
+    usuario_id,
+    estado: 'completado',
+    creado_en: { [Op.between]: [inicio, fin] },
+  };
+  if (!alcance.acceso_todas) where.sucursal_id = alcance.sucursal_id;
+
+  const { rows, count } = await Pedido.findAndCountAll({
+    where,
+    include: INCLUDE_PEDIDO_COMPLETO,
+    order: [['creado_en', 'DESC']],
+    distinct: true,
+    limit: limite,
+    offset: (pagina - 1) * limite,
+  });
+
+  return { filas: rows, pagina, limite, total: count, total_paginas: Math.ceil(count / limite) || 1 };
+}
+
 async function obtener(id, alcance) {
   const p = await Pedido.findByPk(id, { include: INCLUDE_PEDIDO_COMPLETO });
   if (!p) throw Object.assign(new Error('Pedido no encontrado'), { status: 404 });
@@ -1209,7 +1244,7 @@ async function marcarEntregado(pedido_id, alcance) {
 }
 
 module.exports = {
-  listar, listarCocina, obtener, reimprimir, crear, crearCompleta, agregarItem, actualizarItem, eliminarItem,
+  listar, listarCocina, obtener, misVentasHoy, reimprimir, crear, crearCompleta, agregarItem, actualizarItem, eliminarItem,
   cobrar, cancelar, marcarListo, marcarEntregado,
   consultarEstadoPagoQr, cancelarPagoQr, procesarWebhookPagoQr, revertirPagosQrVencidos,
 };

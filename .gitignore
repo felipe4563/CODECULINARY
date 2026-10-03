@@ -30,6 +30,11 @@ api_personas/
 # Workspace de trabajo de Superpowers (ledgers, briefs, reportes) — scratch local.
 .superpowers/
 
+# Artefactos de sesiones de prueba con Playwright MCP (snapshots .yml, logs
+# de consola) — se generan al verificar features en el navegador, no son
+# parte del producto.
+.playwright-mcp/
+
 # Simulador de la app de pedidos externa — herramienta de pruebas local, no
 # es parte del producto.
 frontend/public/simulador-app-externa.html

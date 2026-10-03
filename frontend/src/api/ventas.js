@@ -9,6 +9,9 @@ export const crearVenta = (datos) =>
 export const getVenta = (id) =>
   api.get(`/ventas/${id}`).then((r) => r.data.datos);
 
+export const getMisVentasHoy = (params) =>
+  api.get('/ventas/mis-ventas-hoy', { params }).then((r) => r.data.datos);
+
 export const agregarItem = (pedido_id, datos) =>
   api.post(`/ventas/${pedido_id}/items`, datos).then((r) => r.data.datos);
 

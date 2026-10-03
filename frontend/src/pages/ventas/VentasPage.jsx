@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   RefreshCw, AlertCircle, Package, ShoppingCart, ShoppingBag,
   Plus, Minus, Trash2, CreditCard, Wallet, ChevronRight, LayoutGrid, CheckCircle2, Gift, Disc3,
-  Eye, EyeOff,
+  Eye, EyeOff, Receipt,
 } from 'lucide-react';
 import { getMesas } from '../../api/mesas';
 import { getVentas, crearVentaCompleta, cobrarVenta, reimprimirVenta } from '../../api/ventas';
@@ -315,24 +315,32 @@ export default function VentasPage() {
       {/* Header */}
       <header className="flex items-center justify-between gap-3 pb-3 border-b border-border shrink-0">
         <h1 className="font-bold text-foreground">Ventas</h1>
-        <div className="flex md:hidden gap-1 bg-muted p-1 rounded-xl">
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setTabMobile('productos')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tabMobile === 'productos' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
+            onClick={() => navigate('/ventas/mis-ventas')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
           >
-            Menú
+            <Receipt className="w-3.5 h-3.5" /> Mis Ventas
           </button>
-          <button
-            onClick={() => setTabMobile('orden')}
-            className={`relative px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tabMobile === 'orden' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
-          >
-            Orden
-            {totalItems > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-primary-foreground text-[10px] rounded-full flex items-center justify-center">
-                {totalItems}
-              </span>
-            )}
-          </button>
+          <div className="flex md:hidden gap-1 bg-muted p-1 rounded-xl">
+            <button
+              onClick={() => setTabMobile('productos')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tabMobile === 'productos' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
+            >
+              Menú
+            </button>
+            <button
+              onClick={() => setTabMobile('orden')}
+              className={`relative px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tabMobile === 'orden' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
+            >
+              Orden
+              {totalItems > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-primary-foreground text-[10px] rounded-full flex items-center justify-center">
+                  {totalItems}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 

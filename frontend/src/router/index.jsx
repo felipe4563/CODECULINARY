@@ -4,6 +4,7 @@ import Layout from '../components/layout/Layout';
 import LoginPage from '../pages/auth/LoginPage';
 import Dashboard from '../pages/Dashboard';
 import VentasPage from '../pages/ventas/VentasPage';
+import MisVentasPage from '../pages/ventas/MisVentasPage';
 import PedidoPage from '../pages/ventas/PedidoPage';
 import ConfiguracionPage from '../pages/configuracion/ConfiguracionPage';
 import ProductosPage from '../pages/productos/ProductosPage';
@@ -42,6 +43,7 @@ export const router = createBrowserRouter(
           children: [
             { path: '/',                  element: <Dashboard /> },
             { path: '/ventas',            element: <VentasPage /> },
+            { path: '/ventas/mis-ventas', element: <MisVentasPage /> },
             { path: '/ventas/pedido/:id', element: <PedidoPage /> },
             { path: '/pedidos-externos',  element: <PedidosExternosPage /> },
             { path: '/productos',         element: <ProductosPage /> },
