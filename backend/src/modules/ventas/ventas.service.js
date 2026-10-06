@@ -904,6 +904,7 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
     const producto = await Producto.findByPk(item.producto_id);
     if (!producto) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
     if (!producto.activo || !producto.es_vendible) throw Object.assign(new Error('Producto no disponible'), { status: 409 });
+    if (!producto.disponible_hoy) throw Object.assign(new Error(`"${producto.nombre}" no está disponible hoy`), { status: 409 });
     const extra = await _extraPorOpciones(item.opcion_ids);
     const precioBase = await _precioConPromocion(producto);
     const linea = _datosLinea(item, producto, precioBase, extra);
@@ -1041,6 +1042,7 @@ async function agregarItem(pedido_id, { producto_id, combo_id, cantidad = 1, not
   const producto = await Producto.findByPk(producto_id);
   if (!producto) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
   if (!producto.activo || !producto.es_vendible) throw Object.assign(new Error('Producto no disponible'), { status: 409 });
+  if (!producto.disponible_hoy) throw Object.assign(new Error(`"${producto.nombre}" no está disponible hoy`), { status: 409 });
 
   const extra = await _extraPorOpciones(opcion_ids);
   const precioBase = await _precioConPromocion(producto);

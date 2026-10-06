@@ -14,5 +14,7 @@ router.put('/:id', verificarPermiso('configuracion', 'editar'), ctrl.actualizarM
 router.delete('/:id', verificarPermiso('configuracion', 'editar'), ctrl.eliminarMesa);
 router.post('/:id/sesion', verificarPermiso('ventas', 'crear'), requiereSucursalActiva, ctrl.abrirSesionMesa);
 router.delete('/:id/sesion', verificarPermiso('ventas', 'crear'), ctrl.cerrarSesionMesa);
+router.post('/:id/codigo-qr', verificarPermiso('configuracion', 'editar'), ctrl.asegurarCodigoQr);
+router.post('/:id/codigo-qr/regenerar', verificarPermiso('configuracion', 'editar'), ctrl.regenerarCodigoQr);
 
 module.exports = router;

@@ -56,7 +56,7 @@ async function eliminarMesa(req, res, next) {
 
 async function abrirSesionMesa(req, res, next) {
   try {
-    const mesa = await svc.obtenerMesa(req.params.id, _alcance(req));
+    const mesa = await svc.asegurarCodigoQr(req.params.id, _alcance(req));
     const sesion = await svc.abrirSesion(mesa.id, mesa.area.sucursal_id, 'staff');
     res.status(201).json({ ok: true, datos: sesion });
   } catch (err) { next(err); }
@@ -70,8 +70,18 @@ async function cerrarSesionMesa(req, res, next) {
   } catch (err) { next(err); }
 }
 
+async function asegurarCodigoQr(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.asegurarCodigoQr(req.params.id, _alcance(req)) }); }
+  catch (err) { next(err); }
+}
+
+async function regenerarCodigoQr(req, res, next) {
+  try { res.json({ ok: true, datos: await svc.regenerarCodigoQr(req.params.id, _alcance(req)) }); }
+  catch (err) { next(err); }
+}
+
 module.exports = {
   listarAreas, crearArea, actualizarArea, eliminarArea,
   listarMesas, obtenerMesa, crearMesa, actualizarMesa, eliminarMesa,
-  abrirSesionMesa, cerrarSesionMesa,
+  abrirSesionMesa, cerrarSesionMesa, asegurarCodigoQr, regenerarCodigoQr,
 };

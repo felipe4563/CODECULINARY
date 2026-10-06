@@ -382,14 +382,16 @@ export default function VentasPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                 {productos.map((prod) => {
                   const cantidadEnCarrito = cantidadPorProducto[prod.id];
+                  const bloqueado = !puedeCrear || !prod.disponible_hoy;
                   return (
+                    // No usamos `disabled`: un botón deshabilitado también bloquea el clic del ojo (toggle de disponibilidad)
                     <button
                       key={prod.id}
-                      onClick={() => handleProducto(prod)}
-                      disabled={!puedeCrear}
+                      onClick={() => { if (!bloqueado) handleProducto(prod); }}
+                      aria-disabled={bloqueado}
                       className={`relative flex flex-col rounded-xl border transition-all text-left overflow-hidden ${
-                        !puedeCrear
-                          ? 'opacity-50 cursor-not-allowed'
+                        bloqueado
+                          ? 'opacity-50 cursor-not-allowed border-border bg-card'
                           : cantidadEnCarrito
                           ? 'border-primary bg-primary/10 hover:bg-primary/15'
                           : 'border-border bg-card hover:border-primary/50 hover:shadow-sm'

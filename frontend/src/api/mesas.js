@@ -6,3 +6,5 @@ export const actualizarMesa = (id, datos) => api.put(`/mesas/${id}`, datos).then
 export const eliminarMesa = (id) => api.delete(`/mesas/${id}`).then(r => r.data.datos);
 export const abrirSesionMesa = (id) => api.post(`/mesas/${id}/sesion`).then(r => r.data.datos);
 export const cerrarSesionMesa = (id) => api.delete(`/mesas/${id}/sesion`).then(r => r.data.datos);
+export const asegurarCodigoQrMesa = (id) => api.post(`/mesas/${id}/codigo-qr`).then(r => r.data.datos);
+export const regenerarCodigoQrMesa = (id) => api.post(`/mesas/${id}/codigo-qr/regenerar`).then(r => r.data.datos);

@@ -3,7 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, Grid3x3, Users, RefreshCw, QrCode, Download, Smartphone } from 'lucide-react';
 import QRCode from 'qrcode';
 import { getAreas } from '../../../api/areas';
-import { getMesas, crearMesa, actualizarMesa, eliminarMesa, abrirSesionMesa, cerrarSesionMesa } from '../../../api/mesas';
+import {
+  getMesas, crearMesa, actualizarMesa, eliminarMesa, abrirSesionMesa, cerrarSesionMesa,
+  asegurarCodigoQrMesa, regenerarCodigoQrMesa,
+} from '../../../api/mesas';
 import { getConfiguracion, logoSrc } from '../../../api/configuracion';
 import Modal from '../../../components/ui/Modal';
 import { SettingsCard } from '../shared';
@@ -389,11 +392,37 @@ function dibujarRectRedondeado(ctx, x, y, w, h, r) {
 }
 
 function ModalCodigoQr({ mesa, onClose }) {
+  const qc = useQueryClient();
   const [previewUrl, setPreviewUrl] = useState(null);
   const [imagenBlob, setImagenBlob] = useState(null);
-  const url = `${window.location.origin}/m/${mesa.codigo_qr}`;
+  const [codigo, setCodigo] = useState(mesa.codigo_qr);
+  const [confirmarRegenerar, setConfirmarRegenerar] = useState(false);
+  const url = codigo ? `${window.location.origin}/m/${codigo}` : null;
+
+  // Mesas creadas antes del autoservicio no tienen código: se genera al abrir el modal.
+  const asegurar = useMutation({
+    mutationFn: () => asegurarCodigoQrMesa(mesa.id),
+    onSuccess: (m) => { setCodigo(m.codigo_qr); qc.invalidateQueries({ queryKey: ['mesas'] }); },
+  });
+
+  const regenerar = useMutation({
+    mutationFn: () => regenerarCodigoQrMesa(mesa.id),
+    onSuccess: (m) => {
+      setConfirmarRegenerar(false);
+      setPreviewUrl(null);
+      setImagenBlob(null);
+      setCodigo(m.codigo_qr);
+      qc.invalidateQueries({ queryKey: ['mesas'] });
+    },
+  });
 
   useEffect(() => {
+    if (!mesa.codigo_qr) asegurar.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mesa.id]);
+
+  useEffect(() => {
+    if (!url) return undefined;
     let cancelado = false;
 
     async function componer() {
@@ -536,7 +565,9 @@ function ModalCodigoQr({ mesa, onClose }) {
   return (
     <Modal titulo={`QR — ${mesa.nombre}`} onClose={onClose}>
       <div className="flex flex-col items-center gap-4">
-        {previewUrl ? (
+        {asegurar.isError ? (
+          <p className="text-sm text-rose-600 dark:text-rose-400">No se pudo generar el código QR de esta mesa.</p>
+        ) : previewUrl ? (
           <img src={previewUrl} alt={`QR de ${mesa.nombre}`} className="w-full max-w-[280px] rounded-lg shadow-sm" />
         ) : (
           <div className="w-full max-w-[280px] aspect-[580/862] flex items-center justify-center text-muted-foreground">Generando...</div>
@@ -548,6 +579,42 @@ function ModalCodigoQr({ mesa, onClose }) {
         >
           <Download className="w-4 h-4" /> Descargar imagen
         </button>
+
+        {codigo && (
+          confirmarRegenerar ? (
+            <div className="w-full rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm">
+              <p className="text-amber-800 dark:text-amber-300">
+                El QR impreso actual de <b>{mesa.nombre}</b> dejará de funcionar y vas a tener que imprimir el nuevo. ¿Continuar?
+              </p>
+              {regenerar.isError && (
+                <p className="mt-1 text-rose-600 dark:text-rose-400">No se pudo regenerar. Intentá de nuevo.</p>
+              )}
+              <div className="mt-2 flex justify-end gap-2">
+                <button
+                  onClick={() => setConfirmarRegenerar(false)}
+                  disabled={regenerar.isPending}
+                  className="px-3 py-1.5 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => regenerar.mutate()}
+                  disabled={regenerar.isPending}
+                  className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-medium transition-colors"
+                >
+                  {regenerar.isPending ? 'Regenerando...' : 'Sí, regenerar'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmarRegenerar(true)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-amber-600 transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Regenerar QR
+            </button>
+          )
+        )}
       </div>
     </Modal>
   );

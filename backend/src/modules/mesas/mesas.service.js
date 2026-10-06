@@ -147,6 +147,23 @@ async function cerrarSesion(mesa_id, transaction) {
   );
 }
 
+// Las mesas creadas antes del autoservicio (migración 038) quedaron con
+// codigo_qr NULL: se les genera uno la primera vez que se pide su QR o se
+// habilita el autoservicio, en vez de mostrar una URL /m/null.
+async function asegurarCodigoQr(id, alcance) {
+  const mesa = await obtenerMesa(id, alcance);
+  if (!mesa.codigo_qr) await mesa.update({ codigo_qr: _generarCodigoQr() });
+  return mesa;
+}
+
+// Reemplaza el código: el QR impreso anterior deja de funcionar (útil si se
+// filtró o lo fotografiaron). Hay que volver a imprimirlo.
+async function regenerarCodigoQr(id, alcance) {
+  const mesa = await obtenerMesa(id, alcance);
+  await mesa.update({ codigo_qr: _generarCodigoQr() });
+  return mesa;
+}
+
 async function obtenerMesaPorCodigoQr(codigo_qr) {
   const mesa = await Mesa.findOne({
     where: { codigo_qr },
@@ -160,4 +177,5 @@ module.exports = {
   listarAreas, crearArea, actualizarArea, eliminarArea,
   listarMesas, obtenerMesa, crearMesa, actualizarMesa, eliminarMesa,
   obtenerSesionActiva, abrirSesion, cerrarSesion, obtenerMesaPorCodigoQr,
+  asegurarCodigoQr, regenerarCodigoQr,
 };

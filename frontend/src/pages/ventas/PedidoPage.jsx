@@ -336,9 +336,9 @@ export default function PedidoPage() {
                     <button
                       key={prod.id}
                       onClick={() => handleProducto(prod)}
-                      disabled={!puedeCrear || !esPendiente}
+                      disabled={!puedeCrear || !esPendiente || !prod.disponible_hoy}
                       className={`relative flex flex-col rounded-xl border transition-all text-left overflow-hidden ${
-                        !puedeCrear || !esPendiente
+                        !puedeCrear || !esPendiente || !prod.disponible_hoy
                           ? 'opacity-50 cursor-not-allowed'
                           : enOrden
                           ? 'border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30'
