@@ -23,11 +23,11 @@ echo "==> Construyendo frontend..."
 cd frontend && npm install && npm run build && cd ..
 
 echo "==> Reiniciando servicio..."
-pm2 reload scarnestropicales-api
+pm2 reload salybrasas-api
 
 echo "==> Recargando Nginx..."
 sudo nginx -t && sudo systemctl reload nginx
 
 echo ""
 echo "Despliegue completado"
-pm2 status scarnestropicales-api
+pm2 status salybrasas-api
