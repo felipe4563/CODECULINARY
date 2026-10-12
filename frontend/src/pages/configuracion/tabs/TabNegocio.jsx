@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, CheckCircle2, Store, Upload, X } from 'lucide-react';
+import { RefreshCw, CheckCircle2, Store, Upload, X, QrCode } from 'lucide-react';
 import { getConfiguracion, actualizarConfiguracion, subirLogo, logoSrc } from '../../../api/configuracion';
 import { SettingsSection } from '../shared';
 
@@ -29,6 +29,9 @@ export default function TabNegocio({ puedeEditar }) {
   const [errorLogo, setErrorLogo] = useState('');
   const [subiendoPortada, setSubiendoPortada] = useState(false);
   const [errorPortada, setErrorPortada] = useState('');
+  const qrRef = useRef(null);
+  const [subiendoQr, setSubiendoQr] = useState(false);
+  const [errorQr, setErrorQr] = useState('');
 
   const { data: config = {}, isLoading } = useQuery({
     queryKey: ['configuracion'],
@@ -51,6 +54,9 @@ export default function TabNegocio({ puedeEditar }) {
       portada:        config.portada        ?? '',
       color_primario:   config.color_primario   ?? '',
       color_secundario: config.color_secundario ?? '',
+      qr_pos_modo:      config.qr_pos_modo      ?? 'codepay',
+      qr_pago_imagen:   config.qr_pago_imagen   ?? '',
+      qr_pago_texto:    config.qr_pago_texto    ?? '',
     });
   }
 
@@ -58,6 +64,7 @@ export default function TabNegocio({ puedeEditar }) {
     mutationFn: (datos) => actualizarConfiguracion(datos),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['configuracion'] });
+      qc.invalidateQueries({ queryKey: ['configuracion-publica'] });
       setGuardado(true);
       setTimeout(() => setGuardado(false), 2500);
     },
@@ -86,6 +93,22 @@ export default function TabNegocio({ puedeEditar }) {
       setErrorLogo('Error al subir la imagen. Intenta de nuevo.');
     } finally {
       setSubiendoLogo(false);
+      e.target.value = '';
+    }
+  }
+
+  async function handleQr(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setErrorQr('');
+    setSubiendoQr(true);
+    try {
+      const url = await subirLogo(file);
+      set('qr_pago_imagen', url);
+    } catch {
+      setErrorQr('Error al subir la imagen. Intenta de nuevo.');
+    } finally {
+      setSubiendoQr(false);
       e.target.value = '';
     }
   }
@@ -257,6 +280,77 @@ export default function TabNegocio({ puedeEditar }) {
         </div>
       </SettingsSection>
 
+      <SettingsSection titulo="Cobro QR en el POS" descripcion="Qué QR se muestra al cobrar desde Ventas. El autoservicio por mesa siempre usa CodePay.">
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {[
+              { id: 'codepay', titulo: 'CodePay', desc: 'QR automático: el pago se confirma solo.' },
+              { id: 'manual', titulo: 'QR propio del negocio', desc: 'Se muestra tu QR y el cajero confirma viendo el comprobante.' },
+            ].map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => set('qr_pos_modo', m.id)}
+                disabled={!puedeEditar}
+                className={`text-left rounded-xl border px-4 py-3 transition-colors disabled:opacity-60 ${
+                  form.qr_pos_modo === m.id ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'
+                }`}
+              >
+                <p className="text-sm font-semibold text-foreground">{m.titulo}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{m.desc}</p>
+              </button>
+            ))}
+          </div>
+
+          {form.qr_pos_modo === 'manual' && (
+            <>
+              <div className="flex items-start gap-4">
+                {form.qr_pago_imagen ? (
+                  <div className="relative shrink-0">
+                    <img
+                      src={logoSrc(form.qr_pago_imagen)}
+                      alt="QR de pago"
+                      className="w-32 h-32 object-contain rounded-xl border border-border bg-white p-1"
+                    />
+                    {puedeEditar && (
+                      <button
+                        onClick={() => set('qr_pago_imagen', '')}
+                        className="absolute -top-2 -right-2 w-5 h-5 bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-full flex items-center justify-center"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="w-32 h-32 rounded-xl border-2 border-dashed border-input flex items-center justify-center text-muted-foreground shrink-0">
+                    {subiendoQr ? <RefreshCw className="w-6 h-6 animate-spin" /> : <QrCode className="w-8 h-8" />}
+                  </div>
+                )}
+                {puedeEditar && (
+                  <div className="space-y-1.5">
+                    <button
+                      onClick={() => qrRef.current?.click()}
+                      disabled={subiendoQr}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-60"
+                    >
+                      <Upload className="w-4 h-4" />
+                      {subiendoQr ? 'Subiendo...' : form.qr_pago_imagen ? 'Cambiar QR' : 'Subir QR'}
+                    </button>
+                    <p className="text-xs text-muted-foreground">Imagen del QR de cobro de tu banco · PNG, JPG o WebP · máx. 5MB.</p>
+                    {errorQr && <p className="text-xs text-destructive">{errorQr}</p>}
+                    <input ref={qrRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleQr} />
+                  </div>
+                )}
+              </div>
+              {campo('Texto bajo el QR (opcional)', 'qr_pago_texto', { placeholder: 'Ej: Titular Juan Pérez — BNB' })}
+              {!form.qr_pago_imagen && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">Subí la imagen del QR para poder guardar este modo.</p>
+              )}
+            </>
+          )}
+        </div>
+      </SettingsSection>
+
       <SettingsSection titulo="Colores de marca" descripcion="Se aplican en toda la interfaz del sistema">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
@@ -315,6 +409,9 @@ export default function TabNegocio({ puedeEditar }) {
           >
             {guardar.isPending ? 'Guardando...' : 'Guardar cambios'}
           </button>
+          {guardar.isError && (
+            <p className="text-sm text-destructive">{guardar.error?.response?.data?.mensaje ?? 'Error al guardar'}</p>
+          )}
           {guardado && (
             <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-sm font-medium">
               <CheckCircle2 className="w-4 h-4" /> Guardado correctamente

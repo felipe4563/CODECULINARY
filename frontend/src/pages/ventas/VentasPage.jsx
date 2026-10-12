@@ -25,6 +25,8 @@ import ModalLlevar from './components/ModalLlevar';
 import ModalMesas from './components/ModalMesas';
 import CategoriasBar from './components/CategoriasBar';
 import ModalPagoQr from './components/ModalPagoQr';
+import ModalQrPropio from './components/ModalQrPropio';
+import { useQrPos } from '../../hooks/useQrPos';
 import SelectorOpcionModal from './components/SelectorOpcionModal';
 import ModalPeso from './components/ModalPeso';
 import Modal from '../../components/ui/Modal';
@@ -661,6 +663,8 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
   const [descuentoPuntos, setDescuentoPuntos] = useState(0);
   const [cuponAplicado, setCuponAplicado] = useState(null); // { codigo, descuento } | null
   const [mostrarRuleta, setMostrarRuleta] = useState(false);
+  const [verQrPropio, setVerQrPropio] = useState(false);
+  const qrPos = useQrPos();
 
   const { data: config = {} } = useQuery({ queryKey: ['configuracion'], queryFn: getConfiguracion, staleTime: 60_000 });
   const puedeCanjearPuntos = metodo === 'qr' ? config.fidelidad_canje_qr === 'true' : config.fidelidad_canje_efectivo !== 'false';
@@ -674,7 +678,7 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
   });
 
   const iniciar = useMutation({
-    mutationFn: () => crearVentaCompleta({
+    mutationFn: ({ qrConfirmado = false } = {}) => crearVentaCompleta({
       tipo,
       mesa_id: tipo === 'mesa' ? mesaId : undefined,
       nombre_cliente: nombreCliente ?? undefined,
@@ -686,8 +690,10 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
       cliente_id: clienteFidelidad?.id,
       puntos_canjear: puedeCanjearPuntos ? puntosCanjear : 0,
       cupon_codigo: cuponAplicado?.codigo,
+      qr_confirmado: qrConfirmado,
     }),
     onSuccess: (resultado) => {
+      setVerQrPropio(false);
       if (resultado.pago_qr) {
         setPagoQrEstado({ pedidoId: resultado.pedido.id, pagoQr: resultado.pago_qr });
       } else {
@@ -695,8 +701,18 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
         setVentaExitosa({ pedidoId: resultado.id, metodoPago: metodo });
       }
     },
-    onError: (err) => setError(err?.response?.data?.mensaje ?? 'Error al cobrar'),
+    onError: (err) => {
+      setError(err?.response?.data?.mensaje ?? 'Error al cobrar');
+      // Por si el modo QR cambió desde Configuración mientras el POS estaba abierto.
+      if (metodo === 'qr') qc.invalidateQueries({ queryKey: ['configuracion-publica'] });
+    },
   });
+
+  const confirmarCobro = () => {
+    setError(null);
+    if (metodo === 'qr' && qrPos.manual) setVerQrPropio(true);
+    else iniciar.mutate();
+  };
 
   const reintentar = useMutation({
     mutationFn: () => cobrarVenta(pagoQrEstado.pedidoId, { metodo_pago: 'qr', monto_recibido: total }),
@@ -736,6 +752,20 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
           </div>
         </div>
       </Modal>
+    );
+  }
+
+  if (verQrPropio) {
+    return (
+      <ModalQrPropio
+        monto={totalFinal}
+        imagen={qrPos.imagen}
+        texto={qrPos.texto}
+        confirmando={iniciar.isPending}
+        error={error}
+        onConfirmar={() => iniciar.mutate({ qrConfirmado: true })}
+        onVolver={() => { setVerQrPropio(false); setError(null); }}
+      />
     );
   }
 
@@ -829,11 +859,11 @@ function ModalCobrar({ total, carrito, tipo, mesaId, nombreCliente, sesionCajaId
             Cancelar
           </button>
           <button
-            onClick={() => iniciar.mutate()}
+            onClick={confirmarCobro}
             disabled={iniciar.isPending}
             className="px-5 py-2 rounded-xl text-sm bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-colors disabled:opacity-60"
           >
-            {iniciar.isPending ? 'Procesando...' : 'Confirmar cobro'}
+            {iniciar.isPending ? 'Procesando...' : metodo === 'qr' && qrPos.manual ? 'Mostrar QR' : 'Confirmar cobro'}
           </button>
         </div>
       </div>

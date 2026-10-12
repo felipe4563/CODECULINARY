@@ -28,6 +28,8 @@ const Pedido = sequelize.define('Pedido', {
   puntos_ganados: { type: DataTypes.INTEGER, defaultValue: 0 },
   puntos_canjeados: { type: DataTypes.INTEGER, defaultValue: 0 },
   metodo_pago: { type: DataTypes.ENUM('efectivo','qr','app_externa'), defaultValue: 'efectivo' },
+  qr_tipo: { type: DataTypes.ENUM('codepay','manual'), allowNull: true },
+  qr_confirmado_por: { type: DataTypes.INTEGER.UNSIGNED, allowNull: true },
   monto_recibido: { type: DataTypes.DECIMAL(10,2) },
   cambio: { type: DataTypes.DECIMAL(10,2), defaultValue: 0 },
   notas: { type: DataTypes.TEXT },

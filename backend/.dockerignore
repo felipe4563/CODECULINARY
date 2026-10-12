@@ -1,7 +1,23 @@
+# Las imágenes se publican en ghcr.io y pueden quedar públicas: nada de
+# secretos, datos de clientes ni archivos subidos.
 node_modules
 npm-debug.log
+.git
 .env
+.env.*
+!.env.example
+# Archivos subidos (logos, fotos): viven en el volumen `uploads`
 uploads/*
 !uploads/.gitkeep
+# SQL (migraciones, volcados, respaldos): se aplican a mano desde el repo del VPS
+database
+*.sql
+*.sql.gz
+*.dump
+*.bak
+*.log
+backups
+respaldos
 tests
+scripts
 .superpowers

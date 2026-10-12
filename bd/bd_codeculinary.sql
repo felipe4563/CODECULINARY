@@ -212,7 +212,10 @@ INSERT INTO `configuraciones` (`id`, `clave`, `valor`, `creado_en`, `actualizado
 (46, 'ruleta_vigencia_dias_premio', '7', '2026-09-07 17:44:45', '2026-09-07 17:44:45'),
 (47, 'cocina_destino', 'centralizada', '2026-09-07 17:44:45', '2026-09-07 17:44:45'),
 (48, 'cocina_pantalla_dedicada', 'false', '2026-09-07 17:44:45', '2026-09-07 17:44:45'),
-(49, 'portada', NULL, '2026-09-08 00:00:00', '2026-09-08 00:00:00');
+(49, 'portada', NULL, '2026-09-08 00:00:00', '2026-09-08 00:00:00'),
+(50, 'qr_pos_modo', 'codepay', '2026-10-12 00:00:00', '2026-10-12 00:00:00'),
+(51, 'qr_pago_imagen', '', '2026-10-12 00:00:00', '2026-10-12 00:00:00'),
+(52, 'qr_pago_texto', '', '2026-10-12 00:00:00', '2026-10-12 00:00:00');
 
 -- --------------------------------------------------------
 
@@ -537,6 +540,8 @@ CREATE TABLE `pedidos` (
   `cupon_id` int(10) UNSIGNED DEFAULT NULL,
   `descuento_cupon` decimal(10,2) NOT NULL DEFAULT 0.00,
   `metodo_pago` enum('efectivo','qr','app_externa') NOT NULL DEFAULT 'efectivo',
+  `qr_tipo` enum('codepay','manual') DEFAULT NULL,
+  `qr_confirmado_por` int(10) UNSIGNED DEFAULT NULL,
   `monto_recibido` decimal(10,2) DEFAULT NULL,
   `cambio` decimal(10,2) NOT NULL DEFAULT 0.00,
   `notas` text DEFAULT NULL,
@@ -1230,7 +1235,8 @@ ALTER TABLE `pedidos`
   ADD KEY `sesion_caja_id` (`sesion_caja_id`),
   ADD KEY `sucursal_id` (`sucursal_id`),
   ADD KEY `cupon_id` (`cupon_id`),
-  ADD KEY `pedidos_ibfk_6` (`mesa_sesion_id`);
+  ADD KEY `pedidos_ibfk_6` (`mesa_sesion_id`),
+  ADD KEY `qr_confirmado_por` (`qr_confirmado_por`);
 
 --
 -- Indices de la tabla `permisos`
@@ -1408,7 +1414,7 @@ ALTER TABLE `compras`
 -- AUTO_INCREMENT de la tabla `configuraciones`
 --
 ALTER TABLE `configuraciones`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=49;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=53;
 
 --
 -- AUTO_INCREMENT de la tabla `cupones`
@@ -1730,7 +1736,8 @@ ALTER TABLE `pedidos`
   ADD CONSTRAINT `pedidos_ibfk_3` FOREIGN KEY (`cliente_id`) REFERENCES `clientes` (`id`) ON DELETE SET NULL,
   ADD CONSTRAINT `pedidos_ibfk_4` FOREIGN KEY (`sesion_caja_id`) REFERENCES `sesiones_caja` (`id`) ON DELETE SET NULL,
   ADD CONSTRAINT `pedidos_ibfk_5` FOREIGN KEY (`sucursal_id`) REFERENCES `sucursales` (`id`),
-  ADD CONSTRAINT `pedidos_ibfk_6` FOREIGN KEY (`mesa_sesion_id`) REFERENCES `mesa_sesiones` (`id`);
+  ADD CONSTRAINT `pedidos_ibfk_6` FOREIGN KEY (`mesa_sesion_id`) REFERENCES `mesa_sesiones` (`id`),
+  ADD CONSTRAINT `pedidos_ibfk_7` FOREIGN KEY (`qr_confirmado_por`) REFERENCES `usuarios` (`id`);
 
 --
 -- Filtros para la tabla `productos`

@@ -78,9 +78,9 @@ ALTER TABLE `detalle_pedido_opciones`
 
 -- Permisos del módulo insumos, otorgados de entrada al rol Administrador (id 1).
 INSERT INTO `permisos` (`id`, `modulo`, `accion`, `descripcion`) VALUES
-(65, 'insumos', 'ver', 'Ver insumos'),
-(66, 'insumos', 'crear', 'Crear insumos'),
-(67, 'insumos', 'editar', 'Editar insumos (incluye receta y ajustes de stock)'),
-(68, 'insumos', 'eliminar', 'Desactivar insumos');
+(72, 'insumos', 'ver', 'Ver insumos'),
+(73, 'insumos', 'crear', 'Crear insumos'),
+(74, 'insumos', 'editar', 'Editar insumos (incluye receta y ajustes de stock)'),
+(75, 'insumos', 'eliminar', 'Desactivar insumos');
 
-INSERT INTO `roles_permisos` (`rol_id`, `permiso_id`) VALUES (1,65),(1,66),(1,67),(1,68);
+INSERT INTO `roles_permisos` (`rol_id`, `permiso_id`) VALUES (1,72),(1,73),(1,74),(1,75);

@@ -296,6 +296,24 @@ async function _siguienteNumeroLlevar() {
 // ya se cobró o no (ver spec: estado_cocina es un eje separado de estado).
 // Ausencia de configuración se trata como 'digital' (mismo default que ya
 // usa TabFlujo.jsx en el frontend).
+// Cobro QR del POS: 'codepay' (QR dinámico, se confirma solo por webhook) o
+// 'manual' (QR propio del negocio; el cajero confirma viendo el comprobante,
+// así que la venta se completa directo como en efectivo). Ver migración 052.
+async function _qrPosManual() {
+  const cfg = await Configuracion.findOne({ where: { clave: 'qr_pos_modo' } });
+  return cfg?.valor === 'manual';
+}
+
+// Si el modo cambió a 'manual' mientras un POS tenía la config vieja en
+// caché, el cajero mandaría el cobro sin haber visto el QR ni el comprobante.
+// El frontend manda qr_confirmado solo desde el botón "Confirmar pago recibido".
+function _errorQrSinConfirmar() {
+  return Object.assign(
+    new Error('El cobro QR ahora usa el QR del negocio. Volvé a tocar Cobrar para mostrarlo al cliente.'),
+    { status: 409 }
+  );
+}
+
 async function _estadoCocinaInicial() {
   const cfg = await Configuracion.findOne({ where: { clave: 'flujo_cocina' } });
   return (!cfg || cfg.valor === 'digital') ? 'pendiente' : null;
@@ -401,7 +419,7 @@ async function _sesionCajaParaAsiento(pedido, transaction) {
  * libro de caja y libera la mesa si corresponde. Debe correr dentro de una
  * transacción activa.
  */
-async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, descuento = 0, propina = 0, usuario_id, puntos_canjear = 0, cupon_codigo, canjeYaReservado = false }, transaction) {
+async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, descuento = 0, propina = 0, usuario_id, puntos_canjear = 0, cupon_codigo, canjeYaReservado = false, qrManual = false }, transaction) {
   const cfgFidelidad = await _configFidelidad(transaction);
 
   let puntosCanjeados, descuentoPuntos, clienteBloqueado;
@@ -432,6 +450,7 @@ async function _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, 
     puntos_ganados: puntosGanados, puntos_canjeados: puntosCanjeados, descuento_cupon: descuentoCupon,
   };
   if (!canjeYaReservado) datosPedido.cupon_id = cupon ? cupon.id : null;
+  if (qrManual) Object.assign(datosPedido, { qr_tipo: 'manual', qr_confirmado_por: usuario_id });
   await pedido.update(datosPedido, { transaction });
 
   if (cupon) await cupon.update({ usos_actuales: cupon.usos_actuales + 1, usado_en: new Date() }, { transaction });
@@ -675,7 +694,7 @@ async function iniciarPagoQr(pedido, { descuento = 0, propina = 0, puntos_canjea
         qr_code: respuesta.qr_code, expires_at,
       }, { transaction: t });
 
-      await pedido.update({ estado: 'pendiente_pago', metodo_pago: 'qr', descuento, propina }, { transaction: t });
+      await pedido.update({ estado: 'pendiente_pago', metodo_pago: 'qr', qr_tipo: 'codepay', descuento, propina }, { transaction: t });
     });
 
     return {
@@ -873,7 +892,7 @@ async function procesarWebhookPagoQr({ event, order_id }) {
   }
 }
 
-async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente, tipo_documento, notas, items, metodo_pago, monto_recibido, descuento = 0, propina = 0, sesion_caja_id, usuario_id, cliente_id, puntos_canjear = 0, cupon_codigo, mesa_sesion_id = null, origen = 'staff', direccion_entrega = null, telefono_cliente = null, origen_app = null }) {
+async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente, tipo_documento, notas, items, metodo_pago, monto_recibido, descuento = 0, propina = 0, sesion_caja_id, usuario_id, cliente_id, puntos_canjear = 0, cupon_codigo, mesa_sesion_id = null, origen = 'staff', direccion_entrega = null, telefono_cliente = null, origen_app = null, qr_confirmado = false }) {
   if (!sesion_caja_id) {
     throw Object.assign(new Error('No hay caja abierta. Abre la caja antes de crear una orden.'), { status: 409 });
   }
@@ -937,8 +956,15 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
     throw Object.assign(new Error('Monto recibido insuficiente'), { status: 400 });
   }
 
+  // QR propio (modo manual): el cajero ya vio el comprobante antes de enviar,
+  // así que se completa directo como efectivo. Solo para ventas del staff —
+  // el autoservicio no tiene quién verifique y sigue siempre con CodePay.
+  const qrManual = metodo_pago === 'qr' && origen === 'staff' && await _qrPosManual();
+  const qrCodepay = metodo_pago === 'qr' && !qrManual;
+  if (qrManual && !qr_confirmado) throw _errorQrSinConfirmar();
+
   const numero_llevar = (tipo === 'llevar' || tipo === 'delivery') ? await _siguienteNumeroLlevar() : null;
-  const estadoInicial = (metodo_pago === 'qr' || metodo_pago === 'diferido') ? 'pendiente' : 'completado';
+  const estadoInicial = (qrCodepay || metodo_pago === 'diferido') ? 'pendiente' : 'completado';
   const estado_cocina = await _estadoCocinaInicial();
 
   const pedidoId = await sequelize.transaction(async (t) => {
@@ -977,14 +1003,14 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
       detalles.push({ id: detallePedido.id, producto_id: combo ? null : item.producto_id, combo_id: combo ? item.combo_id : null, cantidad: linea.cantidad, precio: linea.precio });
     }
 
-    if (metodo_pago !== 'qr' && metodo_pago !== 'diferido') {
-      await _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, descuento, propina, usuario_id, puntos_canjear, cupon_codigo }, t);
+    if (!qrCodepay && metodo_pago !== 'diferido') {
+      await _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, descuento, propina, usuario_id, puntos_canjear, cupon_codigo, qrManual }, t);
     }
 
     return pedido.id;
   });
 
-  if (metodo_pago === 'qr') {
+  if (qrCodepay) {
     const pedidoPendiente = await Pedido.findByPk(pedidoId);
     const pago_qr = await iniciarPagoQr(pedidoPendiente, { descuento, propina, puntos_canjear, cupon_codigo, items: itemsCupon });
     emitir('restaurante:actualizar', { tipo: 'pedido_nuevo' }, sucursal_id);
@@ -1102,7 +1128,7 @@ async function eliminarItem(pedido_id, item_id, alcance) {
   emitir('restaurante:actualizar', { tipo: 'pedido_items' });
 }
 
-async function cobrar(pedido_id, usuario_id, { metodo_pago, monto_recibido, descuento = 0, propina = 0, cliente_id, puntos_canjear = 0, cupon_codigo }, alcance) {
+async function cobrar(pedido_id, usuario_id, { metodo_pago, monto_recibido, descuento = 0, propina = 0, cliente_id, puntos_canjear = 0, cupon_codigo, qr_confirmado = false }, alcance) {
   const pedido = await Pedido.findByPk(pedido_id, { include: INCLUDE_PEDIDO_COMPLETO });
   if (!pedido) throw Object.assign(new Error('Pedido no encontrado'), { status: 404 });
   _verificarAlcance(pedido, alcance);
@@ -1128,7 +1154,12 @@ async function cobrar(pedido_id, usuario_id, { metodo_pago, monto_recibido, desc
     throw Object.assign(new Error('Monto recibido insuficiente'), { status: 400 });
   }
 
-  if (metodo_pago === 'qr') {
+  // Mismo criterio que crearCompleta: con QR propio el cajero ya confirmó el
+  // comprobante, así que se cobra directo; con CodePay se genera el QR.
+  const qrManual = metodo_pago === 'qr' && await _qrPosManual();
+  if (qrManual && !qr_confirmado) throw _errorQrSinConfirmar();
+
+  if (metodo_pago === 'qr' && !qrManual) {
     // El cupón (igual que los puntos) se reserva dentro de iniciarPagoQr,
     // porque el monto cobrado por QR queda fijo desde que se genera.
     const pago_qr = await iniciarPagoQr(pedido, { descuento, propina, puntos_canjear, cupon_codigo, items: itemsCupon });
@@ -1136,7 +1167,7 @@ async function cobrar(pedido_id, usuario_id, { metodo_pago, monto_recibido, desc
   }
 
   const detalles = pedido.detalles.map((d) => ({ id: d.id, producto_id: d.producto_id, combo_id: d.combo_id, cantidad: d.cantidad, precio: parseFloat(d.precio) }));
-  await sequelize.transaction((t) => _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, descuento, propina, usuario_id, puntos_canjear, cupon_codigo }, t));
+  await sequelize.transaction((t) => _finalizarVenta({ pedido, detalles, metodo_pago, monto_recibido, descuento, propina, usuario_id, puntos_canjear, cupon_codigo, qrManual }, t));
   await Pedido.update({ estado_cocina: null }, { where: { id: pedido_id } });
 
   const cobrado = await obtener(pedido_id);
@@ -1148,7 +1179,8 @@ async function cobrar(pedido_id, usuario_id, { metodo_pago, monto_recibido, desc
   // una comanda duplicada real (fuera de la ventana de dedup del agente de
   // impresión) que podría hacer que la cocina vuelva a cocinar un pedido ya
   // entregado.
-  const datos_impresion = await _emitirImpresion(cobrado, metodo_pago, parseFloat(monto_recibido) - monto_neto, pedido.sucursal_id, undefined, { suprimirCocina: pedido.origen === 'app_externa' });
+  const cambio = metodo_pago === 'efectivo' ? parseFloat(monto_recibido) - monto_neto : 0;
+  const datos_impresion = await _emitirImpresion(cobrado, metodo_pago, cambio, pedido.sucursal_id, undefined, { suprimirCocina: pedido.origen === 'app_externa' });
   return { ...cobrado.toJSON(), datos_impresion };
 }
 

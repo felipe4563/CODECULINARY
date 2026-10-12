@@ -1,4 +1,15 @@
+# Las imágenes se publican en ghcr.io y pueden quedar públicas.
 node_modules
 npm-debug.log
+.git
 dist
+dev-dist
+# .env.production apunta a un dominio concreto; la imagen usa VITE_API_URL
+# relativa (build-arg), así que ningún .env entra al build.
 .env
+.env.*
+*.sql
+*.sql.gz
+*.dump
+*.bak
+*.log

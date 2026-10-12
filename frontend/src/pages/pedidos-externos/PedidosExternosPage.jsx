@@ -4,6 +4,8 @@ import { Truck, MapPin, Phone, RefreshCw, DollarSign } from 'lucide-react';
 import { getVentas, cobrarVenta } from '../../api/ventas';
 import Modal from '../../components/ui/Modal';
 import ModalPagoQr from '../ventas/components/ModalPagoQr';
+import ModalQrPropio from '../ventas/components/ModalQrPropio';
+import { useQrPos } from '../../hooks/useQrPos';
 
 const ESTADO_LABEL = {
   pendiente: 'Pendiente', listo: 'Listo', completado: 'Completado', cancelado: 'Cancelado',
@@ -97,10 +99,15 @@ function ModalCobrar({ pedido, onClose }) {
   const [metodo_pago, setMetodoPago] = useState('efectivo');
   const [monto_recibido, setMontoRecibido] = useState(pedido.total);
   const [pagoQrEstado, setPagoQrEstado] = useState(null); // { pedidoId, pagoQr } | null
+  const [verQrPropio, setVerQrPropio] = useState(false);
+  const qrPos = useQrPos();
 
   const cobrar = useMutation({
-    mutationFn: () => cobrarVenta(pedido.id, { metodo_pago, monto_recibido: parseFloat(monto_recibido) }),
+    mutationFn: ({ qrConfirmado = false } = {}) => cobrarVenta(pedido.id, {
+      metodo_pago, monto_recibido: parseFloat(monto_recibido), qr_confirmado: qrConfirmado,
+    }),
     onSuccess: (resultado) => {
+      setVerQrPropio(false);
       if (resultado.pago_qr) {
         setPagoQrEstado({ pedidoId: resultado.pedido.id, pagoQr: resultado.pago_qr });
         return;
@@ -108,12 +115,36 @@ function ModalCobrar({ pedido, onClose }) {
       qc.invalidateQueries({ queryKey: ['ventas'] });
       onClose();
     },
+    onError: () => {
+      // Por si el modo QR cambió desde Configuración mientras la pantalla estaba abierta.
+      if (metodo_pago === 'qr') qc.invalidateQueries({ queryKey: ['configuracion-publica'] });
+    },
   });
+
+  const confirmarCobro = () => {
+    cobrar.reset();
+    if (metodo_pago === 'qr' && qrPos.manual) setVerQrPropio(true);
+    else cobrar.mutate();
+  };
 
   const reintentar = useMutation({
     mutationFn: () => cobrarVenta(pagoQrEstado.pedidoId, { metodo_pago: 'qr', monto_recibido: pedido.total }),
     onSuccess: (resultado) => setPagoQrEstado({ pedidoId: resultado.pedido.id, pagoQr: resultado.pago_qr }),
   });
+
+  if (verQrPropio) {
+    return (
+      <ModalQrPropio
+        monto={pedido.total}
+        imagen={qrPos.imagen}
+        texto={qrPos.texto}
+        confirmando={cobrar.isPending}
+        error={cobrar.error ? (cobrar.error?.response?.data?.mensaje ?? 'Error al cobrar') : null}
+        onConfirmar={() => cobrar.mutate({ qrConfirmado: true })}
+        onVolver={() => { setVerQrPropio(false); cobrar.reset(); }}
+      />
+    );
+  }
 
   if (pagoQrEstado) {
     return (
@@ -167,11 +198,11 @@ function ModalCobrar({ pedido, onClose }) {
             Cancelar
           </button>
           <button
-            onClick={() => cobrar.mutate()}
+            onClick={confirmarCobro}
             disabled={cobrar.isPending}
             className="px-4 py-2 rounded-xl text-sm bg-primary hover:bg-primary/90 text-primary-foreground transition-colors disabled:opacity-60"
           >
-            {cobrar.isPending ? 'Cobrando...' : 'Confirmar cobro'}
+            {cobrar.isPending ? 'Cobrando...' : metodo_pago === 'qr' && qrPos.manual ? 'Mostrar QR' : 'Confirmar cobro'}
           </button>
         </div>
       </div>

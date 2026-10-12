@@ -7,7 +7,9 @@ RUN npm install
 
 COPY . .
 
-ARG VITE_API_URL=https://cdemo.codewave.com.bo/api/v1
+# Relativa para que una sola imagen sirva a todas las instancias (cada una
+# con su dominio): el nginx de este contenedor reenvía /api al backend.
+ARG VITE_API_URL=/api/v1
 ENV VITE_API_URL=$VITE_API_URL
 
 RUN npm run build
