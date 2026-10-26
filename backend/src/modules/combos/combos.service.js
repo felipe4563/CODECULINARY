@@ -41,8 +41,8 @@ async function listar(alcance, sucursal_id) {
 }
 
 // Combos vendibles ahora mismo (activos y dentro de su ventana de fechas/días) — para el POS.
-async function listarActivos(alcance) {
-  const combos = await Combo.findAll({ where: { activo: 1, ...filtroSucursalCatalogo(alcance) }, include: [...INCLUDE_PRODUCTOS, INCLUDE_SUCURSAL], order: [['nombre', 'ASC']] });
+async function listarActivos(alcance, sucursal_id) {
+  const combos = await Combo.findAll({ where: { activo: 1, ...filtroSucursalCatalogo(alcance, sucursal_id) }, include: [...INCLUDE_PRODUCTOS, INCLUDE_SUCURSAL], order: [['nombre', 'ASC']] });
   return combos.filter((c) => estaActivoHoy(c)).map((c) => _normalizarCombo(c.toJSON()));
 }
 

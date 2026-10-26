@@ -58,6 +58,20 @@ describe('Combos y promociones por sucursal', () => {
       expect(deB.body.datos.some((c) => c.id === comboA.id)).toBe(false);
     });
 
+    it('el global filtra /combos/activos por sucursal_id', async () => {
+      const deA = await request(app).get(`/api/v1/combos/activos?sucursal_id=${ctx.sucursalA.id}`).set(auth(ctx.tokenGlobal));
+      expect(deA.status).toBe(200);
+      expect(deA.body.datos.some((c) => c.id === comboA.id)).toBe(true);
+      expect(deA.body.datos.every((c) => c.sucursal_id === ctx.sucursalA.id)).toBe(true);
+      const deB = await request(app).get(`/api/v1/combos/activos?sucursal_id=${ctx.sucursalB.id}`).set(auth(ctx.tokenGlobal));
+      expect(deB.body.datos.some((c) => c.id === comboA.id)).toBe(false);
+    });
+
+    it('un usuario con sucursal ignora el sucursal_id de /combos/activos', async () => {
+      const res = await request(app).get(`/api/v1/combos/activos?sucursal_id=${ctx.sucursalA.id}`).set(auth(ctx.tokenB));
+      expect(res.body.datos.some((c) => c.id === comboA.id)).toBe(false);
+    });
+
     it('crear un combo en A con un producto de B → 400', async () => {
       const res = await request(app).post('/api/v1/combos').set(auth(ctx.tokenA))
         .send({ nombre: 'Combo Mixto', precio: 20, productos: [{ producto_id: productoA.id }, { producto_id: productoB.id }] });
@@ -87,6 +101,13 @@ describe('Combos y promociones por sucursal', () => {
       expect(activas.body.datos.some((p) => p.id === promoA.id)).toBe(false);
       const propias = await request(app).get('/api/v1/promociones/activas').set(auth(ctx.tokenA));
       expect(propias.body.datos.some((p) => p.id === promoA.id)).toBe(true);
+    });
+
+    it('el global filtra /promociones/activas por sucursal_id', async () => {
+      const deA = await request(app).get(`/api/v1/promociones/activas?sucursal_id=${ctx.sucursalA.id}`).set(auth(ctx.tokenGlobal));
+      expect(deA.body.datos.some((p) => p.id === promoA.id)).toBe(true);
+      const deB = await request(app).get(`/api/v1/promociones/activas?sucursal_id=${ctx.sucursalB.id}`).set(auth(ctx.tokenGlobal));
+      expect(deB.body.datos.some((p) => p.id === promoA.id)).toBe(false);
     });
 
     it('GET/PUT/DELETE de la promoción de A desde B → 404', async () => {

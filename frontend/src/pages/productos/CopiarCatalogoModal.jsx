@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getSucursales } from '../../api/sucursales';
 import { getCategorias } from '../../api/categorias';
 import { getProductos, copiarCatalogo } from '../../api/productos';
-import { getCombosActivos } from '../../api/combos';
+import { getCombos } from '../../api/combos';
 import Modal from '../../components/ui/Modal';
 
 const NOMBRES_CREADOS = {
@@ -38,10 +38,12 @@ export default function CopiarCatalogoModal({ destinoId, onClose }) {
     queryFn: () => getProductos({ sucursal_id: origen }),
     enabled: origen != null,
   });
+  // Todos los combos activos del origen, aunque hoy no estén en su ventana de fechas/días.
   const { data: combos = [], isLoading: cargandoCombos } = useQuery({
     queryKey: ['copiar-combos', origen],
-    queryFn: () => getCombosActivos({ sucursal_id: origen }),
+    queryFn: () => getCombos({ sucursal_id: origen }),
     enabled: origen != null,
+    select: (lista) => lista.filter(c => c.activo),
   });
 
   const copiar = useMutation({

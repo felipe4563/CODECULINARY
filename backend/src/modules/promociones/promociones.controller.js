@@ -10,7 +10,7 @@ async function listar(req, res, next) {
 }
 
 async function listarActivas(req, res, next) {
-  try { res.json({ ok: true, datos: await svc.listarActivas(_alcance(req)) }); }
+  try { res.json({ ok: true, datos: await svc.listarActivas(_alcance(req), req.query.sucursal_id) }); }
   catch (err) { next(err); }
 }
 

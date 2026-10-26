@@ -17,12 +17,12 @@ async function listar(alcance, sucursal_id) {
 // así el frontend arma su mapa producto_id → promo exactamente igual que
 // antes (cuando cada promo era de un solo producto), sin tener que cambiar
 // esa parte.
-async function listarActivas(alcance) {
+async function listarActivas(alcance, sucursal_id) {
   // Orden ascendente por id: el frontend arma un mapa producto_id → promo
   // pisando con la última que procesa, así que acá se devuelve en el mismo
   // orden que espera (la más reciente queda última = la que gana).
   const promos = await Promocion.findAll({
-    where: { activo: 1, ...filtroSucursalCatalogo(alcance) }, include: INCLUDE_PRODUCTOS, order: [['id', 'ASC']],
+    where: { activo: 1, ...filtroSucursalCatalogo(alcance, sucursal_id) }, include: INCLUDE_PRODUCTOS, order: [['id', 'ASC']],
   });
   const vigentes = promos.filter((p) => estaActivoHoy(p));
   const filas = [];
