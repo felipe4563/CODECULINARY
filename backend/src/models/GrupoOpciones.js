@@ -3,6 +3,7 @@ const sequelize = require('../config/database');
 
 const GrupoOpciones = sequelize.define('GrupoOpciones', {
   id: { type: DataTypes.INTEGER.UNSIGNED, primaryKey: true, autoIncrement: true },
+  sucursal_id: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
   nombre: { type: DataTypes.STRING(100), allowNull: false },
   tipo_seleccion: { type: DataTypes.ENUM('unica', 'multiple'), allowNull: false, defaultValue: 'unica' },
 }, {

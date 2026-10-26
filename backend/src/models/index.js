@@ -88,6 +88,13 @@ Mesa.hasMany(MesaSesion, { foreignKey: 'mesa_id', as: 'sesiones' });
 MesaSesion.belongsTo(Mesa, { foreignKey: 'mesa_id', as: 'mesa' });
 MesaSesion.belongsTo(Sucursal, { foreignKey: 'sucursal_id', as: 'sucursal' });
 
+// Catálogo por sucursal
+Categoria.belongsTo(Sucursal, { foreignKey: 'sucursal_id', as: 'sucursal' });
+Producto.belongsTo(Sucursal, { foreignKey: 'sucursal_id', as: 'sucursal' });
+GrupoOpciones.belongsTo(Sucursal, { foreignKey: 'sucursal_id', as: 'sucursal' });
+Combo.belongsTo(Sucursal, { foreignKey: 'sucursal_id', as: 'sucursal' });
+Promocion.belongsTo(Sucursal, { foreignKey: 'sucursal_id', as: 'sucursal' });
+
 // Productos
 Producto.belongsTo(Categoria, { foreignKey: 'categoria_id', as: 'categoria' });
 Categoria.hasMany(Producto, { foreignKey: 'categoria_id', as: 'productos' });

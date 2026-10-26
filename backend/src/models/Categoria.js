@@ -3,6 +3,7 @@ const sequelize = require('../config/database');
 
 const Categoria = sequelize.define('Categoria', {
   id: { type: DataTypes.INTEGER.UNSIGNED, primaryKey: true, autoIncrement: true },
+  sucursal_id: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
   nombre: { type: DataTypes.STRING(255), allowNull: false },
   imagen: { type: DataTypes.STRING(255) },
   activo: { type: DataTypes.TINYINT(1), defaultValue: 1 },
