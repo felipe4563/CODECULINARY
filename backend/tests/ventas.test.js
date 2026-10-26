@@ -1,3 +1,4 @@
+const { idSucursalPrincipal } = require('./helpers/sucursalPrincipal');
 jest.mock('../src/integrations/codepay/codepay.client', () => ({
   generarQr: jest.fn(),
   consultarEstado: jest.fn(),
@@ -31,7 +32,7 @@ describe('Ventas por sucursal', () => {
     const mesa = await Mesa.create({ area_id: area.id, nombre: 'Mesa Ventas Test B' });
     mesaBId = mesa.id;
 
-    const categoria = await Categoria.create({ nombre: 'Categoria Ventas Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Ventas Test' });
     const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Ventas Test', precio: 5, stock: 0 });
     productoId = producto.id;
     await ProductoStockSucursal.create({ producto_id: producto.id, sucursal_id: sucursalB.id, stock: 3 });
@@ -173,7 +174,7 @@ describe('Ventas — cobro con QR (CodePay)', () => {
     areaId = area.id;
     const mesa = await Mesa.create({ area_id: areaId, nombre: 'Mesa PagoQr Ventas Test' });
     mesaId = mesa.id;
-    const categoria = await Categoria.create({ nombre: 'Categoria PagoQr Ventas Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria PagoQr Ventas Test' });
     const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto PagoQr Ventas Test', precio: 5, stock: 0 });
     productoId = producto.id;
     await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 10 });
@@ -405,7 +406,7 @@ describe('Ventas — productos pesables', () => {
     areaId = area.id;
     const mesa = await Mesa.create({ area_id: areaId, nombre: 'Mesa Pesables Test' });
     mesaId = mesa.id;
-    const categoria = await Categoria.create({ nombre: 'Categoria Pesables Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Pesables Test' });
     categoriaId = categoria.id;
     const producto = await Producto.create({ categoria_id: categoriaId, nombre: 'Chorizo Pesable Ventas Test', precio: 27, es_pesable: 1 });
     productoPesableId = producto.id;
@@ -505,7 +506,7 @@ describe('Ventas — reimprimir ticket', () => {
     areaId = area.id;
     const mesa = await Mesa.create({ area_id: areaId, nombre: 'Mesa Reimprimir Test' });
     mesaId = mesa.id;
-    const categoria = await Categoria.create({ nombre: 'Categoria Reimprimir Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Reimprimir Test' });
     const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Reimprimir Test', precio: 10, stock: 0 });
     productoId = producto.id;
     await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 20 });
@@ -648,7 +649,7 @@ describe('Ventas — ticket de cliente por caja', () => {
     areaId = area.id;
     const mesa = await Mesa.create({ area_id: areaId, nombre: 'Mesa Ticket Cliente Test' });
     mesaId = mesa.id;
-    const categoria = await Categoria.create({ nombre: 'Categoria Ticket Cliente Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Ticket Cliente Test' });
     const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Ticket Cliente Test', precio: 10, stock: 0 });
     productoId = producto.id;
     await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 20 });
@@ -736,7 +737,7 @@ describe('Ventas — opciones por producto dentro de un combo', () => {
     const sesion = await SesionCaja.create({ usuario_id: usuarioId, sucursal_id: sucursalId, caja_id: cajaId, monto_apertura: 0 });
     sesionId = sesion.id;
 
-    const categoria = await Categoria.create({ nombre: 'Categoria Combo Opciones Ventas Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Combo Opciones Ventas Test' });
     const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Combo Opciones Ventas Test', precio: 10, stock: 0 });
     productoId = producto.id;
     await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 20 });
@@ -744,7 +745,7 @@ describe('Ventas — opciones por producto dentro de un combo', () => {
     otroProductoId = otroProducto.id;
     await ProductoStockSucursal.create({ producto_id: otroProductoId, sucursal_id: sucursalId, stock: 20 });
 
-    const grupo = await GrupoOpciones.create({ nombre: 'Tamaño Combo Opciones Ventas Test', tipo_seleccion: 'unica' });
+    const grupo = await GrupoOpciones.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Tamaño Combo Opciones Ventas Test', tipo_seleccion: 'unica' });
     grupoId = grupo.id;
     const opcion = await Opcion.create({ grupo_opciones_id: grupoId, nombre: 'Grande', precio_adicional: 3, orden: 0 });
     opcionId = opcion.id;
@@ -910,7 +911,7 @@ describe('crearCompleta — delivery y pago diferido', () => {
     const sesion = await SesionCaja.create({ usuario_id: usuarioId, sucursal_id: sucursalId, caja_id: cajaId, monto_apertura: 0 });
     sesionId = sesion.id;
 
-    const categoria = await Categoria.create({ nombre: 'Categoria Delivery Diferido Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Delivery Diferido Test' });
     const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Delivery Diferido Test', precio: 10, stock: 0 });
     productoId = producto.id;
     await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 20 });
@@ -1030,7 +1031,7 @@ describe('listar — filtro por origen', () => {
     const sesion = await SesionCaja.create({ usuario_id: usuarioId, sucursal_id: sucursalId, caja_id: cajaId, monto_apertura: 0 });
     sesionId = sesion.id;
 
-    const categoria = await Categoria.create({ nombre: 'Categoria Listar Origen Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Listar Origen Test' });
     const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Listar Origen Test', precio: 10, stock: 0 });
     productoId = producto.id;
     await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 20 });

@@ -1,3 +1,4 @@
+const { idSucursalPrincipal } = require('./helpers/sucursalPrincipal');
 jest.mock('../src/integrations/codepay/codepay.client', () => ({
   generarQr: jest.fn(),
   consultarEstado: jest.fn(),
@@ -34,7 +35,7 @@ describe('Ventas — cobro con QR propio (verificación manual)', () => {
 
     const sucursal = await Sucursal.create({ nombre: 'Sucursal QrPropio Test' });
     sucursalId = sucursal.id;
-    const categoria = await Categoria.create({ nombre: 'Categoria QrPropio Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria QrPropio Test' });
     categoriaId = categoria.id;
     const producto = await Producto.create({ categoria_id: categoriaId, nombre: 'Producto QrPropio Test', precio: 5, stock: 0 });
     productoId = producto.id;

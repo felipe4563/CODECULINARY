@@ -1,3 +1,4 @@
+const { idSucursalPrincipal } = require('./helpers/sucursalPrincipal');
 jest.mock('../src/socket', () => ({ emitir: jest.fn(), init: jest.fn(), estadoAgentes: jest.fn() }));
 const { emitir } = require('../src/socket');
 const request = require('supertest');
@@ -18,7 +19,7 @@ describe('_emitirImpresion — cocina_pantalla_dedicada viaja en el payload', ()
     const area = await Area.create({ nombre: `Area Impresion Ticket Test ${timestamp}`, sucursal_id: sucursal.id });
     mesa = await Mesa.create({ area_id: area.id, nombre: 'Mesa Impresion Ticket Test' });
 
-    const categoria = await Categoria.create({ nombre: `Categoria Impresion Ticket Test ${timestamp}` });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: `Categoria Impresion Ticket Test ${timestamp}` });
     producto = await Producto.create({ categoria_id: categoria.id, nombre: `Producto Impresion Ticket Test ${timestamp}`, precio: 10, stock: 0 });
     await ProductoStockSucursal.create({ producto_id: producto.id, sucursal_id: sucursal.id, stock: 5 });
 

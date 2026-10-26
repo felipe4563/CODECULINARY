@@ -1,3 +1,4 @@
+const { idSucursalPrincipal } = require('./helpers/sucursalPrincipal');
 // backend/tests/estado_cocina.test.js
 jest.mock('../src/integrations/codepay/codepay.client', () => ({
   generarQr: jest.fn(),
@@ -35,7 +36,7 @@ describe('estado_cocina — independiente del cobro', () => {
     const sesion = await SesionCaja.create({ usuario_id: usuarioId, sucursal_id: sucursalId, caja_id: cajaId, monto_apertura: 0 });
     sesionId = sesion.id;
 
-    const categoria = await Categoria.create({ nombre: 'Categoria Estado Cocina Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Estado Cocina Test' });
     const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Estado Cocina Test', precio: 10, stock: 0 });
     productoId = producto.id;
     await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 20 });

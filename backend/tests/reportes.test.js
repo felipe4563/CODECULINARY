@@ -1,3 +1,4 @@
+const { idSucursalPrincipal } = require('./helpers/sucursalPrincipal');
 const request = require('supertest');
 const bcrypt = require('bcryptjs');
 const app = require('../src/app');
@@ -12,7 +13,7 @@ describe('Reportes filtrados por sucursal', () => {
     const sucursalPropiaId = login.body.datos.usuario.sucursal_activa.id;
 
     sucursalOtra = await Sucursal.create({ nombre: 'Sucursal Reportes Test' });
-    const categoria = await Categoria.create({ nombre: 'Categoria Reportes Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Reportes Test' });
     const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Reportes Test', precio: 6, stock: null });
     cajaOtra = await Caja.create({ sucursal_id: sucursalOtra.id, nombre: 'Caja Reportes Test' });
     const sesion = await SesionCaja.create({ usuario_id: 1, sucursal_id: sucursalOtra.id, caja_id: cajaOtra.id, monto_apertura: 0 });
@@ -238,7 +239,7 @@ describe('GET /api/v1/reportes/ventas/productos', () => {
     const login = await request(app).post('/api/v1/auth/login').send({ email: 'admin@restaurante.com', contrasena: process.env.ADMIN_PASSWORD || 'admin123' });
     token = login.body.datos.token;
 
-    categoria = await Categoria.create({ nombre: 'Categoria Ranking Test' });
+    categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Ranking Test' });
     producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Ranking Test', precio: 8, stock: null });
 
     // Dos pedidos completados distintos con el MISMO producto, para probar que el
@@ -304,9 +305,9 @@ describe('GET /api/v1/reportes/ventas/variantes', () => {
     token = login.body.datos.token;
     const sucursalId = login.body.datos.usuario.sucursal_activa.id;
 
-    categoria = await Categoria.create({ nombre: 'Categoria Variantes Test' });
+    categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Variantes Test' });
     producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Variantes Test', precio: 10, stock: null });
-    grupo = await GrupoOpciones.create({ nombre: 'Grupo Variantes Test', tipo_seleccion: 'multiple' });
+    grupo = await GrupoOpciones.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Grupo Variantes Test', tipo_seleccion: 'multiple' });
     opcion = await Opcion.create({ grupo_opciones_id: grupo.id, nombre: 'Extra queso' });
 
     // Pedido 1: mismo producto, SIN opciones.
@@ -379,9 +380,9 @@ describe('GET /api/v1/reportes/ventas/variantes — combos con opciones por prod
     token = login.body.datos.token;
     const sucursalId = login.body.datos.usuario.sucursal_activa.id;
 
-    categoria = await Categoria.create({ nombre: 'Categoria Variantes Combo Test' });
+    categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Variantes Combo Test' });
     producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Papas Variantes Combo Test', precio: 5, stock: null });
-    grupo = await GrupoOpciones.create({ nombre: 'Tamaño Variantes Combo Test', tipo_seleccion: 'unica' });
+    grupo = await GrupoOpciones.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Tamaño Variantes Combo Test', tipo_seleccion: 'unica' });
     opcionGrande = await Opcion.create({ grupo_opciones_id: grupo.id, nombre: 'Grande', precio_adicional: 3, orden: 0 });
     opcionChica = await Opcion.create({ grupo_opciones_id: grupo.id, nombre: 'Chica', precio_adicional: 0, orden: 1 });
 
@@ -494,7 +495,7 @@ describe('GET /api/v1/reportes/inventario — paginación, resumen y filtro tipo
     token = login.body.datos.token;
     sucursalId = login.body.datos.usuario.sucursal_activa.id;
 
-    categoria = await Categoria.create({ nombre: 'Categoria Inventario Reportes Test' });
+    categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Inventario Reportes Test' });
     producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Inventario Reportes Test', precio: 5, stock: 10 });
 
     registroAjuste = await RegistroInventario.create({

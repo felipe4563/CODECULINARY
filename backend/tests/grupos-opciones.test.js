@@ -1,3 +1,4 @@
+const { idSucursalPrincipal } = require('./helpers/sucursalPrincipal');
 const request = require('supertest');
 const app = require('../src/app');
 const { GrupoOpciones, Opcion, Producto, Categoria, ProductoGrupoOpciones } = require('../src/models');
@@ -56,7 +57,7 @@ describe('Grupos de opciones API', () => {
   });
 
   it('eliminar un grupo asignado a un producto quita la asignación sin afectar al producto', async () => {
-    const categoria = await Categoria.create({ nombre: 'Categoria Grupos Opciones Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Grupos Opciones Test' });
     const crear = await request(app)
       .post('/api/v1/grupos-opciones')
       .set('Authorization', `Bearer ${adminToken}`)

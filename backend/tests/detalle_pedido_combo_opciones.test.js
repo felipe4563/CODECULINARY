@@ -1,3 +1,4 @@
+const { idSucursalPrincipal } = require('./helpers/sucursalPrincipal');
 // backend/tests/detalle_pedido_combo_opciones.test.js
 const {
   Sucursal, Area, Mesa, Categoria, Producto, ProductoStockSucursal, Usuario, Rol,
@@ -22,12 +23,12 @@ describe('DetallePedidoComboOpcion — cascada de borrado', () => {
     const sesion = await SesionCaja.create({ usuario_id: usuarioId, sucursal_id: sucursalId, caja_id: cajaId, monto_apertura: 0 });
     sesionId = sesion.id;
 
-    const categoria = await Categoria.create({ nombre: 'Categoria Combo Opciones Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Combo Opciones Test' });
     categoriaId = categoria.id;
     const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Combo Opciones Test', precio: 5, stock: 0 });
     productoId = producto.id;
 
-    const grupo = await GrupoOpciones.create({ nombre: 'Tamaño Combo Opciones Test', tipo_seleccion: 'unica' });
+    const grupo = await GrupoOpciones.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Tamaño Combo Opciones Test', tipo_seleccion: 'unica' });
     grupoId = grupo.id;
     const opcion = await Opcion.create({ grupo_opciones_id: grupo.id, nombre: 'Grande', precio_adicional: 3, orden: 0 });
     opcionId = opcion.id;

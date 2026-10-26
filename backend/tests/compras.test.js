@@ -1,3 +1,4 @@
+const { idSucursalPrincipal } = require('./helpers/sucursalPrincipal');
 const request = require('supertest');
 const app = require('../src/app');
 
@@ -24,7 +25,7 @@ describe('Compras por sucursal', () => {
 
     sucursalOtra = await Sucursal.create({ nombre: 'Sucursal Compras Test' });
     proveedor = await Proveedor.create({ nombre: 'Proveedor Compras Test' });
-    const categoria = await Categoria.create({ nombre: 'Categoria Compras Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Compras Test' });
     producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Compras Test', precio: 8, stock: 0 });
   });
 
@@ -81,7 +82,7 @@ describe('Compras - aislamiento entre sucursales (acceso por id)', () => {
     sucursalA = await Sucursal.create({ nombre: 'Sucursal Compras Aislamiento A' });
     sucursalB = await Sucursal.create({ nombre: 'Sucursal Compras Aislamiento B' });
     proveedorA = await Proveedor.create({ nombre: 'Proveedor Compras Aislamiento A' });
-    const categoria = await Categoria.create({ nombre: 'Categoria Compras Aislamiento A' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Compras Aislamiento A' });
     productoA = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Compras Aislamiento A', precio: 8, stock: 0 });
 
     // Cajero no tiene permisos de compras; usamos rol Administrador pero con

@@ -2,6 +2,7 @@ const { Categoria, Producto, Sucursal, GrupoOpciones, Opcion, ProductoGrupoOpcio
 const sequelize = require('../../config/database');
 const { ajustarStockSucursal, mezclarStockPorSucursal } = require('../inventario/stock.service');
 const { emitir } = require('../../socket');
+const { filtroSucursalCatalogo, sucursalParaCrear, verificarSucursal } = require('../../utils/alcanceCatalogo');
 
 // Avisa a la app de pedidos (y a cualquier otro cliente conectado, p. ej. el
 // admin en otra pestaña) que el catálogo cambió, para que refresque contra
@@ -14,24 +15,28 @@ function _avisarCambioProducto(tipo, producto_id) {
 
 // --- Categorías ---
 
-async function listarCategorias() {
-  return Categoria.findAll({ order: [['nombre', 'ASC']] });
+async function listarCategorias(alcance, sucursal_id) {
+  return Categoria.findAll({ where: filtroSucursalCatalogo(alcance, sucursal_id), order: [['nombre', 'ASC']] });
 }
 
-async function crearCategoria({ nombre, imagen }) {
-  return Categoria.create({ nombre, imagen });
+async function crearCategoria({ nombre, imagen, sucursal_id }, alcance) {
+  const sucursalDestino = await sucursalParaCrear(alcance, sucursal_id);
+  return Categoria.create({ nombre, imagen, sucursal_id: sucursalDestino });
 }
 
-async function actualizarCategoria(id, { nombre, imagen, activo }) {
+// sucursal_id no se destructura: una categoría no cambia de sucursal.
+async function actualizarCategoria(id, { nombre, imagen, activo }, alcance) {
   const cat = await Categoria.findByPk(id);
   if (!cat) throw Object.assign(new Error('Categoría no encontrada'), { status: 404 });
+  verificarSucursal(cat, alcance, 'Categoría no encontrada');
   await cat.update({ nombre, imagen, activo });
   return cat;
 }
 
-async function eliminarCategoria(id) {
+async function eliminarCategoria(id, alcance) {
   const cat = await Categoria.findByPk(id);
   if (!cat) throw Object.assign(new Error('Categoría no encontrada'), { status: 404 });
+  verificarSucursal(cat, alcance, 'Categoría no encontrada');
   const productos = await Producto.findAll({ where: { categoria_id: id }, attributes: ['nombre', 'activo'] });
   if (productos.length > 0) {
     // Un producto "eliminado" solo se desactiva (para no perder su historial de
@@ -46,8 +51,9 @@ async function eliminarCategoria(id) {
 
 // --- Grupos de opciones ---
 
-async function listarGruposOpciones() {
+async function listarGruposOpciones(alcance, sucursal_id) {
   return GrupoOpciones.findAll({
+    where: filtroSucursalCatalogo(alcance, sucursal_id),
     include: [{ model: Opcion, as: 'opciones', attributes: ['id', 'nombre', 'precio_adicional', 'orden'] }],
     order: [['nombre', 'ASC'], [{ model: Opcion, as: 'opciones' }, 'orden', 'ASC']],
   });
@@ -61,9 +67,10 @@ async function _conOpciones(id, transaction) {
   });
 }
 
-async function crearGrupoOpciones({ nombre, tipo_seleccion, opciones = [] }) {
+async function crearGrupoOpciones({ nombre, tipo_seleccion, opciones = [], sucursal_id }, alcance) {
+  const sucursalDestino = await sucursalParaCrear(alcance, sucursal_id);
   return sequelize.transaction(async (t) => {
-    const grupo = await GrupoOpciones.create({ nombre, tipo_seleccion }, { transaction: t });
+    const grupo = await GrupoOpciones.create({ nombre, tipo_seleccion, sucursal_id: sucursalDestino }, { transaction: t });
     if (opciones.length) {
       await Opcion.bulkCreate(
         opciones.map((o, i) => ({ grupo_opciones_id: grupo.id, nombre: o.nombre, precio_adicional: o.precio_adicional || 0, orden: o.orden ?? i })),
@@ -74,10 +81,11 @@ async function crearGrupoOpciones({ nombre, tipo_seleccion, opciones = [] }) {
   });
 }
 
-async function actualizarGrupoOpciones(id, { nombre, tipo_seleccion, opciones = [] }) {
+async function actualizarGrupoOpciones(id, { nombre, tipo_seleccion, opciones = [] }, alcance) {
   return sequelize.transaction(async (t) => {
     const grupo = await GrupoOpciones.findByPk(id, { transaction: t });
     if (!grupo) throw Object.assign(new Error('Grupo de opciones no encontrado'), { status: 404 });
+    verificarSucursal(grupo, alcance, 'Grupo de opciones no encontrado');
     await grupo.update({ nombre, tipo_seleccion }, { transaction: t });
     await Opcion.destroy({ where: { grupo_opciones_id: id }, transaction: t });
     if (opciones.length) {
@@ -90,9 +98,10 @@ async function actualizarGrupoOpciones(id, { nombre, tipo_seleccion, opciones = 
   });
 }
 
-async function eliminarGrupoOpciones(id) {
+async function eliminarGrupoOpciones(id, alcance) {
   const grupo = await GrupoOpciones.findByPk(id);
   if (!grupo) throw Object.assign(new Error('Grupo de opciones no encontrado'), { status: 404 });
+  verificarSucursal(grupo, alcance, 'Grupo de opciones no encontrado');
   // producto_grupos_opciones tiene ON DELETE CASCADE en grupo_opciones_id: las
   // asignaciones de productos a este grupo se borran solas, no hace falta tocarlas a mano.
   await grupo.destroy();

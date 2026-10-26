@@ -1,3 +1,4 @@
+const { idSucursalPrincipal } = require('./helpers/sucursalPrincipal');
 const request = require('supertest');
 const app = require('../src/app');
 
@@ -93,7 +94,7 @@ describe('Productos — stock inicial con acceso a todas las sucursales', () => 
   let categoriaId, sucursalX, usuarioTodasId, tokenTodas;
 
   beforeAll(async () => {
-    const categoria = await Categoria.create({ nombre: 'Categoria Stock Inicial Todas Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Stock Inicial Todas Test' });
     categoriaId = categoria.id;
     sucursalX = await Sucursal.create({ nombre: 'Sucursal Stock Inicial Todas X' });
 
@@ -163,15 +164,15 @@ describe('Productos — grupos de opciones', () => {
     const login = await request(app).post('/api/v1/auth/login').send({ email: 'admin@restaurante.com', contrasena: process.env.ADMIN_PASSWORD || 'admin123' });
     adminToken = login.body.datos.token;
 
-    const categoria = await Categoria.create({ nombre: 'Categoria Grupo Opciones Productos Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Grupo Opciones Productos Test' });
     categoriaId = categoria.id;
 
-    const grupoSabor = await GrupoOpciones.create({ nombre: 'Sabor Productos Test', tipo_seleccion: 'unica' });
+    const grupoSabor = await GrupoOpciones.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Sabor Productos Test', tipo_seleccion: 'unica' });
     await Opcion.create({ grupo_opciones_id: grupoSabor.id, nombre: 'Chocolate', orden: 0 });
     await Opcion.create({ grupo_opciones_id: grupoSabor.id, nombre: 'Vainilla', orden: 1 });
     grupoSaborId = grupoSabor.id;
 
-    const grupoExtra = await GrupoOpciones.create({ nombre: 'Extra Productos Test', tipo_seleccion: 'multiple' });
+    const grupoExtra = await GrupoOpciones.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Extra Productos Test', tipo_seleccion: 'multiple' });
     await Opcion.create({ grupo_opciones_id: grupoExtra.id, nombre: 'Maní', orden: 0 });
     grupoExtraId = grupoExtra.id;
   });
@@ -255,7 +256,7 @@ describe('Productos — grupos de opciones', () => {
   });
 
   it('borrar un grupo de opciones quita la asignación del producto sin borrar el producto', async () => {
-    const grupoTemp = await GrupoOpciones.create({ nombre: 'Grupo Temporal Test', tipo_seleccion: 'unica' });
+    const grupoTemp = await GrupoOpciones.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Grupo Temporal Test', tipo_seleccion: 'unica' });
     const crear = await request(app)
       .post('/api/v1/productos')
       .set('Authorization', `Bearer ${adminToken}`)
@@ -284,7 +285,7 @@ describe('Productos — eliminar y filtro de inactivos', () => {
     const principal = await Sucursal.findOne({ where: { nombre: 'Sucursal Principal' } });
     sucursalId = principal.id;
 
-    const categoria = await Categoria.create({ nombre: 'Categoria Eliminar Productos Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Eliminar Productos Test' });
     categoriaId = categoria.id;
   });
 

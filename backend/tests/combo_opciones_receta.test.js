@@ -1,3 +1,4 @@
+const { idSucursalPrincipal } = require('./helpers/sucursalPrincipal');
 // backend/tests/combo_opciones_receta.test.js
 // Regresión: una opción elegida para un producto DENTRO de un combo debe
 // disparar su línea de receta (RecetaInsumo ligada a esa opcion_id), igual
@@ -27,12 +28,12 @@ describe('Receta de insumos ligada a una opción dentro de un combo', () => {
     const sesion = await SesionCaja.create({ usuario_id: usuarioId, sucursal_id: sucursalId, caja_id: cajaId, monto_apertura: 0 });
     sesionId = sesion.id;
 
-    const categoria = await Categoria.create({ nombre: 'Categoria Combo Receta Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Combo Receta Test' });
     categoriaId = categoria.id;
     const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Cafe Combo Receta Test', precio: 5, stock: null });
     productoId = producto.id;
 
-    const grupo = await GrupoOpciones.create({ nombre: 'Azucar Combo Receta Test', tipo_seleccion: 'unica' });
+    const grupo = await GrupoOpciones.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Azucar Combo Receta Test', tipo_seleccion: 'unica' });
     grupoId = grupo.id;
     const opcionCon = await Opcion.create({ grupo_opciones_id: grupo.id, nombre: 'Con azucar', precio_adicional: 0, orden: 0 });
     opcionConId = opcionCon.id;

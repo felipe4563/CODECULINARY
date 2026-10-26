@@ -1,3 +1,4 @@
+const { idSucursalPrincipal } = require('./helpers/sucursalPrincipal');
 const request = require('supertest');
 const { createHmac } = require('crypto');
 const bcrypt = require('bcryptjs');
@@ -25,7 +26,7 @@ describe('POST /webhooks/codepay', () => {
     areaId = area.id;
     const mesa = await Mesa.create({ area_id: areaId, nombre: 'Mesa Webhook Test' });
     mesaId = mesa.id;
-    const categoria = await Categoria.create({ nombre: 'Categoria Webhook Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Webhook Test' });
     const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Webhook Test', precio: 5, stock: 0 });
     productoId = producto.id;
     await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 3 });

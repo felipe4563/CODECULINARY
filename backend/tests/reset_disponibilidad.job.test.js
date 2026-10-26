@@ -1,3 +1,4 @@
+const { idSucursalPrincipal } = require('./helpers/sucursalPrincipal');
 // backend/tests/reset_disponibilidad.job.test.js
 const { Categoria, Producto } = require('../src/models');
 const { resetDisponibilidadDiaria } = require('../src/jobs/resetDisponibilidad.job');
@@ -6,7 +7,7 @@ describe('Job: reset de disponibilidad diaria', () => {
   let categoriaId, noDisponibleId, yaDisponibleId;
 
   beforeAll(async () => {
-    const categoria = await Categoria.create({ nombre: 'Categoria Reset Disponibilidad Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Reset Disponibilidad Test' });
     categoriaId = categoria.id;
     const noDisponible = await Producto.create({ categoria_id: categoriaId, nombre: 'Producto Reset No Disponible Test', precio: 10, disponible_hoy: false });
     noDisponibleId = noDisponible.id;

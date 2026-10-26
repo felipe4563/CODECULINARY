@@ -1,3 +1,4 @@
+const { idSucursalPrincipal } = require('./helpers/sucursalPrincipal');
 jest.mock('../src/socket', () => ({ emitir: jest.fn(), init: jest.fn() }));
 const { emitir } = require('../src/socket');
 const bcrypt = require('bcryptjs');
@@ -18,7 +19,7 @@ describe('Socket: pedido autoservicio confirmado', () => {
       mesaId = mesa.id;
       const sesionMesa = await MesaSesion.create({ mesa_id: mesaId, sucursal_id: sucursalId, abierta_por: 'autoservicio' });
 
-      const categoria = await Categoria.create({ nombre: `Categoria Socket Autoservicio Test ${timestamp}` });
+      const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: `Categoria Socket Autoservicio Test ${timestamp}` });
       const producto = await Producto.create({ categoria_id: categoria.id, nombre: `Producto Socket Autoservicio Test ${timestamp}`, precio: 30, stock: 0 });
       productoId = producto.id;
       await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 10 });

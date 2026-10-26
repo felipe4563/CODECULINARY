@@ -1,3 +1,4 @@
+const { idSucursalPrincipal } = require('./helpers/sucursalPrincipal');
 const request = require('supertest');
 const app = require('../src/app');
 
@@ -18,7 +19,7 @@ describe('Inventario manual por sucursal', () => {
     const login = await request(app).post('/api/v1/auth/login').send({ email: 'admin@restaurante.com', contrasena: process.env.ADMIN_PASSWORD || 'admin123' });
     adminToken = login.body.datos.token;
 
-    const categoria = await Categoria.create({ nombre: 'Categoria Inventario Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Inventario Test' });
     producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Inventario Test', precio: 4, stock: 0 });
   });
 
@@ -46,7 +47,7 @@ describe('Inventario — acceso a todas las sucursales', () => {
 
   beforeAll(async () => {
     sucursalX = await Sucursal.create({ nombre: 'Sucursal Inventario Todas X' });
-    const categoria = await Categoria.create({ nombre: 'Categoria Inventario Todas Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Inventario Todas Test' });
     productoTest = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Inventario Todas Test', precio: 5, stock: 0 });
 
     const rolAdmin = await Rol.findOne({ where: { nombre: 'Administrador' } });

@@ -5,46 +5,46 @@ function _alcance(req) {
 }
 
 async function listarCategorias(req, res, next) {
-  try { res.json({ ok: true, datos: await svc.listarCategorias() }); }
+  try { res.json({ ok: true, datos: await svc.listarCategorias(_alcance(req), req.query.sucursal_id) }); }
   catch (err) { next(err); }
 }
 
 async function crearCategoria(req, res, next) {
   try {
     if (!req.body.nombre) return res.status(400).json({ ok: false, mensaje: 'nombre es requerido' });
-    res.status(201).json({ ok: true, datos: await svc.crearCategoria(req.body) });
+    res.status(201).json({ ok: true, datos: await svc.crearCategoria(req.body, _alcance(req)) });
   } catch (err) { next(err); }
 }
 
 async function actualizarCategoria(req, res, next) {
-  try { res.json({ ok: true, datos: await svc.actualizarCategoria(req.params.id, req.body) }); }
+  try { res.json({ ok: true, datos: await svc.actualizarCategoria(req.params.id, req.body, _alcance(req)) }); }
   catch (err) { next(err); }
 }
 
 async function eliminarCategoria(req, res, next) {
-  try { await svc.eliminarCategoria(req.params.id); res.json({ ok: true, datos: null }); }
+  try { await svc.eliminarCategoria(req.params.id, _alcance(req)); res.json({ ok: true, datos: null }); }
   catch (err) { next(err); }
 }
 
 async function listarGruposOpciones(req, res, next) {
-  try { res.json({ ok: true, datos: await svc.listarGruposOpciones() }); }
+  try { res.json({ ok: true, datos: await svc.listarGruposOpciones(_alcance(req), req.query.sucursal_id) }); }
   catch (err) { next(err); }
 }
 
 async function crearGrupoOpciones(req, res, next) {
   try {
     if (!req.body.nombre) return res.status(400).json({ ok: false, mensaje: 'nombre es requerido' });
-    res.status(201).json({ ok: true, datos: await svc.crearGrupoOpciones(req.body) });
+    res.status(201).json({ ok: true, datos: await svc.crearGrupoOpciones(req.body, _alcance(req)) });
   } catch (err) { next(err); }
 }
 
 async function actualizarGrupoOpciones(req, res, next) {
-  try { res.json({ ok: true, datos: await svc.actualizarGrupoOpciones(req.params.id, req.body) }); }
+  try { res.json({ ok: true, datos: await svc.actualizarGrupoOpciones(req.params.id, req.body, _alcance(req)) }); }
   catch (err) { next(err); }
 }
 
 async function eliminarGrupoOpciones(req, res, next) {
-  try { await svc.eliminarGrupoOpciones(req.params.id); res.json({ ok: true, datos: null }); }
+  try { await svc.eliminarGrupoOpciones(req.params.id, _alcance(req)); res.json({ ok: true, datos: null }); }
   catch (err) { next(err); }
 }
 

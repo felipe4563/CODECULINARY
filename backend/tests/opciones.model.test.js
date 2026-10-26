@@ -1,10 +1,11 @@
+const { idSucursalPrincipal } = require('./helpers/sucursalPrincipal');
 const { GrupoOpciones, Opcion, Producto, Categoria, ProductoGrupoOpciones } = require('../src/models');
 
 describe('Modelos GrupoOpciones y Opcion', () => {
   let categoriaId;
 
   beforeAll(async () => {
-    const cat = await Categoria.create({ nombre: 'Categoria Opciones Model Test' });
+    const cat = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Opciones Model Test' });
     categoriaId = cat.id;
   });
 
@@ -14,7 +15,7 @@ describe('Modelos GrupoOpciones y Opcion', () => {
   });
 
   it('crea un grupo de opciones con sus opciones asociadas', async () => {
-    const grupo = await GrupoOpciones.create({ nombre: 'Término de cocción Model Test' });
+    const grupo = await GrupoOpciones.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Término de cocción Model Test' });
     await Opcion.bulkCreate([
       { grupo_opciones_id: grupo.id, nombre: 'Jugoso', orden: 1 },
       { grupo_opciones_id: grupo.id, nombre: 'Término medio', orden: 2 },
@@ -28,7 +29,7 @@ describe('Modelos GrupoOpciones y Opcion', () => {
   });
 
   it('un producto puede asignarse a un grupo de opciones vía la tabla puente, y al borrar el grupo se quita la asignación', async () => {
-    const grupo = await GrupoOpciones.create({ nombre: 'Sabor Model Test' });
+    const grupo = await GrupoOpciones.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Sabor Model Test' });
     const producto = await Producto.create({ categoria_id: categoriaId, nombre: 'Jugo Model Test', precio: 10 });
     await ProductoGrupoOpciones.create({ producto_id: producto.id, grupo_opciones_id: grupo.id, orden: 0, obligatorio: 0 });
 

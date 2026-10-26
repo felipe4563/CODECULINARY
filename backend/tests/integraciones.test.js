@@ -1,3 +1,4 @@
+const { idSucursalPrincipal } = require('./helpers/sucursalPrincipal');
 const request = require('supertest');
 const bcrypt = require('bcryptjs');
 const app = require('../src/app');
@@ -14,7 +15,7 @@ describe('API pública de integraciones', () => {
     const usuario = await Usuario.create({ rol_id: rol.id, nombre: 'Usuario Integracion Test', email: `usuario-integracion-${Date.now()}@restaurante.com`, contrasena: hash });
     const caja = await Caja.create({ sucursal_id: sucursal.id, nombre: 'Caja Integracion Test' });
     sesion = await SesionCaja.create({ usuario_id: usuario.id, sucursal_id: sucursal.id, caja_id: caja.id, monto_apertura: 0 });
-    categoria = await Categoria.create({ nombre: `Categoria Integracion Test ${Date.now()}` });
+    categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: `Categoria Integracion Test ${Date.now()}` });
     producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Integracion Test', precio: 25, es_vendible: 1 });
     await ProductoStockSucursal.create({ producto_id: producto.id, sucursal_id: sucursal.id, stock: 100 });
 

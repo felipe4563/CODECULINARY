@@ -1,3 +1,4 @@
+const { idSucursalPrincipal } = require('./helpers/sucursalPrincipal');
 jest.mock('../src/integrations/email/email.client', () => ({
   enviarCodigoPin: jest.fn().mockResolvedValue(),
 }));
@@ -461,7 +462,7 @@ describe('Cliente público — PIN', () => {
       sucursal = await Sucursal.create({ nombre: `Sucursal Historial Test ${timestamp}` });
       area = await Area.create({ nombre: `Area Historial Test ${timestamp}`, sucursal_id: sucursal.id });
       mesa = await Mesa.create({ area_id: area.id, nombre: 'Mesa Historial Test' });
-      categoria = await Categoria.create({ nombre: `Categoria Historial Test ${timestamp}` });
+      categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: `Categoria Historial Test ${timestamp}` });
       producto = await Producto.create({ categoria_id: categoria.id, nombre: `Producto Historial Test ${timestamp}`, precio: 10, stock: 0 });
 
       const rol = await Rol.findOne({ where: { nombre: 'Cajero' } });

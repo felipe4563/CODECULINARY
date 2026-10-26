@@ -1,3 +1,4 @@
+const { idSucursalPrincipal } = require('./helpers/sucursalPrincipal');
 // backend/tests/stock.service.test.js
 require('dotenv').config();
 const { Producto, Categoria, Sucursal, ProductoStockSucursal, Usuario } = require('../src/models');
@@ -6,7 +7,7 @@ const { ajustarStockSucursal } = require('../src/modules/inventario/stock.servic
 let categoria, producto, sucursalA, sucursalB, admin;
 
 beforeAll(async () => {
-  categoria = await Categoria.create({ nombre: 'Categoria Stock Test' });
+  categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Stock Test' });
   producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Stock Test', precio: 10, stock: 0 });
   sucursalA = await Sucursal.create({ nombre: 'Sucursal Stock Test A' });
   sucursalB = await Sucursal.create({ nombre: 'Sucursal Stock Test B' });

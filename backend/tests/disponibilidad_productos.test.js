@@ -1,3 +1,4 @@
+const { idSucursalPrincipal } = require('./helpers/sucursalPrincipal');
 // backend/tests/disponibilidad_productos.test.js
 const request = require('supertest');
 const app = require('../src/app');
@@ -11,7 +12,7 @@ describe('Disponibilidad diaria de productos', () => {
     const login = await request(app).post('/api/v1/auth/login').send({ email: 'admin@restaurante.com', contrasena: process.env.ADMIN_PASSWORD || 'admin123' });
     adminToken = login.body.datos.token;
 
-    const categoria = await Categoria.create({ nombre: 'Categoria Disponibilidad Test' });
+    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Disponibilidad Test' });
     categoriaId = categoria.id;
     const disponible = await Producto.create({ categoria_id: categoriaId, nombre: 'Producto Disponible Test', precio: 10, stock: null });
     productoDisponibleId = disponible.id;
