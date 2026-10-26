@@ -1,5 +1,5 @@
 const {
-  Categoria, Producto, ProductoStockSucursal, Promocion, Configuracion, sequelize,
+  Categoria, Producto, ProductoStockSucursal, Promocion, Configuracion, Pedido, Usuario, sequelize,
 } = require('../src/models');
 const { migrarCatalogoPorSucursal } = require('../database/scripts/migrar-catalogo-por-sucursal');
 const { crearDosSucursales } = require('./helpers/dosSucursales');
@@ -63,13 +63,44 @@ describe('Script de migración del catálogo por sucursal', () => {
     expect(filaA.stock).toBe(3);
   });
 
+  describe('con pedidos abiertos en una sucursal destino', () => {
+    let pedido;
+
+    beforeAll(async () => {
+      const usuario = await Usuario.findOne({ order: [['id', 'ASC']] });
+      pedido = await Pedido.create({ tipo: 'llevar', usuario_id: usuario.id, sucursal_id: ctx.sucursalA.id, estado: 'pendiente_pago' });
+    });
+
+    afterAll(() => pedido.destroy());
+
+    it('aborta listando los pedidos abiertos y no escribe nada', async () => {
+      await borrarFlag();
+      const err = await migrarCatalogoPorSucursal({ destinos: [ctx.sucursalA.id, ctx.sucursalB.id] }).catch((e) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect(err.message).toMatch(/pedidos abiertos/);
+      expect(err.message).toContain(`#${pedido.id}`);
+      expect(err.message).toContain('pendiente_pago');
+      expect(err.pedidos_abiertos).toEqual([{ id: pedido.id, sucursal_id: ctx.sucursalA.id, estado: 'pendiente_pago' }]);
+
+      expect(await Producto.count({ where: { sucursal_id: [ctx.sucursalA.id, ctx.sucursalB.id] } })).toBe(0);
+      expect(await Configuracion.count({ where: { clave: CLAVE } })).toBe(0);
+      const filaA = await ProductoStockSucursal.findOne({ where: { producto_id: prod.id, sucursal_id: ctx.sucursalA.id } });
+      expect(filaA.stock).toBe(3);
+    });
+  });
+
   describe('después de migrar', () => {
-    let resultado;
+    let resultado, pedidoAbierto;
 
     beforeAll(async () => {
       await borrarFlag();
-      resultado = await migrarCatalogoPorSucursal({ destinos: [ctx.sucursalA.id, ctx.sucursalB.id] });
+      // Un pedido abierto en B no frena la migración si se fuerza.
+      const usuario = await Usuario.findOne({ order: [['id', 'ASC']] });
+      pedidoAbierto = await Pedido.create({ tipo: 'llevar', usuario_id: usuario.id, sucursal_id: ctx.sucursalB.id, estado: 'pendiente' });
+      resultado = await migrarCatalogoPorSucursal({ destinos: [ctx.sucursalA.id, ctx.sucursalB.id], forzar: true });
     });
+
+    afterAll(() => pedidoAbierto.destroy());
 
     it('devuelve un resumen por sucursal y guarda la clave', async () => {
       expect(resultado.principal_id).toBe(principalId);

@@ -3,10 +3,12 @@
 -- promociones pasan a pertenecer a una sucursal. Todo lo existente se asigna
 -- a la sucursal principal (la activa de menor id).
 --
--- IMPORTANTE: correr INMEDIATAMENTE DESPUÉS de esta migración
+-- IMPORTANTE: aplicar con todas las cajas cerradas y sin pedidos abiertos,
+-- después de respaldar la base, y correr INMEDIATAMENTE DESPUÉS (desde backend/)
 --   node database/scripts/migrar-catalogo-por-sucursal.js
--- (se crea en una tarea posterior). Si no, las demás sucursales quedan sin
--- catálogo.
+-- que copia el catálogo de la principal a las demás sucursales activas y
+-- les pasa su stock. Si no, las demás sucursales quedan sin catálogo. Revisar
+-- los omitidos que imprime el script.
 
 SET @principal = (SELECT MIN(id) FROM sucursales WHERE activo = 1);
 

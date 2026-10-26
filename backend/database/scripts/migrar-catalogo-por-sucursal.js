@@ -1,8 +1,13 @@
 // Migración de datos del catálogo por sucursal. Se corre UNA vez, justo
 // después de aplicar la migración 053 (que dejó todo el catálogo en la
-// sucursal principal):
+// sucursal principal), con todas las cajas cerradas y sin pedidos abiertos:
 //
-//   node database/scripts/migrar-catalogo-por-sucursal.js
+//   node database/scripts/migrar-catalogo-por-sucursal.js [--forzar]
+//
+// Si alguna sucursal destino tiene pedidos abiertos (pendiente, listo o
+// pendiente_pago) aborta sin escribir nada: al cobrarlos se descontaría stock
+// del producto original, que ya no tiene fila de stock en esa sucursal.
+// `--forzar` migra igual.
 //
 // Copia a cada otra sucursal activa el catálogo de la principal (categorías,
 // productos y combos activos, promociones activas) y le pasa a cada copia el
@@ -15,20 +20,22 @@
 require('dotenv').config();
 const { QueryTypes } = require('sequelize');
 const {
-  sequelize, Sucursal, Categoria, Producto, Combo, Promocion, Configuracion,
+  sequelize, Sucursal, Categoria, Producto, Combo, Promocion, Configuracion, Pedido,
 } = require('../../src/models');
 const { copiarCatalogo } = require('../../src/modules/productos/copiarCatalogo.service');
 
 const CLAVE = 'catalogo_por_sucursal_migrado';
+const ESTADOS_ABIERTOS = ['pendiente', 'listo', 'pendiente_pago'];
 
 // `destinos` limita las sucursales a migrar (los tests lo usan); por defecto
 // son todas las activas menos la principal.
-async function migrarCatalogoPorSucursal({ transaction, destinos } = {}) {
-  if (transaction) return _migrar(destinos, transaction);
-  return sequelize.transaction((t) => _migrar(destinos, t));
+// `forzar` migra aunque haya pedidos abiertos en las sucursales destino.
+async function migrarCatalogoPorSucursal({ transaction, destinos, forzar = false } = {}) {
+  if (transaction) return _migrar(destinos, forzar, transaction);
+  return sequelize.transaction((t) => _migrar(destinos, forzar, t));
 }
 
-async function _migrar(destinos, t) {
+async function _migrar(destinos, forzar, t) {
   const flag = await Configuracion.findOne({ where: { clave: CLAVE }, transaction: t, lock: t.LOCK.UPDATE });
   if (flag && flag.valor === 'true') {
     return { ya_migrado: true, mensaje: 'El catálogo ya fue migrado por sucursal; no se hizo nada', sucursales: [] };
@@ -43,6 +50,22 @@ async function _migrar(destinos, t) {
   } else {
     const otras = await Sucursal.findAll({ where: { activo: 1 }, attributes: ['id'], order: [['id', 'ASC']], transaction: t });
     destinoIds = otras.map((s) => s.id).filter((id) => id !== principal.id);
+  }
+
+  if (!forzar && destinoIds.length) {
+    const abiertos = await Pedido.findAll({
+      where: { sucursal_id: destinoIds, estado: ESTADOS_ABIERTOS },
+      attributes: ['id', 'sucursal_id', 'estado'],
+      order: [['id', 'ASC']],
+      transaction: t,
+    });
+    if (abiertos.length) {
+      const lista = abiertos.map((p) => `#${p.id} (sucursal ${p.sucursal_id}, ${p.estado})`).join(', ');
+      const err = new Error(`Hay pedidos abiertos en las sucursales a migrar: ${lista}. `
+        + 'Cóbralos o cancélalos y cierra las cajas antes de migrar, o corre con --forzar.');
+      err.pedidos_abiertos = abiertos.map((p) => ({ id: p.id, sucursal_id: p.sucursal_id, estado: p.estado }));
+      throw err;
+    }
   }
 
   // Lo que se copia de la principal (igual para todas las sucursales).
@@ -140,7 +163,7 @@ async function _moverStock(originalId, copiaId, sucursalId, t) {
 }
 
 if (require.main === module) {
-  migrarCatalogoPorSucursal()
+  migrarCatalogoPorSucursal({ forzar: process.argv.includes('--forzar') })
     .then(async (r) => {
       if (r.ya_migrado) {
         console.log(r.mensaje);
@@ -151,6 +174,7 @@ if (require.main === module) {
           const c = s.creados;
           console.log(`Sucursal ${s.sucursal_id}: ${c.categorias} categorías, ${c.grupos_opciones} grupos de opciones, `
             + `${c.productos} productos, ${c.combos} combos, ${c.promociones} promociones creados; ${s.omitidos.length} omitidos`);
+          for (const o of s.omitidos) console.log(`  - ${o.tipo} · ${o.nombre} · ${o.motivo}`);
         }
         console.log('Migración del catálogo por sucursal completada.');
       }

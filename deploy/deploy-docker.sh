@@ -75,10 +75,18 @@ main() {
     echo "$NUEVAS" | sed 's/^/    /'
     echo "  Respaldá la base primero y aplicá cada una, por ejemplo:"
     echo "    docker compose exec -T db sh -c 'mysql -uroot -p\"\$MYSQL_ROOT_PASSWORD\" \"\$MYSQL_DATABASE\"' < backend/database/migrations/<archivo>.sql"
-    # La imagen no trae database/ (.dockerignore): se monta la carpeta del repo.
-    echo "  Justo después de la 053 (catálogo por sucursal) corré una sola vez el script de datos"
-    echo "  (node database/scripts/migrar-catalogo-por-sucursal.js), por ejemplo:"
-    echo "    TAG=${TAG} docker compose run --rm --no-deps -v \"\$PWD/backend/database/scripts:/app/database/scripts:ro\" backend node database/scripts/migrar-catalogo-por-sucursal.js"
+    if echo "$NUEVAS" | grep -q '053_'; then
+      # La imagen no trae database/ (.dockerignore): se monta la carpeta del repo.
+      echo ""
+      echo "  CATÁLOGO POR SUCURSAL (053): hacelo en una ventana de mantenimiento, con todas"
+      echo "  las cajas cerradas y sin pedidos abiertos, en este orden:"
+      echo "    1. Respaldá la base."
+      echo "    2. Aplicá 053_catalogo_por_sucursal.sql (deja todo el catálogo en la sucursal principal)."
+      echo "    3. Inmediatamente después corré una sola vez el script de datos, que copia el catálogo"
+      echo "       a las demás sucursales (aborta si encuentra pedidos abiertos; --forzar lo salta):"
+      echo "         TAG=${TAG} docker compose run --rm --no-deps -v \"\$PWD/backend/database/scripts:/app/database/scripts:ro\" backend node database/scripts/migrar-catalogo-por-sucursal.js"
+      echo "    4. Revisá los omitidos que imprime (tipo · nombre · motivo) y completalos a mano."
+    fi
   fi
 
   echo "==> Limpiando imágenes viejas de este proyecto..."
