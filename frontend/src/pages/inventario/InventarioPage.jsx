@@ -68,6 +68,12 @@ function ModalMovimiento({ productos, accesoTodas, sucursales, onClose, onGuarda
   const [sucursalId, setSucursalId] = useState('');
   const [error, setError] = useState('');
 
+  // El global solo puede elegir productos de la sucursal destino elegida
+  // (cada sucursal tiene su catálogo; otro producto daría 409 al guardar).
+  const productosOpciones = accesoTodas
+    ? (sucursalId ? productos.filter(p => p.sucursal_id === Number(sucursalId)) : [])
+    : productos;
+
   const accentColor = tipo === 'entrada' ? 'emerald' : tipo === 'salida' ? 'rose' : 'amber';
   const estilos = ESTILOS_TIPO[accentColor];
 
@@ -140,7 +146,7 @@ function ModalMovimiento({ productos, accesoTodas, sucursales, onClose, onGuarda
               </label>
               <select
                 value={sucursalId}
-                onChange={e => setSucursalId(e.target.value)}
+                onChange={e => { setSucursalId(e.target.value); setProductoId(''); }}
                 className="w-full rounded-xl border border-input bg-background text-foreground px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="">Seleccionar sucursal...</option>
@@ -159,8 +165,8 @@ function ModalMovimiento({ productos, accesoTodas, sucursales, onClose, onGuarda
               onChange={e => setProductoId(e.target.value)}
               className="w-full rounded-xl border border-input bg-background text-foreground px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              <option value="">Seleccionar producto...</option>
-              {productos.map(p => (
+              <option value="">{accesoTodas && !sucursalId ? 'Elegí primero la sucursal...' : 'Seleccionar producto...'}</option>
+              {productosOpciones.map(p => (
                 <option key={p.id} value={p.id}>
                   {conSucursal(p, accesoTodas)} (stock actual: {p.stock ?? 0})
                 </option>

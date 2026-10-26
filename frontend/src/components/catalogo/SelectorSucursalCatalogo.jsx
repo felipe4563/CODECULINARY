@@ -1,15 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
-import { getSucursales } from '../../api/sucursales';
 import { useSucursalCatalogo } from '../../store/catalogoSucursalStore';
 
 // Selector de sucursal del catálogo; solo lo ven los usuarios con acceso a todas.
 export default function SelectorSucursalCatalogo() {
-  const { sucursalId, esGlobal, setSucursalId } = useSucursalCatalogo();
-  const { data: sucursales = [] } = useQuery({
-    queryKey: ['sucursales'],
-    queryFn: getSucursales,
-    enabled: esGlobal,
-  });
+  const { sucursalId, esGlobal, setSucursalId, sucursales } = useSucursalCatalogo();
 
   if (!esGlobal) return null;
 

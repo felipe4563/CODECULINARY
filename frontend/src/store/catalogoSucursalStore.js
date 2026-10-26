@@ -16,22 +16,25 @@ export const useCatalogoSucursalStore = create(
 );
 
 // Sucursal del catálogo: la propia para un usuario de sucursal; para un global,
-// la elegida (o la primera sucursal si no hay una válida guardada).
+// la elegida entre las activas (o la principal —la activa de menor id— si no
+// hay una válida guardada). `sucursales` son las activas, para el selector.
 export function useSucursalCatalogo() {
   const sucursalActivaId = useAuthStore((s) => s.usuario?.sucursal_activa?.id ?? null);
   const esGlobal = sucursalActivaId == null;
   const guardado = useCatalogoSucursalStore((s) => s.sucursalId);
   const setSucursalId = useCatalogoSucursalStore((s) => s.setSucursalId);
 
-  const { data: sucursales = [] } = useQuery({
+  const { data: todas = [] } = useQuery({
     queryKey: ['sucursales'],
     queryFn: getSucursales,
     enabled: esGlobal,
   });
 
-  if (!esGlobal) return { sucursalId: sucursalActivaId, esGlobal, setSucursalId };
+  if (!esGlobal) return { sucursalId: sucursalActivaId, esGlobal, setSucursalId, sucursales: [] };
 
+  const sucursales = todas.filter((s) => s.activo);
   const valido = sucursales.some((s) => s.id === guardado);
-  const sucursalId = valido ? guardado : (sucursales[0]?.id ?? null);
-  return { sucursalId, esGlobal, setSucursalId };
+  const principal = sucursales.reduce((min, s) => (min == null || s.id < min ? s.id : min), null);
+  const sucursalId = valido ? guardado : principal;
+  return { sucursalId, esGlobal, setSucursalId, sucursales };
 }
