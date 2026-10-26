@@ -6,7 +6,8 @@ import { useAuth } from '../../../hooks/useAuth';
 import { useAuthStore } from '../../../store/authStore';
 import { useSucursalCatalogo } from '../../../store/catalogoSucursalStore';
 import { exportarPDF } from '../utils/exportarPDF';
-import { FiltroFechas, StatCard, Skeleton, bs, fecha, hoy, inicioMes, nombreConSucursal } from '../shared';
+import { FiltroFechas, StatCard, Skeleton, bs, fecha, hoy, inicioMes } from '../shared';
+import { nombreConSucursal } from '../utils/nombreConSucursal';
 
 const puestoClase = (i) =>
   i === 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400'

@@ -4,10 +4,6 @@ export const bs       = (n) => `Bs ${parseFloat(n || 0).toLocaleString('es-BO', 
 export const fecha    = (d) => d ? new Date(d).toLocaleDateString('es-BO') : '-';
 export const fechaHora = (d) => d ? new Date(d).toLocaleString('es-BO') : '-';
 export const hoy      = () => new Date().toISOString().slice(0, 10);
-// Con catálogo por sucursal dos productos pueden llamarse igual: el global ve
-// también la sucursal del producto/combo.
-export const nombreConSucursal = (fila, esGlobal) =>
-  esGlobal && fila.sucursal_nombre ? `${fila.nombre} · ${fila.sucursal_nombre}` : fila.nombre;
 export const inicioMes = () => {
   const d = new Date();
   return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
