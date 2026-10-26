@@ -1,4 +1,3 @@
-const { idSucursalPrincipal } = require('./helpers/sucursalPrincipal');
 // backend/tests/stock.service.test.js
 require('dotenv').config();
 const { Producto, Categoria, Sucursal, ProductoStockSucursal, Usuario } = require('../src/models');
@@ -7,10 +6,11 @@ const { ajustarStockSucursal } = require('../src/modules/inventario/stock.servic
 let categoria, producto, sucursalA, sucursalB, admin;
 
 beforeAll(async () => {
-  categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Stock Test' });
-  producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Stock Test', precio: 10, stock: 0 });
   sucursalA = await Sucursal.create({ nombre: 'Sucursal Stock Test A' });
   sucursalB = await Sucursal.create({ nombre: 'Sucursal Stock Test B' });
+  // El producto pertenece a A: el stock solo se ajusta en su propia sucursal.
+  categoria = await Categoria.create({ sucursal_id: sucursalA.id, nombre: 'Categoria Stock Test' });
+  producto = await Producto.create({ sucursal_id: sucursalA.id, categoria_id: categoria.id, nombre: 'Producto Stock Test', precio: 10, stock: 0 });
   admin = await Usuario.findOne({ where: { email: 'admin@restaurante.com' } });
 });
 
@@ -31,22 +31,19 @@ describe('ajustarStockSucursal', () => {
     expect(fila.stock).toBe(10);
   });
 
-  it('las sucursales no comparten stock entre sí', async () => {
-    await ajustarStockSucursal({ producto_id: producto.id, sucursal_id: sucursalB.id, tipo: 'entrada', cantidad: 15, usuario_id: admin.id });
-
-    const filaA = await ProductoStockSucursal.findOne({ where: { producto_id: producto.id, sucursal_id: sucursalA.id } });
+  it('rechaza ajustar el stock en una sucursal que no es la del producto', async () => {
+    await expect(
+      ajustarStockSucursal({ producto_id: producto.id, sucursal_id: sucursalB.id, tipo: 'entrada', cantidad: 15, usuario_id: admin.id })
+    ).rejects.toMatchObject({ status: 409, message: 'El producto no pertenece a esta sucursal' });
     const filaB = await ProductoStockSucursal.findOne({ where: { producto_id: producto.id, sucursal_id: sucursalB.id } });
-    expect(filaA.stock).toBe(10);
-    expect(filaB.stock).toBe(15);
+    expect(filaB).toBeNull();
   });
 
-  it('una venta en A descuenta solo de A y no toca B', async () => {
+  it('una venta en A descuenta del stock de A', async () => {
     await ajustarStockSucursal({ producto_id: producto.id, sucursal_id: sucursalA.id, tipo: 'venta', cantidad: 3, usuario_id: admin.id });
 
     const filaA = await ProductoStockSucursal.findOne({ where: { producto_id: producto.id, sucursal_id: sucursalA.id } });
-    const filaB = await ProductoStockSucursal.findOne({ where: { producto_id: producto.id, sucursal_id: sucursalB.id } });
     expect(filaA.stock).toBe(7);
-    expect(filaB.stock).toBe(15);
   });
 
   it('rechaza una venta/salida sin stock suficiente en esa sucursal', async () => {
@@ -55,9 +52,9 @@ describe('ajustarStockSucursal', () => {
     ).rejects.toMatchObject({ status: 409 });
   });
 
-  it('recalcula productos.stock como la suma de todas las sucursales', async () => {
+  it('recalcula productos.stock a partir de las filas por sucursal', async () => {
     const p = await Producto.findByPk(producto.id);
-    expect(p.stock).toBe(22); // 7 (A) + 15 (B)
+    expect(p.stock).toBe(7);
   });
 
   it('un ajuste fija el valor absoluto de esa sucursal', async () => {

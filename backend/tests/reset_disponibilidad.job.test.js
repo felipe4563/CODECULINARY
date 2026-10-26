@@ -9,9 +9,9 @@ describe('Job: reset de disponibilidad diaria', () => {
   beforeAll(async () => {
     const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Reset Disponibilidad Test' });
     categoriaId = categoria.id;
-    const noDisponible = await Producto.create({ categoria_id: categoriaId, nombre: 'Producto Reset No Disponible Test', precio: 10, disponible_hoy: false });
+    const noDisponible = await Producto.create({ sucursal_id: await idSucursalPrincipal(), categoria_id: categoriaId, nombre: 'Producto Reset No Disponible Test', precio: 10, disponible_hoy: false });
     noDisponibleId = noDisponible.id;
-    const yaDisponible = await Producto.create({ categoria_id: categoriaId, nombre: 'Producto Reset Ya Disponible Test', precio: 10, disponible_hoy: true });
+    const yaDisponible = await Producto.create({ sucursal_id: await idSucursalPrincipal(), categoria_id: categoriaId, nombre: 'Producto Reset Ya Disponible Test', precio: 10, disponible_hoy: true });
     yaDisponibleId = yaDisponible.id;
   });
 

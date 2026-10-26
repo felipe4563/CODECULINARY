@@ -35,9 +35,9 @@ describe('Ventas — cobro con QR propio (verificación manual)', () => {
 
     const sucursal = await Sucursal.create({ nombre: 'Sucursal QrPropio Test' });
     sucursalId = sucursal.id;
-    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria QrPropio Test' });
+    const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: 'Categoria QrPropio Test' });
     categoriaId = categoria.id;
-    const producto = await Producto.create({ categoria_id: categoriaId, nombre: 'Producto QrPropio Test', precio: 5, stock: 0 });
+    const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoriaId, nombre: 'Producto QrPropio Test', precio: 5, stock: 0 });
     productoId = producto.id;
     await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 20 });
 
@@ -69,6 +69,8 @@ describe('Ventas — cobro con QR propio (verificación manual)', () => {
     await Producto.destroy({ where: { id: productoId } });
     await Categoria.destroy({ where: { id: categoriaId } });
     await Usuario.destroy({ where: { id: usuarioId } });
+    await Categoria.destroy({ where: { sucursal_id: sucursalId } });
+
     await Sucursal.destroy({ where: { id: sucursalId } });
   });
 

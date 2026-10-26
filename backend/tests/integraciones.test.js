@@ -15,8 +15,8 @@ describe('API pública de integraciones', () => {
     const usuario = await Usuario.create({ rol_id: rol.id, nombre: 'Usuario Integracion Test', email: `usuario-integracion-${Date.now()}@restaurante.com`, contrasena: hash });
     const caja = await Caja.create({ sucursal_id: sucursal.id, nombre: 'Caja Integracion Test' });
     sesion = await SesionCaja.create({ usuario_id: usuario.id, sucursal_id: sucursal.id, caja_id: caja.id, monto_apertura: 0 });
-    categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: `Categoria Integracion Test ${Date.now()}` });
-    producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Integracion Test', precio: 25, es_vendible: 1 });
+    categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: `Categoria Integracion Test ${Date.now()}` });
+    producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: 'Producto Integracion Test', precio: 25, es_vendible: 1 });
     await ProductoStockSucursal.create({ producto_id: producto.id, sucursal_id: sucursal.id, stock: 100 });
 
     const creada = await crearKey({ sucursal_id: sucursal.id, nombre_app: 'PedidosYa Test' });
@@ -52,7 +52,7 @@ describe('API pública de integraciones', () => {
   });
 
   it('GET /menu excluye un producto marcado como no disponible hoy', async () => {
-    const noDisponible = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Integracion No Disponible Test', precio: 15, es_vendible: 1, disponible_hoy: false });
+    const noDisponible = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: 'Producto Integracion No Disponible Test', precio: 15, es_vendible: 1, disponible_hoy: false });
     await ProductoStockSucursal.create({ producto_id: noDisponible.id, sucursal_id: sucursal.id, stock: 100 });
 
     const res = await request(app).get('/api/v1/integraciones/menu').set('X-Api-Key', apiKey);

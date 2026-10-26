@@ -2,6 +2,11 @@
 const { Producto, ProductoStockSucursal, RegistroInventario } = require('../../models');
 
 async function ajustarStockSucursal({ producto_id, sucursal_id, tipo, cantidad, usuario_id, nota, transaction }) {
+  const producto = await Producto.findByPk(producto_id, { attributes: ['id', 'sucursal_id'], transaction });
+  if (producto && producto.sucursal_id !== sucursal_id) {
+    throw Object.assign(new Error('El producto no pertenece a esta sucursal'), { status: 409 });
+  }
+
   const [fila] = await ProductoStockSucursal.findOrCreate({
     where: { producto_id, sucursal_id },
     defaults: { stock: 0 },
@@ -46,7 +51,6 @@ async function mezclarStockPorSucursal(productos, { sucursal_id, acceso_todas } 
   return productos.map(p => {
     const plano = typeof p.toJSON === 'function' ? p.toJSON() : { ...p };
     if (plano.stock === null || plano.stock === undefined) {
-      plano.sucursal_id = acceso_todas ? null : (sucursal_id ?? null);
       return plano; // no trackea inventario
     }
 
@@ -63,10 +67,6 @@ async function mezclarStockPorSucursal(productos, { sucursal_id, acceso_todas } 
 
     const propia = filasProducto.find(f => f.sucursal_id === sucursal_id);
     plano.stock = propia ? propia.stock : 0;
-    // Deja explícito a qué sucursal corresponde ese `stock` — sin esto, un
-    // cliente externo (ej. la app de pedidos) no tiene forma de saberlo a
-    // partir del producto solo, ya que no viene en ningún otro campo.
-    plano.sucursal_id = sucursal_id ?? null;
     return plano;
   });
 }

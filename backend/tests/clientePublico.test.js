@@ -462,8 +462,8 @@ describe('Cliente público — PIN', () => {
       sucursal = await Sucursal.create({ nombre: `Sucursal Historial Test ${timestamp}` });
       area = await Area.create({ nombre: `Area Historial Test ${timestamp}`, sucursal_id: sucursal.id });
       mesa = await Mesa.create({ area_id: area.id, nombre: 'Mesa Historial Test' });
-      categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: `Categoria Historial Test ${timestamp}` });
-      producto = await Producto.create({ categoria_id: categoria.id, nombre: `Producto Historial Test ${timestamp}`, precio: 10, stock: 0 });
+      categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: `Categoria Historial Test ${timestamp}` });
+      producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: `Producto Historial Test ${timestamp}`, precio: 10, stock: 0 });
 
       const rol = await Rol.findOne({ where: { nombre: 'Cajero' } });
       usuario = await Usuario.create({ rol_id: rol.id, nombre: `Historial Test ${timestamp}`, email: `historial-test-${timestamp}@restaurante.com`, contrasena: 'x' });
@@ -497,6 +497,8 @@ describe('Cliente público — PIN', () => {
       await Categoria.destroy({ where: { id: categoria.id } });
       await Mesa.destroy({ where: { id: mesa.id } });
       await Area.destroy({ where: { id: area.id } });
+      await Categoria.destroy({ where: { sucursal_id: sucursal.id } });
+
       await Sucursal.destroy({ where: { id: sucursal.id } });
     });
 

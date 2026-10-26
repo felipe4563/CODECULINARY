@@ -85,13 +85,13 @@ async function actualizarProducto(req, res, next) {
 }
 
 async function eliminarProducto(req, res, next) {
-  try { res.json({ ok: true, datos: await svc.eliminarProducto(req.params.id) }); }
+  try { res.json({ ok: true, datos: await svc.eliminarProducto(req.params.id, _alcance(req)) }); }
   catch (err) { next(err); }
 }
 
 async function actualizarDisponibilidad(req, res, next) {
   try {
-    res.json({ ok: true, datos: await svc.actualizarDisponibilidad(req.params.id, req.body.disponible_hoy) });
+    res.json({ ok: true, datos: await svc.actualizarDisponibilidad(req.params.id, req.body.disponible_hoy, _alcance(req)) });
   } catch (err) { next(err); }
 }
 

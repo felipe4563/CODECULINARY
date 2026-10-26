@@ -94,9 +94,9 @@ describe('Productos — stock inicial con acceso a todas las sucursales', () => 
   let categoriaId, sucursalX, usuarioTodasId, tokenTodas;
 
   beforeAll(async () => {
-    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Stock Inicial Todas Test' });
-    categoriaId = categoria.id;
     sucursalX = await Sucursal.create({ nombre: 'Sucursal Stock Inicial Todas X' });
+    const categoria = await Categoria.create({ sucursal_id: sucursalX.id, nombre: 'Categoria Stock Inicial Todas Test' });
+    categoriaId = categoria.id;
 
     const rolAdmin = await Rol.findOne({ where: { nombre: 'Administrador' } });
     const hash = await bcrypt.hash('clave123', 10);
@@ -136,12 +136,12 @@ describe('Productos — stock inicial con acceso a todas las sucursales', () => 
     expect(stock.stock).toBe(20);
   });
 
-  it('acceso-todas creando producto sin stock no requiere sucursal_id', async () => {
+  it('acceso-todas creando producto sin stock y sin sucursal_id → 400 (el producto necesita sucursal)', async () => {
     const res = await request(app)
       .post('/api/v1/productos')
       .set('Authorization', `Bearer ${tokenTodas}`)
       .send({ categoria_id: categoriaId, nombre: 'Producto Sin Stock Inicial Test', precio: 10 });
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(400);
   });
 
   it('acceso-todas creando producto con stock y sucursal_id inexistente → 404 y no crea el producto', async () => {
@@ -338,8 +338,8 @@ describe('Productos — eliminar y filtro de inactivos', () => {
   });
 
   it('GET /productos por defecto solo trae activos', async () => {
-    const activo = await Producto.create({ categoria_id: categoriaId, nombre: 'Producto Activo Filtro Test', precio: 10, activo: 1 });
-    const inactivo = await Producto.create({ categoria_id: categoriaId, nombre: 'Producto Inactivo Filtro Test', precio: 10, activo: 0 });
+    const activo = await Producto.create({ sucursal_id: await idSucursalPrincipal(), categoria_id: categoriaId, nombre: 'Producto Activo Filtro Test', precio: 10, activo: 1 });
+    const inactivo = await Producto.create({ sucursal_id: await idSucursalPrincipal(), categoria_id: categoriaId, nombre: 'Producto Inactivo Filtro Test', precio: 10, activo: 0 });
 
     const res = await request(app).get('/api/v1/productos').set('Authorization', `Bearer ${adminToken}`);
 
@@ -349,8 +349,8 @@ describe('Productos — eliminar y filtro de inactivos', () => {
   });
 
   it('GET /productos?solo_inactivos=true solo trae inactivos, no mezcla con activos', async () => {
-    const activo = await Producto.create({ categoria_id: categoriaId, nombre: 'Producto Activo Filtro 2 Test', precio: 10, activo: 1 });
-    const inactivo = await Producto.create({ categoria_id: categoriaId, nombre: 'Producto Inactivo Filtro 2 Test', precio: 10, activo: 0 });
+    const activo = await Producto.create({ sucursal_id: await idSucursalPrincipal(), categoria_id: categoriaId, nombre: 'Producto Activo Filtro 2 Test', precio: 10, activo: 1 });
+    const inactivo = await Producto.create({ sucursal_id: await idSucursalPrincipal(), categoria_id: categoriaId, nombre: 'Producto Inactivo Filtro 2 Test', precio: 10, activo: 0 });
 
     const res = await request(app)
       .get('/api/v1/productos?solo_inactivos=true')

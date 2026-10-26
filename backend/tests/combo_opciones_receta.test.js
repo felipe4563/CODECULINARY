@@ -28,9 +28,9 @@ describe('Receta de insumos ligada a una opción dentro de un combo', () => {
     const sesion = await SesionCaja.create({ usuario_id: usuarioId, sucursal_id: sucursalId, caja_id: cajaId, monto_apertura: 0 });
     sesionId = sesion.id;
 
-    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Combo Receta Test' });
+    const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: 'Categoria Combo Receta Test' });
     categoriaId = categoria.id;
-    const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Cafe Combo Receta Test', precio: 5, stock: null });
+    const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: 'Cafe Combo Receta Test', precio: 5, stock: null });
     productoId = producto.id;
 
     const grupo = await GrupoOpciones.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Azucar Combo Receta Test', tipo_seleccion: 'unica' });
@@ -71,6 +71,8 @@ describe('Receta de insumos ligada a una opción dentro de un combo', () => {
     await SesionCaja.destroy({ where: { id: sesionId } });
     await Caja.destroy({ where: { id: cajaId } });
     await Usuario.destroy({ where: { id: usuarioId } });
+    await Categoria.destroy({ where: { sucursal_id: sucursalId } });
+
     await Sucursal.destroy({ where: { id: sucursalId } });
   });
 

@@ -36,8 +36,8 @@ describe('estado_cocina — independiente del cobro', () => {
     const sesion = await SesionCaja.create({ usuario_id: usuarioId, sucursal_id: sucursalId, caja_id: cajaId, monto_apertura: 0 });
     sesionId = sesion.id;
 
-    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Estado Cocina Test' });
-    const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Estado Cocina Test', precio: 10, stock: 0 });
+    const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: 'Categoria Estado Cocina Test' });
+    const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: 'Producto Estado Cocina Test', precio: 10, stock: 0 });
     productoId = producto.id;
     await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 20 });
   });
@@ -51,6 +51,8 @@ describe('estado_cocina — independiente del cobro', () => {
     await ProductoStockSucursal.destroy({ where: { producto_id: productoId } });
     await Producto.destroy({ where: { id: productoId } });
     await Usuario.destroy({ where: { id: usuarioId } });
+    await Categoria.destroy({ where: { sucursal_id: sucursalId } });
+
     await Sucursal.destroy({ where: { id: sucursalId } });
     if (configFlujoOriginal) await Configuracion.upsert({ clave: 'flujo_cocina', valor: configFlujoOriginal.valor });
     else await Configuracion.destroy({ where: { clave: 'flujo_cocina' } });

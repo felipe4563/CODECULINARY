@@ -14,7 +14,7 @@ describe('Reportes filtrados por sucursal', () => {
 
     sucursalOtra = await Sucursal.create({ nombre: 'Sucursal Reportes Test' });
     const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Reportes Test' });
-    const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Reportes Test', precio: 6, stock: null });
+    const producto = await Producto.create({ sucursal_id: await idSucursalPrincipal(), categoria_id: categoria.id, nombre: 'Producto Reportes Test', precio: 6, stock: null });
     cajaOtra = await Caja.create({ sucursal_id: sucursalOtra.id, nombre: 'Caja Reportes Test' });
     const sesion = await SesionCaja.create({ usuario_id: 1, sucursal_id: sucursalOtra.id, caja_id: cajaOtra.id, monto_apertura: 0 });
     const pedido = await Pedido.create({
@@ -240,7 +240,7 @@ describe('GET /api/v1/reportes/ventas/productos', () => {
     token = login.body.datos.token;
 
     categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Ranking Test' });
-    producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Ranking Test', precio: 8, stock: null });
+    producto = await Producto.create({ sucursal_id: await idSucursalPrincipal(), categoria_id: categoria.id, nombre: 'Producto Ranking Test', precio: 8, stock: null });
 
     // Dos pedidos completados distintos con el MISMO producto, para probar que el
     // ranking se agrupa por producto_id (SUM entre filas) y no una fila por pedido.
@@ -306,7 +306,7 @@ describe('GET /api/v1/reportes/ventas/variantes', () => {
     const sucursalId = login.body.datos.usuario.sucursal_activa.id;
 
     categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Variantes Test' });
-    producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Variantes Test', precio: 10, stock: null });
+    producto = await Producto.create({ sucursal_id: await idSucursalPrincipal(), categoria_id: categoria.id, nombre: 'Producto Variantes Test', precio: 10, stock: null });
     grupo = await GrupoOpciones.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Grupo Variantes Test', tipo_seleccion: 'multiple' });
     opcion = await Opcion.create({ grupo_opciones_id: grupo.id, nombre: 'Extra queso' });
 
@@ -381,7 +381,7 @@ describe('GET /api/v1/reportes/ventas/variantes — combos con opciones por prod
     const sucursalId = login.body.datos.usuario.sucursal_activa.id;
 
     categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Variantes Combo Test' });
-    producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Papas Variantes Combo Test', precio: 5, stock: null });
+    producto = await Producto.create({ sucursal_id: await idSucursalPrincipal(), categoria_id: categoria.id, nombre: 'Papas Variantes Combo Test', precio: 5, stock: null });
     grupo = await GrupoOpciones.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Tamaño Variantes Combo Test', tipo_seleccion: 'unica' });
     opcionGrande = await Opcion.create({ grupo_opciones_id: grupo.id, nombre: 'Grande', precio_adicional: 3, orden: 0 });
     opcionChica = await Opcion.create({ grupo_opciones_id: grupo.id, nombre: 'Chica', precio_adicional: 0, orden: 1 });
@@ -496,7 +496,7 @@ describe('GET /api/v1/reportes/inventario — paginación, resumen y filtro tipo
     sucursalId = login.body.datos.usuario.sucursal_activa.id;
 
     categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Inventario Reportes Test' });
-    producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Inventario Reportes Test', precio: 5, stock: 10 });
+    producto = await Producto.create({ sucursal_id: await idSucursalPrincipal(), categoria_id: categoria.id, nombre: 'Producto Inventario Reportes Test', precio: 5, stock: 10 });
 
     registroAjuste = await RegistroInventario.create({
       producto_id: producto.id, sucursal_id: sucursalId, usuario_id: 1, tipo: 'ajuste', cantidad: 3,

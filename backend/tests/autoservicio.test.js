@@ -25,6 +25,8 @@ describe('Autoservicio API', () => {
       await MesaSesion.destroy({ where: { mesa_id: mesa.id } });
       await Mesa.destroy({ where: { id: mesa.id } });
       await Area.destroy({ where: { id: area.id } });
+      await Categoria.destroy({ where: { sucursal_id: sucursal.id } });
+
       await Sucursal.destroy({ where: { id: sucursal.id } });
     });
 
@@ -45,8 +47,8 @@ describe('Autoservicio API', () => {
 
     it('el menú incluye combos activos y promociones vigentes, con la categoría de cada producto', async () => {
       const timestamp = Date.now();
-      const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: `Categoria Menu Test ${timestamp}` });
-      const producto = await Producto.create({ categoria_id: categoria.id, nombre: `Producto Menu Test ${timestamp}`, precio: 15, es_vendible: 1 });
+      const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: `Categoria Menu Test ${timestamp}` });
+      const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: `Producto Menu Test ${timestamp}`, precio: 15, es_vendible: 1 });
       const combo = await Combo.create({ nombre: `Combo Menu Test ${timestamp}`, precio: 20, activo: 1 });
       await ComboProducto.create({ combo_id: combo.id, producto_id: producto.id, cantidad: 1 });
       const promo = await Promocion.create({ nombre: `Promo Menu Test ${timestamp}`, tipo: 'porcentaje', valor: 10, activo: 1 });
@@ -155,6 +157,8 @@ describe('Autoservicio API', () => {
       await MesaSesion.destroy({ where: { mesa_id: mesa.id } });
       await Mesa.destroy({ where: { id: mesa.id } });
       await Area.destroy({ where: { id: area.id } });
+      await Categoria.destroy({ where: { sucursal_id: sucursal.id } });
+
       await Sucursal.destroy({ where: { id: sucursal.id } });
     });
 
@@ -208,6 +212,8 @@ describe('Autoservicio API', () => {
       await MesaSesion.destroy({ where: { mesa_id: [mesaPropia.id, mesaAjena.id] } });
       await Mesa.destroy({ where: { id: [mesaPropia.id, mesaAjena.id] } });
       await Area.destroy({ where: { id: area.id } });
+      await Categoria.destroy({ where: { sucursal_id: sucursal.id } });
+
       await Sucursal.destroy({ where: { id: sucursal.id } });
     });
 
@@ -240,8 +246,8 @@ describe('Autoservicio API', () => {
       mesa = await Mesa.create({ area_id: area.id, nombre: 'Mesa Cupon Test', codigo_qr: `test-qr-cupon-${timestamp}` });
       await MesaSesion.create({ mesa_id: mesa.id, sucursal_id: sucursal.id, abierta_por: 'staff' });
 
-      const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: `Categoria Autoservicio Cupon Test ${timestamp}` });
-      const producto = await Producto.create({ categoria_id: categoria.id, nombre: `Producto Autoservicio Cupon Test ${timestamp}`, precio: 25, stock: 0 });
+      const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: `Categoria Autoservicio Cupon Test ${timestamp}` });
+      const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: `Producto Autoservicio Cupon Test ${timestamp}`, precio: 25, stock: 0 });
       await ProductoStockSucursal.create({ producto_id: producto.id, sucursal_id: sucursal.id, stock: 10 });
 
       const rol = await Rol.findOne({ where: { nombre: 'Cajero' } });
@@ -271,6 +277,8 @@ describe('Autoservicio API', () => {
       await MesaSesion.destroy({ where: { mesa_id: mesa.id } });
       await Mesa.destroy({ where: { id: mesa.id } });
       await Area.destroy({ where: { id: area.id } });
+      await Categoria.destroy({ where: { sucursal_id: sucursal.id } });
+
       await Sucursal.destroy({ where: { id: sucursal.id } });
     });
 
@@ -309,8 +317,8 @@ describe('Autoservicio API', () => {
       mesa = await Mesa.create({ area_id: area.id, nombre: 'Mesa Combo Test', codigo_qr: `test-qr-combo-${timestamp}` });
       await MesaSesion.create({ mesa_id: mesa.id, sucursal_id: sucursal.id, abierta_por: 'staff' });
 
-      const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: `Categoria Autoservicio Combo Test ${timestamp}` });
-      const producto = await Producto.create({ categoria_id: categoria.id, nombre: `Producto Autoservicio Combo Test ${timestamp}`, precio: 25, stock: 0 });
+      const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: `Categoria Autoservicio Combo Test ${timestamp}` });
+      const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: `Producto Autoservicio Combo Test ${timestamp}`, precio: 25, stock: 0 });
       await ProductoStockSucursal.create({ producto_id: producto.id, sucursal_id: sucursal.id, stock: 10 });
       combo = await Combo.create({ nombre: `Combo Autoservicio Test ${timestamp}`, precio: 40, activo: 1 });
       await ComboProducto.create({ combo_id: combo.id, producto_id: producto.id, cantidad: 1 });
@@ -336,6 +344,8 @@ describe('Autoservicio API', () => {
       await MesaSesion.destroy({ where: { mesa_id: mesa.id } });
       await Mesa.destroy({ where: { id: mesa.id } });
       await Area.destroy({ where: { id: area.id } });
+      await Categoria.destroy({ where: { sucursal_id: sucursal.id } });
+
       await Sucursal.destroy({ where: { id: sucursal.id } });
     });
 
@@ -366,8 +376,8 @@ describe('Autoservicio API', () => {
       mesa = await Mesa.create({ area_id: area.id, nombre: 'Mesa ValidarCupon Test', codigo_qr: `vc-${timestamp}` });
       await MesaSesion.create({ mesa_id: mesa.id, sucursal_id: sucursal.id, abierta_por: 'staff' });
 
-      const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: `Categoria Autoservicio ValidarCupon Test ${timestamp}` });
-      const producto = await Producto.create({ categoria_id: categoria.id, nombre: `Producto Autoservicio ValidarCupon Test ${timestamp}`, precio: 40, stock: 0 });
+      const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: `Categoria Autoservicio ValidarCupon Test ${timestamp}` });
+      const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: `Producto Autoservicio ValidarCupon Test ${timestamp}`, precio: 40, stock: 0 });
       mesa.productoId = producto.id;
 
       cupon = await Cupon.create({ codigo: `VALCUPON${timestamp}`, tipo: 'fijo', valor: 5, usos_maximos: 10 });
@@ -378,6 +388,8 @@ describe('Autoservicio API', () => {
       await MesaSesion.destroy({ where: { mesa_id: mesa.id } });
       await Mesa.destroy({ where: { id: mesa.id } });
       await Area.destroy({ where: { id: area.id } });
+      await Categoria.destroy({ where: { sucursal_id: sucursal.id } });
+
       await Sucursal.destroy({ where: { id: sucursal.id } });
     });
 
@@ -437,8 +449,8 @@ describe('Autoservicio API', () => {
       mesa = await Mesa.create({ area_id: area.id, nombre: 'Mesa Doc Test', codigo_qr: `doc-${timestamp}` });
       await MesaSesion.create({ mesa_id: mesa.id, sucursal_id: sucursal.id, abierta_por: 'staff' });
 
-      const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: `Categoria Autoservicio Doc Test ${timestamp}` });
-      const producto = await Producto.create({ categoria_id: categoria.id, nombre: `Producto Autoservicio Doc Test ${timestamp}`, precio: 15, stock: 0 });
+      const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: `Categoria Autoservicio Doc Test ${timestamp}` });
+      const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: `Producto Autoservicio Doc Test ${timestamp}`, precio: 15, stock: 0 });
       await ProductoStockSucursal.create({ producto_id: producto.id, sucursal_id: sucursal.id, stock: 10 });
       mesa.productoId = producto.id;
 
@@ -465,6 +477,8 @@ describe('Autoservicio API', () => {
       await MesaSesion.destroy({ where: { mesa_id: mesa.id } });
       await Mesa.destroy({ where: { id: mesa.id } });
       await Area.destroy({ where: { id: area.id } });
+      await Categoria.destroy({ where: { sucursal_id: sucursal.id } });
+
       await Sucursal.destroy({ where: { id: sucursal.id } });
     });
 
@@ -519,8 +533,8 @@ describe('Autoservicio API', () => {
       mesa = await Mesa.create({ area_id: area.id, nombre: 'Mesa Canje Test', codigo_qr: `cj-${timestamp}` });
       await MesaSesion.create({ mesa_id: mesa.id, sucursal_id: sucursal.id, abierta_por: 'staff' });
 
-      const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: `Categoria Autoservicio Canje Test ${timestamp}` });
-      const producto = await Producto.create({ categoria_id: categoria.id, nombre: `Producto Autoservicio Canje Test ${timestamp}`, precio: 20, stock: 0 });
+      const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: `Categoria Autoservicio Canje Test ${timestamp}` });
+      const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: `Producto Autoservicio Canje Test ${timestamp}`, precio: 20, stock: 0 });
       await ProductoStockSucursal.create({ producto_id: producto.id, sucursal_id: sucursal.id, stock: 10 });
       mesa.productoId = producto.id;
 
@@ -566,6 +580,8 @@ describe('Autoservicio API', () => {
       await MesaSesion.destroy({ where: { mesa_id: mesa.id } });
       await Mesa.destroy({ where: { id: mesa.id } });
       await Area.destroy({ where: { id: area.id } });
+      await Categoria.destroy({ where: { sucursal_id: sucursal.id } });
+
       await Sucursal.destroy({ where: { id: sucursal.id } });
     });
 

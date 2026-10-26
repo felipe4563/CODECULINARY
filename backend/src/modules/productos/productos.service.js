@@ -1,4 +1,5 @@
 const { Categoria, Producto, Sucursal, GrupoOpciones, Opcion, ProductoGrupoOpciones, DetallePedido } = require('../../models');
+const { Op } = require('sequelize');
 const sequelize = require('../../config/database');
 const { ajustarStockSucursal, mezclarStockPorSucursal } = require('../inventario/stock.service');
 const { emitir } = require('../../socket');
@@ -7,8 +8,8 @@ const { filtroSucursalCatalogo, sucursalParaCrear, verificarSucursal } = require
 // Avisa a la app de pedidos (y a cualquier otro cliente conectado, p. ej. el
 // admin en otra pestaña) que el catálogo cambió, para que refresque contra
 // GET /productos — no manda el producto completo por socket, solo la señal.
-// Se emite sin sucursal_id (a todos): el catálogo es el mismo en todas las
-// sucursales, solo el stock varía, y eso todavía no sincroniza en vivo.
+// Se emite sin sucursal_id (a todos): cada sucursal tiene su propio catálogo,
+// pero la señal es solo "refresca" y cada cliente vuelve a pedir su listado.
 function _avisarCambioProducto(tipo, producto_id) {
   emitir('productos:actualizado', { tipo, producto_id });
 }
@@ -107,10 +108,16 @@ async function eliminarGrupoOpciones(id, alcance) {
   await grupo.destroy();
 }
 
-async function _sincronizarGruposOpciones(producto_id, grupos_opciones = [], transaction) {
+async function _sincronizarGruposOpciones(producto_id, grupos_opciones = [], transaction, sucursal_id) {
   const ids = grupos_opciones.map((g) => g.id);
   if (new Set(ids).size !== ids.length) {
     throw Object.assign(new Error('No se puede asignar el mismo grupo de opciones más de una vez'), { status: 400 });
+  }
+  if (ids.length) {
+    const deOtraSucursal = await GrupoOpciones.count({ where: { id: ids, sucursal_id: { [Op.ne]: sucursal_id } }, transaction });
+    if (deOtraSucursal > 0) {
+      throw Object.assign(new Error('El grupo de opciones no pertenece a la sucursal del producto'), { status: 400 });
+    }
   }
   await ProductoGrupoOpciones.destroy({ where: { producto_id }, transaction });
   if (grupos_opciones.length) {
@@ -166,8 +173,8 @@ function _normalizarGruposOpciones(producto) {
 
 // --- Productos ---
 
-async function listarProductos({ categoria_id, solo_vendibles, solo_disponibles, solo_disponibles_hoy, order_by, solo_inactivos } = {}, alcance) {
-  const where = {};
+async function listarProductos({ categoria_id, solo_vendibles, solo_disponibles, solo_disponibles_hoy, order_by, solo_inactivos, sucursal_id } = {}, alcance) {
+  const where = { ...filtroSucursalCatalogo(alcance, sucursal_id) };
   where.activo = (solo_inactivos === 'true' || solo_inactivos === true) ? 0 : 1;
   if (categoria_id) where.categoria_id = categoria_id;
   if (solo_vendibles === 'true' || solo_vendibles === true) where.es_vendible = 1;
@@ -190,6 +197,7 @@ async function listarProductos({ categoria_id, solo_vendibles, solo_disponibles,
     },
     include: [
       { model: Categoria, as: 'categoria', attributes: ['id', 'nombre'] },
+      { model: Sucursal, as: 'sucursal', attributes: ['id', 'nombre'] },
       { model: GrupoOpciones, as: 'grupos_opciones', attributes: ['id', 'nombre', 'tipo_seleccion'],
         through: { attributes: ['orden', 'obligatorio'] },
         include: [{ model: Opcion, as: 'opciones', attributes: ['id', 'nombre', 'precio_adicional', 'orden'] }] },
@@ -214,34 +222,30 @@ async function obtenerProducto(id, alcance) {
   const p = await Producto.findByPk(id, {
     include: [
       { model: Categoria, as: 'categoria', attributes: ['id', 'nombre'] },
+      { model: Sucursal, as: 'sucursal', attributes: ['id', 'nombre'] },
       { model: GrupoOpciones, as: 'grupos_opciones', attributes: ['id', 'nombre', 'tipo_seleccion'],
         through: { attributes: ['orden', 'obligatorio'] },
         include: [{ model: Opcion, as: 'opciones', attributes: ['id', 'nombre', 'precio_adicional', 'orden'] }] },
     ],
   });
   if (!p) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
+  verificarSucursal(p, alcance, 'Producto no encontrado');
   const [conStock] = await mezclarStockPorSucursal([p], alcance);
   return _normalizarGruposOpciones(conStock);
 }
 
 async function crearProducto({ categoria_id, nombre, precio, stock, sucursal_id, es_vendible, imagen, grupos_opciones, es_pesable }, alcance) {
-  let sucursalDestino;
+  const sucursalDestino = await sucursalParaCrear(alcance, sucursal_id);
   const conStock = stock !== undefined && stock !== null;
 
-  if (conStock) {
-    sucursalDestino = alcance.acceso_todas ? sucursal_id : alcance.sucursal_id;
-    if (alcance.acceso_todas && !sucursalDestino) {
-      throw Object.assign(new Error('sucursal_id es requerido para asignar stock inicial'), { status: 400 });
-    }
-    if (alcance.acceso_todas) {
-      const existe = await Sucursal.findByPk(sucursalDestino);
-      if (!existe) throw Object.assign(new Error('Sucursal no encontrada'), { status: 404 });
-    }
+  const categoria = await Categoria.findByPk(categoria_id);
+  if (!categoria || categoria.sucursal_id !== sucursalDestino) {
+    throw Object.assign(new Error('La categoría no pertenece a la sucursal del producto'), { status: 400 });
   }
 
   const producto = await sequelize.transaction(async (t) => {
-    const p = await Producto.create({ categoria_id, nombre, precio, stock: conStock ? 0 : null, es_vendible, imagen: _urlRelativa(imagen), es_pesable }, { transaction: t });
-    await _sincronizarGruposOpciones(p.id, grupos_opciones, t);
+    const p = await Producto.create({ categoria_id, nombre, precio, stock: conStock ? 0 : null, es_vendible, imagen: _urlRelativa(imagen), es_pesable, sucursal_id: sucursalDestino }, { transaction: t });
+    await _sincronizarGruposOpciones(p.id, grupos_opciones, t, sucursalDestino);
     return p;
   });
 
@@ -254,23 +258,32 @@ async function crearProducto({ categoria_id, nombre, precio, stock, sucursal_id,
 }
 
 async function actualizarProducto(id, datos, alcance) {
-  const { stock, grupos_opciones, ...resto } = datos; // stock nunca se edita aquí — solo vía ajustarStockSucursal
+  // stock nunca se edita aquí (solo vía ajustarStockSucursal) y un producto no cambia de sucursal.
+  const { stock, grupos_opciones, sucursal_id: _ignorada, ...resto } = datos;
   if (resto.imagen !== undefined) resto.imagen = _urlRelativa(resto.imagen);
   const p = await Producto.findByPk(id);
   if (!p) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
+  verificarSucursal(p, alcance, 'Producto no encontrado');
+  if (resto.categoria_id !== undefined) {
+    const categoria = await Categoria.findByPk(resto.categoria_id);
+    if (!categoria || categoria.sucursal_id !== p.sucursal_id) {
+      throw Object.assign(new Error('La categoría no pertenece a la sucursal del producto'), { status: 400 });
+    }
+  }
   await sequelize.transaction(async (t) => {
     await p.update(resto, { transaction: t });
     if (grupos_opciones !== undefined) {
-      await _sincronizarGruposOpciones(id, grupos_opciones, t);
+      await _sincronizarGruposOpciones(id, grupos_opciones, t, p.sucursal_id);
     }
   });
   _avisarCambioProducto('actualizado', id);
   return obtenerProducto(id, alcance);
 }
 
-async function eliminarProducto(id) {
+async function eliminarProducto(id, alcance) {
   const p = await Producto.findByPk(id);
   if (!p) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
+  verificarSucursal(p, alcance, 'Producto no encontrado');
 
   const tieneVentas = await DetallePedido.count({ where: { producto_id: id } });
   if (tieneVentas > 0) {
@@ -283,9 +296,10 @@ async function eliminarProducto(id) {
   return { eliminado: true };
 }
 
-async function actualizarDisponibilidad(id, disponible_hoy) {
+async function actualizarDisponibilidad(id, disponible_hoy, alcance) {
   const p = await Producto.findByPk(id);
   if (!p) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
+  verificarSucursal(p, alcance, 'Producto no encontrado');
   await p.update({ disponible_hoy: !!disponible_hoy });
   _avisarCambioProducto('actualizado', id);
   return { id: p.id, disponible_hoy: !!p.disponible_hoy };

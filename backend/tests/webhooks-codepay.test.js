@@ -26,8 +26,8 @@ describe('POST /webhooks/codepay', () => {
     areaId = area.id;
     const mesa = await Mesa.create({ area_id: areaId, nombre: 'Mesa Webhook Test' });
     mesaId = mesa.id;
-    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Webhook Test' });
-    const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Webhook Test', precio: 5, stock: 0 });
+    const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: 'Categoria Webhook Test' });
+    const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: 'Producto Webhook Test', precio: 5, stock: 0 });
     productoId = producto.id;
     await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 3 });
 
@@ -66,6 +66,8 @@ describe('POST /webhooks/codepay', () => {
     await Usuario.destroy({ where: { id: usuarioId } });
     await Mesa.destroy({ where: { id: mesaId } });
     await Area.destroy({ where: { id: areaId } });
+    await Categoria.destroy({ where: { sucursal_id: sucursalId } });
+
     await Sucursal.destroy({ where: { id: sucursalId } });
   });
 

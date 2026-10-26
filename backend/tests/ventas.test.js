@@ -32,8 +32,8 @@ describe('Ventas por sucursal', () => {
     const mesa = await Mesa.create({ area_id: area.id, nombre: 'Mesa Ventas Test B' });
     mesaBId = mesa.id;
 
-    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Ventas Test' });
-    const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Ventas Test', precio: 5, stock: 0 });
+    const categoria = await Categoria.create({ sucursal_id: sucursalB.id, nombre: 'Categoria Ventas Test' });
+    const producto = await Producto.create({ sucursal_id: sucursalB.id, categoria_id: categoria.id, nombre: 'Producto Ventas Test', precio: 5, stock: 0 });
     productoId = producto.id;
     await ProductoStockSucursal.create({ producto_id: producto.id, sucursal_id: sucursalB.id, stock: 3 });
 
@@ -62,6 +62,8 @@ describe('Ventas por sucursal', () => {
     await Usuario.destroy({ where: { id: usuarioBId } });
     await Mesa.destroy({ where: { id: mesaBId } });
     await Area.destroy({ where: { sucursal_id: sucursalB.id } });
+    await Categoria.destroy({ where: { sucursal_id: sucursalB.id } });
+
     await Sucursal.destroy({ where: { id: sucursalB.id } });
   });
 
@@ -135,6 +137,8 @@ describe('Ventas - aislamiento entre sucursales (acceso por id)', () => {
     await Usuario.destroy({ where: { id: [usuarioAId, usuarioCId] } });
     await Mesa.destroy({ where: { id: mesaAId } });
     await Area.destroy({ where: { sucursal_id: sucursalA.id } });
+    await Categoria.destroy({ where: { sucursal_id: [sucursalA.id, sucursalC.id] } });
+
     await Sucursal.destroy({ where: { id: [sucursalA.id, sucursalC.id] } });
   });
 
@@ -174,8 +178,8 @@ describe('Ventas — cobro con QR (CodePay)', () => {
     areaId = area.id;
     const mesa = await Mesa.create({ area_id: areaId, nombre: 'Mesa PagoQr Ventas Test' });
     mesaId = mesa.id;
-    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria PagoQr Ventas Test' });
-    const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto PagoQr Ventas Test', precio: 5, stock: 0 });
+    const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: 'Categoria PagoQr Ventas Test' });
+    const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: 'Producto PagoQr Ventas Test', precio: 5, stock: 0 });
     productoId = producto.id;
     await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 10 });
 
@@ -207,6 +211,8 @@ describe('Ventas — cobro con QR (CodePay)', () => {
     await Usuario.destroy({ where: { id: usuarioId } });
     await Mesa.destroy({ where: { id: mesaId } });
     await Area.destroy({ where: { id: areaId } });
+    await Categoria.destroy({ where: { sucursal_id: sucursalId } });
+
     await Sucursal.destroy({ where: { id: sucursalId } });
   });
 
@@ -406,9 +412,9 @@ describe('Ventas — productos pesables', () => {
     areaId = area.id;
     const mesa = await Mesa.create({ area_id: areaId, nombre: 'Mesa Pesables Test' });
     mesaId = mesa.id;
-    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Pesables Test' });
+    const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: 'Categoria Pesables Test' });
     categoriaId = categoria.id;
-    const producto = await Producto.create({ categoria_id: categoriaId, nombre: 'Chorizo Pesable Ventas Test', precio: 27, es_pesable: 1 });
+    const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoriaId, nombre: 'Chorizo Pesable Ventas Test', precio: 27, es_pesable: 1 });
     productoPesableId = producto.id;
 
     const rol = await Rol.findOne({ where: { nombre: 'Cajero' } });
@@ -435,6 +441,8 @@ describe('Ventas — productos pesables', () => {
     await Usuario.destroy({ where: { id: usuarioId } });
     await Mesa.destroy({ where: { id: mesaId } });
     await Area.destroy({ where: { id: areaId } });
+    await Categoria.destroy({ where: { sucursal_id: sucursalId } });
+
     await Sucursal.destroy({ where: { id: sucursalId } });
   });
 
@@ -506,8 +514,8 @@ describe('Ventas — reimprimir ticket', () => {
     areaId = area.id;
     const mesa = await Mesa.create({ area_id: areaId, nombre: 'Mesa Reimprimir Test' });
     mesaId = mesa.id;
-    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Reimprimir Test' });
-    const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Reimprimir Test', precio: 10, stock: 0 });
+    const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: 'Categoria Reimprimir Test' });
+    const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: 'Producto Reimprimir Test', precio: 10, stock: 0 });
     productoId = producto.id;
     await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 20 });
 
@@ -544,6 +552,8 @@ describe('Ventas — reimprimir ticket', () => {
     await Usuario.destroy({ where: { id: [usuarioId, usuarioOtraId] } });
     await Mesa.destroy({ where: { id: mesaId } });
     await Area.destroy({ where: { id: areaId } });
+    await Categoria.destroy({ where: { sucursal_id: [sucursalId, sucursalOtraId] } });
+
     await Sucursal.destroy({ where: { id: [sucursalId, sucursalOtraId] } });
   });
 
@@ -649,8 +659,8 @@ describe('Ventas — ticket de cliente por caja', () => {
     areaId = area.id;
     const mesa = await Mesa.create({ area_id: areaId, nombre: 'Mesa Ticket Cliente Test' });
     mesaId = mesa.id;
-    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Ticket Cliente Test' });
-    const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Ticket Cliente Test', precio: 10, stock: 0 });
+    const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: 'Categoria Ticket Cliente Test' });
+    const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: 'Producto Ticket Cliente Test', precio: 10, stock: 0 });
     productoId = producto.id;
     await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 20 });
 
@@ -681,6 +691,8 @@ describe('Ventas — ticket de cliente por caja', () => {
     await Usuario.destroy({ where: { id: usuarioId } });
     await Mesa.destroy({ where: { id: mesaId } });
     await Area.destroy({ where: { id: areaId } });
+    await Categoria.destroy({ where: { sucursal_id: sucursalId } });
+
     await Sucursal.destroy({ where: { id: sucursalId } });
   });
 
@@ -737,11 +749,11 @@ describe('Ventas — opciones por producto dentro de un combo', () => {
     const sesion = await SesionCaja.create({ usuario_id: usuarioId, sucursal_id: sucursalId, caja_id: cajaId, monto_apertura: 0 });
     sesionId = sesion.id;
 
-    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Combo Opciones Ventas Test' });
-    const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Combo Opciones Ventas Test', precio: 10, stock: 0 });
+    const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: 'Categoria Combo Opciones Ventas Test' });
+    const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: 'Producto Combo Opciones Ventas Test', precio: 10, stock: 0 });
     productoId = producto.id;
     await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 20 });
-    const otroProducto = await Producto.create({ categoria_id: categoria.id, nombre: 'Otro Producto Combo Opciones Ventas Test', precio: 6, stock: 0 });
+    const otroProducto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: 'Otro Producto Combo Opciones Ventas Test', precio: 6, stock: 0 });
     otroProductoId = otroProducto.id;
     await ProductoStockSucursal.create({ producto_id: otroProductoId, sucursal_id: sucursalId, stock: 20 });
 
@@ -768,6 +780,8 @@ describe('Ventas — opciones por producto dentro de un combo', () => {
     await Producto.destroy({ where: { id: [productoId, otroProductoId] } });
     await LibroCaja.destroy({ where: { usuario_id: usuarioId } });
     await Usuario.destroy({ where: { id: usuarioId } });
+    await Categoria.destroy({ where: { sucursal_id: sucursalId } });
+
     await Sucursal.destroy({ where: { id: sucursalId } });
   });
 
@@ -821,7 +835,7 @@ describe('Ventas — opciones por producto dentro de un combo', () => {
   });
 
   it('rechaza opciones_por_producto con un producto que no pertenece al combo', async () => {
-    const productoAjeno = await Producto.create({ categoria_id: (await Categoria.findOne()).id, nombre: 'Producto Ajeno Combo Test', precio: 4, stock: 0 });
+    const productoAjeno = await Producto.create({ sucursal_id: await idSucursalPrincipal(), categoria_id: (await Categoria.findOne()).id, nombre: 'Producto Ajeno Combo Test', precio: 4, stock: 0 });
     const res = await request(app)
       .post('/api/v1/ventas/completa')
       .set('Authorization', `Bearer ${token}`)
@@ -858,7 +872,7 @@ describe('Ventas — opciones por producto dentro de un combo', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ tipo: 'llevar', sesion_caja_id: sesionId });
     const pedidoId = pedidoBase.body.datos.id;
-    const productoAjeno = await Producto.create({ categoria_id: (await Categoria.findOne()).id, nombre: 'Producto Ajeno Agregar Item Test', precio: 4, stock: 0 });
+    const productoAjeno = await Producto.create({ sucursal_id: await idSucursalPrincipal(), categoria_id: (await Categoria.findOne()).id, nombre: 'Producto Ajeno Agregar Item Test', precio: 4, stock: 0 });
 
     const res = await request(app)
       .post(`/api/v1/ventas/${pedidoId}/items`)
@@ -911,8 +925,8 @@ describe('crearCompleta — delivery y pago diferido', () => {
     const sesion = await SesionCaja.create({ usuario_id: usuarioId, sucursal_id: sucursalId, caja_id: cajaId, monto_apertura: 0 });
     sesionId = sesion.id;
 
-    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Delivery Diferido Test' });
-    const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Delivery Diferido Test', precio: 10, stock: 0 });
+    const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: 'Categoria Delivery Diferido Test' });
+    const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: 'Producto Delivery Diferido Test', precio: 10, stock: 0 });
     productoId = producto.id;
     await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 20 });
   });
@@ -925,6 +939,8 @@ describe('crearCompleta — delivery y pago diferido', () => {
     await ProductoStockSucursal.destroy({ where: { producto_id: productoId } });
     await Producto.destroy({ where: { id: productoId } });
     await Usuario.destroy({ where: { id: usuarioId } });
+    await Categoria.destroy({ where: { sucursal_id: sucursalId } });
+
     await Sucursal.destroy({ where: { id: sucursalId } });
     if (configFlujoOriginal) await Configuracion.upsert({ clave: 'flujo_cocina', valor: configFlujoOriginal.valor });
     else await Configuracion.destroy({ where: { clave: 'flujo_cocina' } });
@@ -1031,8 +1047,8 @@ describe('listar — filtro por origen', () => {
     const sesion = await SesionCaja.create({ usuario_id: usuarioId, sucursal_id: sucursalId, caja_id: cajaId, monto_apertura: 0 });
     sesionId = sesion.id;
 
-    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Listar Origen Test' });
-    const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Listar Origen Test', precio: 10, stock: 0 });
+    const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: 'Categoria Listar Origen Test' });
+    const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: 'Producto Listar Origen Test', precio: 10, stock: 0 });
     productoId = producto.id;
     await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 20 });
   });
@@ -1045,6 +1061,8 @@ describe('listar — filtro por origen', () => {
     await ProductoStockSucursal.destroy({ where: { producto_id: productoId } });
     await Producto.destroy({ where: { id: productoId } });
     await Usuario.destroy({ where: { id: usuarioId } });
+    await Categoria.destroy({ where: { sucursal_id: sucursalId } });
+
     await Sucursal.destroy({ where: { id: sucursalId } });
   });
 

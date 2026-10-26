@@ -20,7 +20,7 @@ describe('Inventario manual por sucursal', () => {
     adminToken = login.body.datos.token;
 
     const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Inventario Test' });
-    producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Inventario Test', precio: 4, stock: 0 });
+    producto = await Producto.create({ sucursal_id: await idSucursalPrincipal(), categoria_id: categoria.id, nombre: 'Producto Inventario Test', precio: 4, stock: 0 });
   });
 
   afterAll(async () => {
@@ -47,8 +47,9 @@ describe('Inventario — acceso a todas las sucursales', () => {
 
   beforeAll(async () => {
     sucursalX = await Sucursal.create({ nombre: 'Sucursal Inventario Todas X' });
-    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Inventario Todas Test' });
-    productoTest = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Inventario Todas Test', precio: 5, stock: 0 });
+    // El producto vive en sucursalX: es donde el admin global ajusta su stock.
+    const categoria = await Categoria.create({ sucursal_id: sucursalX.id, nombre: 'Categoria Inventario Todas Test' });
+    productoTest = await Producto.create({ sucursal_id: sucursalX.id, categoria_id: categoria.id, nombre: 'Producto Inventario Todas Test', precio: 5, stock: 0 });
 
     const rolAdmin = await Rol.findOne({ where: { nombre: 'Administrador' } });
     const hash = await bcrypt.hash('clave123', 10);
@@ -77,6 +78,7 @@ describe('Inventario — acceso a todas las sucursales', () => {
     await RegistroInventario.destroy({ where: { producto_id: productoTest.id } });
     await ProductoStockSucursal.destroy({ where: { producto_id: productoTest.id } });
     await Producto.destroy({ where: { id: productoTest.id } });
+    await Categoria.destroy({ where: { id: productoTest.categoria_id } });
     await Usuario.destroy({ where: { id: [usuarioTodasId, usuarioNormalId] } });
     await Sucursal.destroy({ where: { id: sucursalX.id } });
   });
@@ -119,15 +121,15 @@ describe('Inventario — acceso a todas las sucursales', () => {
     expect(stock.stock).toBe(25);
   });
 
-  it('usuario normal no puede cargar stock en otra sucursal aunque la mande en el body', async () => {
+  it('usuario normal no puede cargar stock de un producto de otra sucursal aunque mande su sucursal_id', async () => {
     const principal = await Sucursal.findOne({ where: { nombre: 'Sucursal Principal' } });
     const res = await request(app)
       .post('/api/v1/inventario/entrada')
       .set('Authorization', `Bearer ${tokenNormal}`)
       .send({ producto_id: productoTest.id, cantidad: 5, sucursal_id: sucursalX.id });
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(409); // el producto es de sucursalX, el usuario es de la principal
 
     const stockPropia = await ProductoStockSucursal.findOne({ where: { producto_id: productoTest.id, sucursal_id: principal.id } });
-    expect(stockPropia.stock).toBe(5); // fue a su propia sucursal, no a sucursalX
+    expect(stockPropia).toBeNull();
   });
 });

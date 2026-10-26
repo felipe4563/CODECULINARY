@@ -14,9 +14,9 @@ describe('Disponibilidad diaria de productos', () => {
 
     const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Disponibilidad Test' });
     categoriaId = categoria.id;
-    const disponible = await Producto.create({ categoria_id: categoriaId, nombre: 'Producto Disponible Test', precio: 10, stock: null });
+    const disponible = await Producto.create({ sucursal_id: await idSucursalPrincipal(), categoria_id: categoriaId, nombre: 'Producto Disponible Test', precio: 10, stock: null });
     productoDisponibleId = disponible.id;
-    const noDisponible = await Producto.create({ categoria_id: categoriaId, nombre: 'Producto No Disponible Test', precio: 10, stock: null, disponible_hoy: false });
+    const noDisponible = await Producto.create({ sucursal_id: await idSucursalPrincipal(), categoria_id: categoriaId, nombre: 'Producto No Disponible Test', precio: 10, stock: null, disponible_hoy: false });
     productoNoDisponibleId = noDisponible.id;
   });
 
@@ -26,14 +26,14 @@ describe('Disponibilidad diaria de productos', () => {
   });
 
   it('listarProductos({ solo_disponibles_hoy: true }) excluye los marcados no disponibles', async () => {
-    const productos = await listarProductos({ solo_disponibles_hoy: true }, {});
+    const productos = await listarProductos({ solo_disponibles_hoy: true }, { acceso_todas: true });
     const ids = productos.map(p => p.id);
     expect(ids).toContain(productoDisponibleId);
     expect(ids).not.toContain(productoNoDisponibleId);
   });
 
   it('listarProductos sin solo_disponibles_hoy incluye el producto no disponible igual', async () => {
-    const productos = await listarProductos({}, {});
+    const productos = await listarProductos({}, { acceso_todas: true });
     const ids = productos.map(p => p.id);
     expect(ids).toContain(productoNoDisponibleId);
   });

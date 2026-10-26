@@ -19,8 +19,8 @@ describe('Socket: pedido autoservicio confirmado', () => {
       mesaId = mesa.id;
       const sesionMesa = await MesaSesion.create({ mesa_id: mesaId, sucursal_id: sucursalId, abierta_por: 'autoservicio' });
 
-      const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: `Categoria Socket Autoservicio Test ${timestamp}` });
-      const producto = await Producto.create({ categoria_id: categoria.id, nombre: `Producto Socket Autoservicio Test ${timestamp}`, precio: 30, stock: 0 });
+      const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: `Categoria Socket Autoservicio Test ${timestamp}` });
+      const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: `Producto Socket Autoservicio Test ${timestamp}`, precio: 30, stock: 0 });
       productoId = producto.id;
       await ProductoStockSucursal.create({ producto_id: productoId, sucursal_id: sucursalId, stock: 10 });
 
@@ -68,6 +68,7 @@ describe('Socket: pedido autoservicio confirmado', () => {
     if (mesaId) await MesaSesion.destroy({ where: { mesa_id: mesaId } });
     if (mesaId) await Mesa.destroy({ where: { id: mesaId } });
     if (areaId) await Area.destroy({ where: { id: areaId } });
+    if (sucursalId) await Categoria.destroy({ where: { sucursal_id: sucursalId } });
     if (sucursalId) await Sucursal.destroy({ where: { id: sucursalId } });
   });
 

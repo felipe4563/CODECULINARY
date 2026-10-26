@@ -30,7 +30,7 @@ describe('Modelos GrupoOpciones y Opcion', () => {
 
   it('un producto puede asignarse a un grupo de opciones vía la tabla puente, y al borrar el grupo se quita la asignación', async () => {
     const grupo = await GrupoOpciones.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Sabor Model Test' });
-    const producto = await Producto.create({ categoria_id: categoriaId, nombre: 'Jugo Model Test', precio: 10 });
+    const producto = await Producto.create({ sucursal_id: await idSucursalPrincipal(), categoria_id: categoriaId, nombre: 'Jugo Model Test', precio: 10 });
     await ProductoGrupoOpciones.create({ producto_id: producto.id, grupo_opciones_id: grupo.id, orden: 0, obligatorio: 0 });
 
     const recargado = await Producto.findByPk(producto.id, { include: [{ model: GrupoOpciones, as: 'grupos_opciones' }] });

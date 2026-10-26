@@ -26,7 +26,7 @@ describe('Compras por sucursal', () => {
     sucursalOtra = await Sucursal.create({ nombre: 'Sucursal Compras Test' });
     proveedor = await Proveedor.create({ nombre: 'Proveedor Compras Test' });
     const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Compras Test' });
-    producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Compras Test', precio: 8, stock: 0 });
+    producto = await Producto.create({ sucursal_id: await idSucursalPrincipal(), categoria_id: categoria.id, nombre: 'Producto Compras Test', precio: 8, stock: 0 });
   });
 
   afterAll(async () => {
@@ -35,6 +35,8 @@ describe('Compras por sucursal', () => {
     await ProductoStockSucursal.destroy({ where: { producto_id: producto.id } });
     await Producto.destroy({ where: { id: producto.id } });
     await Proveedor.destroy({ where: { id: proveedor.id } });
+    await Categoria.destroy({ where: { sucursal_id: sucursalOtra.id } });
+
     await Sucursal.destroy({ where: { id: sucursalOtra.id } });
   });
 
@@ -82,8 +84,8 @@ describe('Compras - aislamiento entre sucursales (acceso por id)', () => {
     sucursalA = await Sucursal.create({ nombre: 'Sucursal Compras Aislamiento A' });
     sucursalB = await Sucursal.create({ nombre: 'Sucursal Compras Aislamiento B' });
     proveedorA = await Proveedor.create({ nombre: 'Proveedor Compras Aislamiento A' });
-    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Compras Aislamiento A' });
-    productoA = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Compras Aislamiento A', precio: 8, stock: 0 });
+    const categoria = await Categoria.create({ sucursal_id: sucursalB.id, nombre: 'Categoria Compras Aislamiento A' });
+    productoA = await Producto.create({ sucursal_id: sucursalB.id, categoria_id: categoria.id, nombre: 'Producto Compras Aislamiento A', precio: 8, stock: 0 });
 
     // Cajero no tiene permisos de compras; usamos rol Administrador pero con
     // acceso_todas_sucursales = 0 para que quede restringido a su sucursal.
@@ -116,6 +118,8 @@ describe('Compras - aislamiento entre sucursales (acceso por id)', () => {
     await Producto.destroy({ where: { id: productoA.id } });
     await Proveedor.destroy({ where: { id: proveedorA.id } });
     await Usuario.destroy({ where: { id: [usuarioAId, usuarioBId] } });
+    await Categoria.destroy({ where: { sucursal_id: [sucursalA.id, sucursalB.id] } });
+
     await Sucursal.destroy({ where: { id: [sucursalA.id, sucursalB.id] } });
   });
 

@@ -23,9 +23,9 @@ describe('DetallePedidoComboOpcion — cascada de borrado', () => {
     const sesion = await SesionCaja.create({ usuario_id: usuarioId, sucursal_id: sucursalId, caja_id: cajaId, monto_apertura: 0 });
     sesionId = sesion.id;
 
-    const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Combo Opciones Test' });
+    const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: 'Categoria Combo Opciones Test' });
     categoriaId = categoria.id;
-    const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Combo Opciones Test', precio: 5, stock: 0 });
+    const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: 'Producto Combo Opciones Test', precio: 5, stock: 0 });
     productoId = producto.id;
 
     const grupo = await GrupoOpciones.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Tamaño Combo Opciones Test', tipo_seleccion: 'unica' });
@@ -52,6 +52,8 @@ describe('DetallePedidoComboOpcion — cascada de borrado', () => {
     await SesionCaja.destroy({ where: { id: sesionId } });
     await Caja.destroy({ where: { id: cajaId } });
     await Usuario.destroy({ where: { id: usuarioId } });
+    await Categoria.destroy({ where: { sucursal_id: sucursalId } });
+
     await Sucursal.destroy({ where: { id: sucursalId } });
     // El Combo fixture queda `activo: 1` por default — sin limpiarlo, cada
     // corrida deja "Combo Test Cascada" vendible en el grid del POS y en el

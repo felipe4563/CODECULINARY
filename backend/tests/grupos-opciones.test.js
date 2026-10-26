@@ -64,7 +64,7 @@ describe('Grupos de opciones API', () => {
       .send({ nombre: 'Grupo A Eliminar Test', opciones: [{ nombre: 'Opción 1', orden: 1 }] });
     const grupoId = crear.body.datos.id;
 
-    const producto = await Producto.create({ categoria_id: categoria.id, nombre: 'Producto Con Grupo Test', precio: 10 });
+    const producto = await Producto.create({ sucursal_id: await idSucursalPrincipal(), categoria_id: categoria.id, nombre: 'Producto Con Grupo Test', precio: 10 });
     await ProductoGrupoOpciones.create({ producto_id: producto.id, grupo_opciones_id: grupoId, orden: 0, obligatorio: 0 });
 
     const eliminar = await request(app)

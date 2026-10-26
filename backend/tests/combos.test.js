@@ -12,7 +12,7 @@ describe('Combos — grupos_opciones anidado', () => {
 
     const categoria = await Categoria.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Categoria Combo Grupos Test' });
     categoriaId = categoria.id;
-    const producto = await Producto.create({ categoria_id: categoriaId, nombre: 'Producto Combo Grupos Test', precio: 8, stock: 0 });
+    const producto = await Producto.create({ sucursal_id: await idSucursalPrincipal(), categoria_id: categoriaId, nombre: 'Producto Combo Grupos Test', precio: 8, stock: 0 });
     productoId = producto.id;
     const grupo = await GrupoOpciones.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Tamaño Combo Grupos Test', tipo_seleccion: 'unica' });
     grupoId = grupo.id;
