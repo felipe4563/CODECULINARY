@@ -1,4 +1,6 @@
 const svc = require('./productos.service');
+const { copiarCatalogo: copiarCatalogoSvc } = require('./copiarCatalogo.service');
+const { emitir } = require('../../socket');
 
 function _alcance(req) {
   return { sucursal_id: req.usuario.sucursal_id, acceso_todas: req.usuario.acceso_todas, usuario_id: req.usuario.id };
@@ -95,4 +97,21 @@ async function actualizarDisponibilidad(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { listarCategorias, crearCategoria, actualizarCategoria, eliminarCategoria, listarGruposOpciones, crearGrupoOpciones, actualizarGrupoOpciones, eliminarGrupoOpciones, listarProductos, obtenerProducto, crearProducto, actualizarProducto, eliminarProducto, actualizarDisponibilidad };
+// Copiar entre sucursales solo lo puede hacer quien ve todas; mapaProductos
+// es para el script de migración, no se devuelve al cliente.
+async function copiarCatalogo(req, res, next) {
+  try {
+    if (!req.usuario.acceso_todas) {
+      return res.status(403).json({ ok: false, mensaje: 'Solo un usuario con acceso a todas las sucursales puede copiar catálogo' });
+    }
+    const { origen_id, destino_id, categoria_ids, producto_ids, combo_ids } = req.body;
+    if (!origen_id || !destino_id) {
+      return res.status(400).json({ ok: false, mensaje: 'origen_id y destino_id son requeridos' });
+    }
+    const { creados, omitidos } = await copiarCatalogoSvc({ origen_id, destino_id, categoria_ids, producto_ids, combo_ids });
+    if (creados.productos || creados.combos) emitir('productos:actualizado', { tipo: 'copiado' });
+    res.json({ ok: true, datos: { creados, omitidos } });
+  } catch (err) { next(err); }
+}
+
+module.exports = { copiarCatalogo, listarCategorias, crearCategoria, actualizarCategoria, eliminarCategoria, listarGruposOpciones, crearGrupoOpciones, actualizarGrupoOpciones, eliminarGrupoOpciones, listarProductos, obtenerProducto, crearProducto, actualizarProducto, eliminarProducto, actualizarDisponibilidad };
