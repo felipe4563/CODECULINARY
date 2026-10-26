@@ -48,7 +48,7 @@ export default function PedidoPage() {
   // Categorías
   const { data: categorias = [] } = useQuery({
     queryKey: ['categorias'],
-    queryFn: getCategorias,
+    queryFn: () => getCategorias(),
   });
 
   // Productos (por categoría si hay filtro)
@@ -75,7 +75,7 @@ export default function PedidoPage() {
 
   const { data: combosActivos = [] } = useQuery({
     queryKey: ['combos-activos'],
-    queryFn: getCombosActivos,
+    queryFn: () => getCombosActivos(),
   });
 
   const total = parseFloat(pedido?.total ?? 0);

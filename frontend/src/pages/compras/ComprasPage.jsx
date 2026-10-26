@@ -516,7 +516,7 @@ export default function ComprasPage() {
 
   const { data: productos = [] } = useQuery({
     queryKey: ['productos'],
-    queryFn: getProductos,
+    queryFn: () => getProductos(),
     enabled: puedoCrear,
   });
 

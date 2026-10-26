@@ -302,7 +302,7 @@ export default function InventarioPage() {
 
   const { data: productos = [] } = useQuery({
     queryKey: ['productos'],
-    queryFn: getProductos,
+    queryFn: () => getProductos(),
     enabled: puedoRegistrar,
   });
 

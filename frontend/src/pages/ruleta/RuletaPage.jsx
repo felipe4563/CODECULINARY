@@ -246,7 +246,7 @@ function ModalPremio({ premio, onClose, onExito }) {
   });
   const { data: combos = [] } = useQuery({
     queryKey: ['combos-para-ruleta'],
-    queryFn: getCombosActivos,
+    queryFn: () => getCombosActivos(),
     enabled: tipo === 'combo_gratis',
   });
 

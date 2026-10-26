@@ -82,7 +82,8 @@ export default function PromocionesPage() {
         {puedeCrear && (
           <button
             onClick={() => setModalForm('nuevo')}
-            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-sm font-semibold transition-colors"
+            disabled={sucursalId == null}
+            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-xl text-sm font-semibold transition-colors"
           >
             <Plus className="w-4 h-4" /> Nueva Promoción
           </button>

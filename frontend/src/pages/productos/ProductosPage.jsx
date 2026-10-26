@@ -99,7 +99,8 @@ function TabCategorias({ puedeCrear, puedeEditar, puedeEliminar }) {
         {puedeCrear && (
           <button
             onClick={() => setModal({ modo: 'crear' })}
-            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-sm font-medium transition-colors"
+            disabled={sucursalId == null}
+            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-xl text-sm font-medium transition-colors"
           >
             <Plus className="w-4 h-4" /> Nueva Categoría
           </button>
@@ -295,7 +296,7 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar, puedeDisponibili
         {puedeCrear && (
           <button
             onClick={() => setModal({ modo: 'crear' })}
-            disabled={categorias.length === 0}
+            disabled={categorias.length === 0 || sucursalId == null}
             className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-xl text-sm font-medium transition-colors"
             title={categorias.length === 0 ? 'Primero crea una categoría' : ''}
           >
@@ -851,7 +852,8 @@ function TabOpciones({ puedeCrear, puedeEditar, puedeEliminar }) {
         {puedeCrear && (
           <button
             onClick={() => setModal({ modo: 'crear' })}
-            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-sm font-medium transition-colors"
+            disabled={sucursalId == null}
+            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-xl text-sm font-medium transition-colors"
           >
             <Plus className="w-4 h-4" /> Nuevo Grupo
           </button>

@@ -84,7 +84,7 @@ export default function VentasPage() {
 
   const { data: categorias = [] } = useQuery({
     queryKey: ['categorias'],
-    queryFn: getCategorias,
+    queryFn: () => getCategorias(),
   });
 
   const { data: productos = [], isLoading: cargandoProductos } = useQuery({
@@ -94,13 +94,13 @@ export default function VentasPage() {
 
   const { data: combosActivos = [] } = useQuery({
     queryKey: ['combos-activos'],
-    queryFn: getCombosActivos,
+    queryFn: () => getCombosActivos(),
     enabled: puedeVer,
   });
 
   const { data: promocionesActivas = [] } = useQuery({
     queryKey: ['promociones-activas'],
-    queryFn: getPromocionesActivas,
+    queryFn: () => getPromocionesActivas(),
     enabled: puedeVer,
   });
 
