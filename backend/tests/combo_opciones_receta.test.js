@@ -49,7 +49,7 @@ describe('Receta de insumos ligada a una opción dentro de un combo', () => {
     // insumo si no se elige ninguna opción con receta.
     await RecetaInsumo.create({ producto_id: productoId, opcion_id: opcionConId, insumo_id: insumoId, cantidad: 25 });
 
-    const combo = await Combo.create({ nombre: 'Combo Cafe Receta Test', precio: 10 });
+    const combo = await Combo.create({ sucursal_id: sucursalId, nombre: 'Combo Cafe Receta Test', precio: 10 });
     comboId = combo.id;
     await ComboProducto.create({ combo_id: comboId, producto_id: productoId, cantidad: 1 });
   });

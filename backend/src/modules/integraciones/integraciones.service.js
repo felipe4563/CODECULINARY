@@ -10,8 +10,8 @@ async function obtenerMenu(sucursal_id) {
   const alcance = { sucursal_id, acceso_todas: false };
   const [productos, combos, promociones, sucursal, config] = await Promise.all([
     listarProductos({ solo_vendibles: true, solo_disponibles: true, solo_disponibles_hoy: true }, alcance),
-    listarCombosActivos(),
-    listarPromocionesActivas(),
+    listarCombosActivos(alcance),
+    listarPromocionesActivas(alcance),
     Sucursal.findByPk(sucursal_id, { attributes: ['id', 'nombre', 'direccion', 'telefono', 'latitud', 'longitud'] }),
     obtenerConfigPublica(),
   ]);

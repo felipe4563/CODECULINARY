@@ -49,9 +49,9 @@ describe('Autoservicio API', () => {
       const timestamp = Date.now();
       const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: `Categoria Menu Test ${timestamp}` });
       const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: `Producto Menu Test ${timestamp}`, precio: 15, es_vendible: 1 });
-      const combo = await Combo.create({ nombre: `Combo Menu Test ${timestamp}`, precio: 20, activo: 1 });
+      const combo = await Combo.create({ sucursal_id: sucursal.id, nombre: `Combo Menu Test ${timestamp}`, precio: 20, activo: 1 });
       await ComboProducto.create({ combo_id: combo.id, producto_id: producto.id, cantidad: 1 });
-      const promo = await Promocion.create({ nombre: `Promo Menu Test ${timestamp}`, tipo: 'porcentaje', valor: 10, activo: 1 });
+      const promo = await Promocion.create({ sucursal_id: sucursal.id, nombre: `Promo Menu Test ${timestamp}`, tipo: 'porcentaje', valor: 10, activo: 1 });
       await promo.setProductos([producto.id]);
 
       const res = await request(app).get(`/api/v1/autoservicio/mesa/${mesa.codigo_qr}`);
@@ -320,7 +320,7 @@ describe('Autoservicio API', () => {
       const categoria = await Categoria.create({ sucursal_id: sucursal.id, nombre: `Categoria Autoservicio Combo Test ${timestamp}` });
       const producto = await Producto.create({ sucursal_id: sucursal.id, categoria_id: categoria.id, nombre: `Producto Autoservicio Combo Test ${timestamp}`, precio: 25, stock: 0 });
       await ProductoStockSucursal.create({ producto_id: producto.id, sucursal_id: sucursal.id, stock: 10 });
-      combo = await Combo.create({ nombre: `Combo Autoservicio Test ${timestamp}`, precio: 40, activo: 1 });
+      combo = await Combo.create({ sucursal_id: sucursal.id, nombre: `Combo Autoservicio Test ${timestamp}`, precio: 40, activo: 1 });
       await ComboProducto.create({ combo_id: combo.id, producto_id: producto.id, cantidad: 1 });
 
       const rol = await Rol.findOne({ where: { nombre: 'Cajero' } });

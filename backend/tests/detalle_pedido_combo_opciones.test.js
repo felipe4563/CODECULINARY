@@ -33,7 +33,7 @@ describe('DetallePedidoComboOpcion — cascada de borrado', () => {
     const opcion = await Opcion.create({ grupo_opciones_id: grupo.id, nombre: 'Grande', precio_adicional: 3, orden: 0 });
     opcionId = opcion.id;
 
-    const combo = await Combo.create({ nombre: 'Combo Test Cascada', precio: 20 });
+    const combo = await Combo.create({ sucursal_id: sucursalId, nombre: 'Combo Test Cascada', precio: 20 });
     comboId = combo.id;
     await ComboProducto.create({ combo_id: combo.id, producto_id: productoId, cantidad: 1 });
 
@@ -52,9 +52,6 @@ describe('DetallePedidoComboOpcion — cascada de borrado', () => {
     await SesionCaja.destroy({ where: { id: sesionId } });
     await Caja.destroy({ where: { id: cajaId } });
     await Usuario.destroy({ where: { id: usuarioId } });
-    await Categoria.destroy({ where: { sucursal_id: sucursalId } });
-
-    await Sucursal.destroy({ where: { id: sucursalId } });
     // El Combo fixture queda `activo: 1` por default — sin limpiarlo, cada
     // corrida deja "Combo Test Cascada" vendible en el grid del POS y en el
     // menú QR de Autoservicio de la BD de desarrollo real.
@@ -64,6 +61,7 @@ describe('DetallePedidoComboOpcion — cascada de borrado', () => {
     await GrupoOpciones.destroy({ where: { id: grupoId } });
     await Producto.destroy({ where: { id: productoId } });
     await Categoria.destroy({ where: { id: categoriaId } });
+    await Sucursal.destroy({ where: { id: sucursalId } });
   });
 
   it('la fila de opciones existe antes de borrar el detalle', async () => {

@@ -386,7 +386,7 @@ describe('GET /api/v1/reportes/ventas/variantes — combos con opciones por prod
     opcionGrande = await Opcion.create({ grupo_opciones_id: grupo.id, nombre: 'Grande', precio_adicional: 3, orden: 0 });
     opcionChica = await Opcion.create({ grupo_opciones_id: grupo.id, nombre: 'Chica', precio_adicional: 0, orden: 1 });
 
-    combo = await Combo.create({ nombre: 'Combo Variantes Test', precio: 20 });
+    combo = await Combo.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Combo Variantes Test', precio: 20 });
     await ComboProducto.create({ combo_id: combo.id, producto_id: producto.id, cantidad: 1 });
 
     // Pedido A: combo con "Grande" elegida. Pedido B: mismo combo, con "Chica".

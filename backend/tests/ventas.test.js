@@ -762,7 +762,7 @@ describe('Ventas — opciones por producto dentro de un combo', () => {
     const opcion = await Opcion.create({ grupo_opciones_id: grupoId, nombre: 'Grande', precio_adicional: 3, orden: 0 });
     opcionId = opcion.id;
 
-    const combo = await Combo.create({ nombre: 'Combo Opciones Ventas Test', precio: 20 });
+    const combo = await Combo.create({ sucursal_id: sucursal.id, nombre: 'Combo Opciones Ventas Test', precio: 20 });
     comboId = combo.id;
     await ComboProducto.create({ combo_id: comboId, producto_id: productoId, cantidad: 1 });
     await ComboProducto.create({ combo_id: comboId, producto_id: otroProductoId, cantidad: 1 });

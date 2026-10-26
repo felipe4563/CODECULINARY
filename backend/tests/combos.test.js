@@ -19,7 +19,7 @@ describe('Combos — grupos_opciones anidado', () => {
     await Opcion.create({ grupo_opciones_id: grupoId, nombre: 'Grande', precio_adicional: 2, orden: 0 });
     await ProductoGrupoOpciones.create({ producto_id: productoId, grupo_opciones_id: grupoId, orden: 0, obligatorio: 1 });
 
-    const combo = await Combo.create({ nombre: 'Combo Grupos Test', precio: 15 });
+    const combo = await Combo.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Combo Grupos Test', precio: 15 });
     comboId = combo.id;
     await ComboProducto.create({ combo_id: comboId, producto_id: productoId, cantidad: 1 });
   });
