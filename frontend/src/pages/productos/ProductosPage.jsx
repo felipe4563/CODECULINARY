@@ -5,8 +5,8 @@ import { getCategorias, crearCategoria, actualizarCategoria, eliminarCategoria }
 import { getProductos, crearProducto, actualizarProducto, eliminarProducto, subirImagenProducto, actualizarDisponibilidad } from '../../api/productos';
 import { getGruposOpciones, crearGrupoOpciones, actualizarGrupoOpciones, eliminarGrupoOpciones } from '../../api/gruposOpciones';
 import { usePermisos } from '../../hooks/usePermisos';
-import { useAuthStore } from '../../store/authStore';
-import { getSucursales } from '../../api/sucursales';
+import { useSucursalCatalogo } from '../../store/catalogoSucursalStore';
+import SelectorSucursalCatalogo from '../../components/catalogo/SelectorSucursalCatalogo';
 import Modal from '../../components/ui/Modal';
 import { BASE_URL } from '../../api/configuracion';
 import RecetaInsumosEditor from './RecetaInsumosEditor';
@@ -39,7 +39,10 @@ export default function ProductosPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-lg sm:text-xl font-bold text-foreground">Productos</h1>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h1 className="text-lg sm:text-xl font-bold text-foreground">Productos</h1>
+        <SelectorSucursalCatalogo />
+      </div>
 
       <div className="flex gap-1 bg-muted p-1 rounded-xl w-full sm:w-fit overflow-x-auto">
         {TABS.map(({ id, label, Icono }) => (
@@ -69,13 +72,18 @@ export default function ProductosPage() {
 
 function TabCategorias({ puedeCrear, puedeEditar, puedeEliminar }) {
   const qc = useQueryClient();
+  const { sucursalId, esGlobal } = useSucursalCatalogo();
   const [modal, setModal] = useState(null);
   const [confirmEliminar, setConfirmEliminar] = useState(null);
 
-  const { data: categorias = [], isLoading } = useQuery({ queryKey: ['categorias'], queryFn: getCategorias });
+  const { data: categorias = [], isLoading } = useQuery({
+    queryKey: ['categorias', sucursalId],
+    queryFn: () => getCategorias({ sucursal_id: sucursalId }),
+    enabled: sucursalId != null,
+  });
 
   const guardar = useMutation({
-    mutationFn: ({ cat, datos }) => cat ? actualizarCategoria(cat.id, datos) : crearCategoria(datos),
+    mutationFn: ({ cat, datos }) => cat ? actualizarCategoria(cat.id, datos) : crearCategoria(esGlobal ? { ...datos, sucursal_id: sucursalId } : datos),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['categorias'] }); setModal(null); },
   });
 
@@ -220,30 +228,35 @@ function FormCategoriaModal({ cat, onClose, onGuardar, guardando, error }) {
 /* ─── Tab Productos ──────────────────────────────────────────────────────── */
 
 function TabProductos({ puedeCrear, puedeEditar, puedeEliminar, puedeDisponibilidad }) {
-  const accesoTodas = useAuthStore((s) => s.usuario?.sucursal_activa?.id == null);
-  const { data: sucursales = [] } = useQuery({
-    queryKey: ['sucursales'],
-    queryFn: getSucursales,
-    enabled: accesoTodas,
-  });
+  const { sucursalId, esGlobal } = useSucursalCatalogo();
   const qc = useQueryClient();
   const [modal, setModal] = useState(null);
   const [confirmEliminar, setConfirmEliminar] = useState(null);
   const [filtroCategoria, setFiltroCategoria] = useState('');
   const [soloInactivos, setSoloInactivos] = useState(false);
 
-  const { data: categorias = [] } = useQuery({ queryKey: ['categorias'], queryFn: getCategorias });
-  const { data: gruposOpciones = [] } = useQuery({ queryKey: ['grupos-opciones'], queryFn: getGruposOpciones });
+  const { data: categorias = [] } = useQuery({
+    queryKey: ['categorias', sucursalId],
+    queryFn: () => getCategorias({ sucursal_id: sucursalId }),
+    enabled: sucursalId != null,
+  });
+  const { data: gruposOpciones = [] } = useQuery({
+    queryKey: ['grupos-opciones', sucursalId],
+    queryFn: () => getGruposOpciones({ sucursal_id: sucursalId }),
+    enabled: sucursalId != null,
+  });
   const { data: productos = [], isLoading } = useQuery({
-    queryKey: ['productos', filtroCategoria, soloInactivos],
+    queryKey: ['productos', sucursalId, filtroCategoria, soloInactivos],
+    enabled: sucursalId != null,
     queryFn: () => getProductos({
+      sucursal_id: sucursalId,
       ...(filtroCategoria ? { categoria_id: filtroCategoria } : {}),
       ...(soloInactivos ? { solo_inactivos: true } : {}),
     }),
   });
 
   const guardar = useMutation({
-    mutationFn: ({ prod, datos }) => prod ? actualizarProducto(prod.id, datos) : crearProducto(datos),
+    mutationFn: ({ prod, datos }) => prod ? actualizarProducto(prod.id, datos) : crearProducto(esGlobal ? { ...datos, sucursal_id: sucursalId } : datos),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['productos'] }); setModal(null); },
   });
 
@@ -433,7 +446,7 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar, puedeDisponibili
                       <td className="px-4 py-3 text-right text-muted-foreground hidden md:table-cell">
                         {prod.stock === null
                           ? '∞'
-                          : accesoTodas && prod.stock_por_sucursal?.length
+                          : esGlobal && prod.stock_por_sucursal?.length
                             ? (
                               <div className="flex flex-col gap-0.5 text-xs">
                                 {prod.stock_por_sucursal.map(s => (
@@ -489,8 +502,6 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar, puedeDisponibili
           prod={modal.prod}
           categorias={categorias}
           gruposOpciones={gruposOpciones}
-          accesoTodas={accesoTodas}
-          sucursales={sucursales}
           onClose={() => setModal(null)}
           onGuardar={(datos) => guardar.mutate({ prod: modal.prod, datos })}
           guardando={guardar.isPending}
@@ -526,14 +537,13 @@ function TabProductos({ puedeCrear, puedeEditar, puedeEliminar, puedeDisponibili
   );
 }
 
-function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucursales, onClose, onGuardar, guardando, error }) {
+function FormProductoModal({ prod, categorias, gruposOpciones, onClose, onGuardar, guardando, error }) {
   const [form, setForm] = useState({
     categoria_id: prod?.categoria_id ?? (categorias[0]?.id ?? ''),
     grupos_opciones: prod?.grupos_opciones?.map(g => ({ id: g.id, nombre: g.nombre, obligatorio: !!g.obligatorio })) ?? [],
     nombre:       prod?.nombre ?? '',
     precio:       prod?.precio ?? '',
     stock:        prod?.stock ?? '',
-    sucursal_id:  '',
     es_vendible:  prod?.es_vendible ?? true,
     es_pesable:   prod?.es_pesable ?? false,
     imagen:       prod?.imagen ?? null,
@@ -608,9 +618,6 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
     // exclusivamente vía ajustes de inventario (ajustarStockSucursal).
     if (!prod) {
       datos.stock = form.stock !== '' ? parseInt(form.stock) : null;
-      if (accesoTodas && datos.stock !== null) {
-        datos.sucursal_id = parseInt(form.sucursal_id);
-      }
     }
     onGuardar(datos);
   }
@@ -754,16 +761,6 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
                 placeholder="Opcional"
                 className="w-full bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
               />
-              {accesoTodas && form.stock !== '' && (
-                <select
-                  value={form.sucursal_id}
-                  onChange={e => set('sucursal_id', e.target.value)}
-                  className="w-full mt-2 bg-background border border-input rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">Sucursal para el stock inicial...</option>
-                  {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                </select>
-              )}
             </div>
           )}
         </div>
@@ -803,8 +800,7 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
           <button
             onClick={handleGuardar}
             disabled={
-              guardando || subiendoImg || !form.nombre.trim() || !(parseFloat(form.precio) >= 1) || !form.categoria_id ||
-              (!prod && accesoTodas && form.stock !== '' && !form.sucursal_id)
+              guardando || subiendoImg || !form.nombre.trim() || !(parseFloat(form.precio) >= 1) || !form.categoria_id
             }
             className="px-4 py-2 rounded-xl text-sm bg-primary hover:bg-primary/90 text-primary-foreground transition-colors disabled:opacity-60"
           >
@@ -820,13 +816,18 @@ function FormProductoModal({ prod, categorias, gruposOpciones, accesoTodas, sucu
 
 function TabOpciones({ puedeCrear, puedeEditar, puedeEliminar }) {
   const qc = useQueryClient();
+  const { sucursalId, esGlobal } = useSucursalCatalogo();
   const [modal, setModal] = useState(null);
   const [confirmEliminar, setConfirmEliminar] = useState(null);
 
-  const { data: grupos = [], isLoading } = useQuery({ queryKey: ['grupos-opciones'], queryFn: getGruposOpciones });
+  const { data: grupos = [], isLoading } = useQuery({
+    queryKey: ['grupos-opciones', sucursalId],
+    queryFn: () => getGruposOpciones({ sucursal_id: sucursalId }),
+    enabled: sucursalId != null,
+  });
 
   const guardar = useMutation({
-    mutationFn: ({ grupo, datos }) => grupo ? actualizarGrupoOpciones(grupo.id, datos) : crearGrupoOpciones(datos),
+    mutationFn: ({ grupo, datos }) => grupo ? actualizarGrupoOpciones(grupo.id, datos) : crearGrupoOpciones(esGlobal ? { ...datos, sucursal_id: sucursalId } : datos),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['grupos-opciones'] });
       qc.invalidateQueries({ queryKey: ['productos'] });

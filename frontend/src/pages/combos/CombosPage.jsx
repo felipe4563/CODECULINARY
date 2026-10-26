@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Gift, Plus, Pencil, Trash2, AlertCircle, RefreshCw, X } from 'lucide-react';
 import { getCombos, crearCombo, actualizarCombo, eliminarCombo } from '../../api/combos';
 import { getProductos } from '../../api/productos';
+import { useSucursalCatalogo } from '../../store/catalogoSucursalStore';
+import SelectorSucursalCatalogo from '../../components/catalogo/SelectorSucursalCatalogo';
 import { usePermisos } from '../../hooks/usePermisos';
 import { describirDisponibilidad } from '../../utils/disponibilidad';
 import SelectorDiasSemana from '../../components/ui/SelectorDiasSemana';
@@ -19,6 +21,7 @@ function BadgeEstado({ activo }) {
 export default function CombosPage() {
   const { tienePermiso } = usePermisos();
   const qc = useQueryClient();
+  const { sucursalId } = useSucursalCatalogo();
 
   const puedeVer      = tienePermiso('combos', 'ver');
   const puedeCrear    = tienePermiso('combos', 'crear');
@@ -29,9 +32,9 @@ export default function CombosPage() {
   const [confirmar, setConfirmar] = useState(null);
 
   const { data: combos = [], isLoading } = useQuery({
-    queryKey: ['combos'],
-    queryFn: getCombos,
-    enabled: puedeVer,
+    queryKey: ['combos', sucursalId],
+    queryFn: () => getCombos({ sucursal_id: sucursalId }),
+    enabled: puedeVer && sucursalId != null,
   });
 
   const eliminar = useMutation({
@@ -75,6 +78,7 @@ export default function CombosPage() {
             <Plus className="w-4 h-4" /> Nuevo Combo
           </button>
         )}
+        <SelectorSucursalCatalogo />
       </div>
 
       {combos.length === 0 ? (
@@ -171,7 +175,12 @@ function ModalCombo({ combo, onClose, onExito }) {
   const [productoAAgregar, setProductoAAgregar] = useState('');
   const [error, setError] = useState(null);
 
-  const { data: catalogo = [] } = useQuery({ queryKey: ['productos-catalogo'], queryFn: () => getProductos({ solo_vendibles: true }) });
+  const { sucursalId, esGlobal } = useSucursalCatalogo();
+  const { data: catalogo = [] } = useQuery({
+    queryKey: ['productos-catalogo', sucursalId],
+    queryFn: () => getProductos({ solo_vendibles: true, sucursal_id: sucursalId }),
+    enabled: sucursalId != null,
+  });
   const disponibles = catalogo.filter((p) => !productos.some((sel) => sel.producto_id === p.id));
 
   function agregarProducto() {
@@ -196,7 +205,7 @@ function ModalCombo({ combo, onClose, onExito }) {
         fecha_inicio: fechaInicio || null, fecha_fin: fechaFin || null, dias_semana: diasSemana,
         productos: productos.map((p) => ({ producto_id: p.producto_id, cantidad: p.cantidad })),
       };
-      return esNuevo ? crearCombo(datos) : actualizarCombo(combo.id, datos);
+      return esNuevo ? crearCombo(esGlobal ? { ...datos, sucursal_id: sucursalId } : datos) : actualizarCombo(combo.id, datos);
     },
     onSuccess: onExito,
     onError: (err) => setError(err?.response?.data?.mensaje ?? 'Error al guardar el combo'),

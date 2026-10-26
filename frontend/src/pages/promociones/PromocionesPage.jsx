@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Tag, Plus, Pencil, Trash2, AlertCircle, RefreshCw } from 'lucide-react';
 import { getPromociones, crearPromocion, actualizarPromocion, eliminarPromocion } from '../../api/promociones';
 import { getProductos } from '../../api/productos';
+import { useSucursalCatalogo } from '../../store/catalogoSucursalStore';
+import SelectorSucursalCatalogo from '../../components/catalogo/SelectorSucursalCatalogo';
 import { usePermisos } from '../../hooks/usePermisos';
 import { describirDisponibilidad } from '../../utils/disponibilidad';
 import SelectorDiasSemana from '../../components/ui/SelectorDiasSemana';
@@ -28,6 +30,7 @@ function etiquetaProductos(promo) {
 export default function PromocionesPage() {
   const { tienePermiso } = usePermisos();
   const qc = useQueryClient();
+  const { sucursalId } = useSucursalCatalogo();
 
   const puedeVer      = tienePermiso('promociones', 'ver');
   const puedeCrear    = tienePermiso('promociones', 'crear');
@@ -38,9 +41,9 @@ export default function PromocionesPage() {
   const [confirmar, setConfirmar] = useState(null);
 
   const { data: promociones = [], isLoading } = useQuery({
-    queryKey: ['promociones'],
-    queryFn: getPromociones,
-    enabled: puedeVer,
+    queryKey: ['promociones', sucursalId],
+    queryFn: () => getPromociones({ sucursal_id: sucursalId }),
+    enabled: puedeVer && sucursalId != null,
   });
 
   const eliminar = useMutation({
@@ -84,6 +87,7 @@ export default function PromocionesPage() {
             <Plus className="w-4 h-4" /> Nueva Promoción
           </button>
         )}
+        <SelectorSucursalCatalogo />
       </div>
 
       {promociones.length === 0 ? (
@@ -222,7 +226,12 @@ function ModalPromocion({ promocion, onClose, onExito }) {
   const [diasSemana, setDiasSemana]   = useState(promocion?.dias_semana ?? null);
   const [error, setError] = useState(null);
 
-  const { data: catalogo = [] } = useQuery({ queryKey: ['productos-catalogo'], queryFn: () => getProductos({ solo_vendibles: true }) });
+  const { sucursalId, esGlobal } = useSucursalCatalogo();
+  const { data: catalogo = [] } = useQuery({
+    queryKey: ['productos-catalogo', sucursalId],
+    queryFn: () => getProductos({ solo_vendibles: true, sucursal_id: sucursalId }),
+    enabled: sucursalId != null,
+  });
 
   function alternarProducto(id) {
     setProductosIds((prev) => (prev.includes(id) ? prev.filter((pid) => pid !== id) : [...prev, id]));
@@ -234,7 +243,7 @@ function ModalPromocion({ promocion, onClose, onExito }) {
         producto_ids: productosIds, nombre: nombre.trim() || null, tipo, valor: parseFloat(valor), activo,
         fecha_inicio: fechaInicio || null, fecha_fin: fechaFin || null, dias_semana: diasSemana,
       };
-      return esNuevo ? crearPromocion(datos) : actualizarPromocion(promocion.id, datos);
+      return esNuevo ? crearPromocion(esGlobal ? { ...datos, sucursal_id: sucursalId } : datos) : actualizarPromocion(promocion.id, datos);
     },
     onSuccess: onExito,
     onError: (err) => setError(err?.response?.data?.mensaje ?? 'Error al guardar la promoción'),
