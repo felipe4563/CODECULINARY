@@ -10,6 +10,7 @@ import SelectorSucursalCatalogo from '../../components/catalogo/SelectorSucursal
 import Modal from '../../components/ui/Modal';
 import { BASE_URL } from '../../api/configuracion';
 import RecetaInsumosEditor from './RecetaInsumosEditor';
+import CopiarCatalogoModal from './CopiarCatalogoModal';
 
 const API_BASE = BASE_URL;
 
@@ -27,6 +28,8 @@ export default function ProductosPage() {
   const puedeEliminar = tienePermiso('productos', 'eliminar');
   const puedeDisponibilidad = tienePermiso('productos', 'disponibilidad');
   const [tab, setTab] = useState('categorias');
+  const [copiando, setCopiando] = useState(false);
+  const { sucursalId, esGlobal } = useSucursalCatalogo();
 
   if (!puedeVer) {
     return (
@@ -41,7 +44,18 @@ export default function ProductosPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-lg sm:text-xl font-bold text-foreground">Productos</h1>
-        <SelectorSucursalCatalogo />
+        <div className="flex items-center gap-3 flex-wrap">
+          <SelectorSucursalCatalogo />
+          {esGlobal && puedeCrear && (
+            <button
+              onClick={() => setCopiando(true)}
+              disabled={sucursalId == null}
+              className="px-4 py-2 border border-border hover:bg-accent disabled:opacity-50 rounded-xl text-sm font-medium text-foreground transition-colors"
+            >
+              Copiar desde otra sucursal
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex gap-1 bg-muted p-1 rounded-xl w-full sm:w-fit overflow-x-auto">
@@ -64,6 +78,8 @@ export default function ProductosPage() {
       {tab === 'categorias' && <TabCategorias puedeCrear={puedeCrear} puedeEditar={puedeEditar} puedeEliminar={puedeEliminar} />}
       {tab === 'productos'  && <TabProductos  puedeCrear={puedeCrear} puedeEditar={puedeEditar} puedeEliminar={puedeEliminar} puedeDisponibilidad={puedeDisponibilidad} />}
       {tab === 'opciones' && <TabOpciones puedeCrear={puedeCrear} puedeEditar={puedeEditar} puedeEliminar={puedeEliminar} />}
+
+      {copiando && <CopiarCatalogoModal destinoId={sucursalId} onClose={() => setCopiando(false)} />}
     </div>
   );
 }

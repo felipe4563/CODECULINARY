@@ -6,6 +6,8 @@ import { getClientes } from '../../api/clientes';
 import { getProductos } from '../../api/productos';
 import { usePermisos } from '../../hooks/usePermisos';
 import Modal from '../../components/ui/Modal';
+import { conSucursal } from '../../components/catalogo/etiquetaSucursal';
+import { useSucursalCatalogo } from '../../store/catalogoSucursalStore';
 
 function BadgeEstado({ cupon }) {
   const agotado = cupon.usos_actuales >= cupon.usos_maximos;
@@ -257,6 +259,7 @@ function ModalCupon({ cupon, onClose, onExito }) {
   const [buscandoCliente, setBuscandoCliente] = useState(false);
   const [productosIds, setProductosIds] = useState(cupon?.productos?.map((p) => p.id) ?? []);
   const [error, setError] = useState(null);
+  const { esGlobal } = useSucursalCatalogo();
 
   const { data: resultadosCliente = [] } = useQuery({
     queryKey: ['clientes-buscar-cupon', buscarCliente],
@@ -402,7 +405,7 @@ function ModalCupon({ cupon, onClose, onExito }) {
                   onChange={() => alternarProducto(p.id)}
                   className="rounded border-input"
                 />
-                <span className="text-foreground truncate flex-1">{p.nombre}</span>
+                <span className="text-foreground truncate flex-1">{conSucursal(p, esGlobal)}</span>
                 <span className="text-xs text-muted-foreground shrink-0">Bs {parseFloat(p.precio).toFixed(2)}</span>
               </label>
             ))}

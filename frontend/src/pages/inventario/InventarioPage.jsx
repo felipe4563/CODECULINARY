@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermisos } from '../../hooks/usePermisos';
 import { getInventario, registrarEntrada, registrarSalida, registrarAjuste } from '../../api/inventario';
 import { getProductos } from '../../api/productos';
+import { conSucursal } from '../../components/catalogo/etiquetaSucursal';
 import { useAuthStore } from '../../store/authStore';
 import { getSucursales } from '../../api/sucursales';
 import Paginacion from '../../components/ui/Paginacion';
@@ -161,7 +162,7 @@ function ModalMovimiento({ productos, accesoTodas, sucursales, onClose, onGuarda
               <option value="">Seleccionar producto...</option>
               {productos.map(p => (
                 <option key={p.id} value={p.id}>
-                  {p.nombre} (stock actual: {p.stock ?? 0})
+                  {conSucursal(p, accesoTodas)} (stock actual: {p.stock ?? 0})
                 </option>
               ))}
             </select>

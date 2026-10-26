@@ -9,6 +9,8 @@ import { getProductos } from '../../api/productos';
 import { getCombosActivos } from '../../api/combos';
 import { usePermisos } from '../../hooks/usePermisos';
 import Modal from '../../components/ui/Modal';
+import { conSucursal } from '../../components/catalogo/etiquetaSucursal';
+import { useSucursalCatalogo } from '../../store/catalogoSucursalStore';
 import { etiquetaValor } from './ruedaUtils';
 import GirarRuletaPanel from './GirarRuletaPanel';
 
@@ -228,6 +230,7 @@ function TabPremios() {
 
 function ModalPremio({ premio, onClose, onExito }) {
   const esNuevo = !premio;
+  const { esGlobal } = useSucursalCatalogo();
   const [nombre, setNombre] = useState(premio?.nombre ?? '');
   const [tipo, setTipo] = useState(premio?.tipo ?? 'nada');
   const [valor, setValor] = useState(premio?.valor ?? '');
@@ -338,7 +341,7 @@ function ModalPremio({ premio, onClose, onExito }) {
             >
               <option value="">Seleccionar producto...</option>
               {productos.map((p) => (
-                <option key={p.id} value={p.id}>{p.nombre} — Bs {parseFloat(p.precio).toFixed(2)}</option>
+                <option key={p.id} value={p.id}>{conSucursal(p, esGlobal)} — Bs {parseFloat(p.precio).toFixed(2)}</option>
               ))}
             </select>
             <p className="text-xs text-muted-foreground mt-1">
@@ -359,7 +362,7 @@ function ModalPremio({ premio, onClose, onExito }) {
             >
               <option value="">Seleccionar combo...</option>
               {combos.map((c) => (
-                <option key={c.id} value={c.id}>{c.nombre} — Bs {parseFloat(c.precio).toFixed(2)}</option>
+                <option key={c.id} value={c.id}>{conSucursal(c, esGlobal)} — Bs {parseFloat(c.precio).toFixed(2)}</option>
               ))}
             </select>
             <p className="text-xs text-muted-foreground mt-1">

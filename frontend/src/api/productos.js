@@ -12,3 +12,5 @@ export const subirImagenProducto = (archivo) => {
   fd.append('imagen', archivo);
   return api.post('/uploads/imagen', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data.datos.url);
 };
+
+export const copiarCatalogo = (datos) => api.post('/productos/copiar', datos).then(r => r.data.datos);
