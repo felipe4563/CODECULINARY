@@ -1,6 +1,6 @@
 const { Op } = require('sequelize');
 const {
-  Pedido, DetallePedido, Mesa, Producto, Cliente, SesionCaja, Caja, LibroCaja, Configuracion, PagoQr, Opcion, Combo, ComboProducto, Promocion, Cupon,
+  Pedido, DetallePedido, Mesa, Producto, Cliente, SesionCaja, Caja, LibroCaja, Configuracion, PagoQr, Opcion, GrupoOpciones, Combo, ComboProducto, Promocion, Cupon,
   RecetaInsumo, DetallePedidoOpcion, DetallePedidoComboOpcion, sequelize,
 } = require('../../models');
 const { emitir } = require('../../socket');
@@ -27,9 +27,21 @@ function _rangoDiaBolivia(referencia = new Date()) {
 // Suma el precio_adicional de las opciones elegidas (ej. "sabor: fresa +2 Bs").
 // Se recalcula siempre desde la BD y nunca se confía en un precio que mande
 // el cliente, para que nadie pueda inflar/desinflar el total del pedido.
-async function _extraPorOpciones(opcion_ids = []) {
+// Si se pasa `sucursal_id` (al crear/agregar ítems), exige que cada opción
+// exista y que su grupo sea de esa sucursal; sin él no valida nada, para no
+// tocar pedidos históricos.
+async function _extraPorOpciones(opcion_ids = [], sucursal_id = null) {
   if (!opcion_ids || opcion_ids.length === 0) return 0;
-  const opciones = await Opcion.findAll({ where: { id: opcion_ids } });
+  const opciones = await Opcion.findAll({
+    where: { id: opcion_ids },
+    ...(sucursal_id ? { include: [{ model: GrupoOpciones, as: 'grupo', attributes: ['sucursal_id'] }] } : {}),
+  });
+  if (sucursal_id) {
+    const distintas = new Set(opcion_ids.map(Number));
+    if (opciones.length !== distintas.size || opciones.some((o) => o.grupo.sucursal_id !== sucursal_id)) {
+      throw Object.assign(new Error('Opción no encontrada'), { status: 404 });
+    }
+  }
   return opciones.reduce((sum, o) => sum + parseFloat(o.precio_adicional || 0), 0);
 }
 
@@ -910,21 +922,21 @@ async function crearCompleta({ tipo, mesa_id, nombre_cliente, documento_cliente,
   for (const item of items) {
     if (item.combo_id) {
       const combo = await Combo.findByPk(item.combo_id);
-      if (!combo) throw Object.assign(new Error('Combo no encontrado'), { status: 404 });
+      if (!combo || combo.sucursal_id !== sucursal_id) throw Object.assign(new Error('Combo no encontrado'), { status: 404 });
       if (!combo.activo || !estaActivoHoy(combo)) {
         throw Object.assign(new Error(`El combo "${combo.nombre}" no está disponible`), { status: 409 });
       }
       const opcionesPorProducto = await _validarOpcionesCombo(item.combo_id, item.opciones_por_producto);
-      const extraCombo = await _extraPorOpciones(opcionesPorProducto.flatMap((o) => o.opcion_ids || []));
+      const extraCombo = await _extraPorOpciones(opcionesPorProducto.flatMap((o) => o.opcion_ids || []), sucursal_id);
       const linea = { cantidad: item.cantidad ?? 1, precio: parseFloat(combo.precio) + extraCombo, peso: null };
       productos.push({ item, combo, linea, opcionesPorProducto });
       continue;
     }
     const producto = await Producto.findByPk(item.producto_id);
-    if (!producto) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
+    if (!producto || producto.sucursal_id !== sucursal_id) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
     if (!producto.activo || !producto.es_vendible) throw Object.assign(new Error('Producto no disponible'), { status: 409 });
     if (!producto.disponible_hoy) throw Object.assign(new Error(`"${producto.nombre}" no está disponible hoy`), { status: 409 });
-    const extra = await _extraPorOpciones(item.opcion_ids);
+    const extra = await _extraPorOpciones(item.opcion_ids, sucursal_id);
     const precioBase = await _precioConPromocion(producto);
     const linea = _datosLinea(item, producto, precioBase, extra);
     productos.push({ item, producto, linea });
@@ -1042,12 +1054,12 @@ async function agregarItem(pedido_id, { producto_id, combo_id, cantidad = 1, not
 
   if (combo_id) {
     const combo = await Combo.findByPk(combo_id);
-    if (!combo) throw Object.assign(new Error('Combo no encontrado'), { status: 404 });
+    if (!combo || combo.sucursal_id !== pedido.sucursal_id) throw Object.assign(new Error('Combo no encontrado'), { status: 404 });
     if (!combo.activo || !estaActivoHoy(combo)) {
       throw Object.assign(new Error(`El combo "${combo.nombre}" no está disponible`), { status: 409 });
     }
     const opcionesPorProductoValidadas = await _validarOpcionesCombo(combo_id, opciones_por_producto);
-    const extraCombo = await _extraPorOpciones(opcionesPorProductoValidadas.flatMap((o) => o.opcion_ids || []));
+    const extraCombo = await _extraPorOpciones(opcionesPorProductoValidadas.flatMap((o) => o.opcion_ids || []), pedido.sucursal_id);
     const item = await DetallePedido.create({
       pedido_id, combo_id, producto_id: null, cantidad, precio: parseFloat(combo.precio) + extraCombo, peso: null, nota,
     });
@@ -1066,11 +1078,11 @@ async function agregarItem(pedido_id, { producto_id, combo_id, cantidad = 1, not
   }
 
   const producto = await Producto.findByPk(producto_id);
-  if (!producto) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
+  if (!producto || producto.sucursal_id !== pedido.sucursal_id) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
   if (!producto.activo || !producto.es_vendible) throw Object.assign(new Error('Producto no disponible'), { status: 409 });
   if (!producto.disponible_hoy) throw Object.assign(new Error(`"${producto.nombre}" no está disponible hoy`), { status: 409 });
 
-  const extra = await _extraPorOpciones(opcion_ids);
+  const extra = await _extraPorOpciones(opcion_ids, pedido.sucursal_id);
   const precioBase = await _precioConPromocion(producto);
   const linea = _datosLinea({ cantidad, peso }, producto, precioBase, extra);
 

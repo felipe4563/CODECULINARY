@@ -757,7 +757,7 @@ describe('Ventas — opciones por producto dentro de un combo', () => {
     otroProductoId = otroProducto.id;
     await ProductoStockSucursal.create({ producto_id: otroProductoId, sucursal_id: sucursalId, stock: 20 });
 
-    const grupo = await GrupoOpciones.create({ sucursal_id: await idSucursalPrincipal(), nombre: 'Tamaño Combo Opciones Ventas Test', tipo_seleccion: 'unica' });
+    const grupo = await GrupoOpciones.create({ sucursal_id: sucursalId, nombre: 'Tamaño Combo Opciones Ventas Test', tipo_seleccion: 'unica' });
     grupoId = grupo.id;
     const opcion = await Opcion.create({ grupo_opciones_id: grupoId, nombre: 'Grande', precio_adicional: 3, orden: 0 });
     opcionId = opcion.id;

@@ -35,12 +35,12 @@ async function obtenerMenu(sucursal_id) {
 // (mismo motivo que autoservicio.service.js:validarCupon). Es solo una
 // vista previa: el pedido real vuelve a validar el cupón (y su límite de
 // usos) dentro de la transacción de crearCompleta.
-async function validarCupon({ codigo, items }) {
+async function validarCupon(sucursal_id, { codigo, items }) {
   const idsProducto = [...new Set((items || []).filter((i) => i.producto_id).map((i) => Number(i.producto_id)))];
   const idsCombo = [...new Set((items || []).filter((i) => i.combo_id).map((i) => Number(i.combo_id)))];
   const [productos, combos] = await Promise.all([
-    idsProducto.length > 0 ? Producto.findAll({ where: { id: idsProducto }, attributes: ['id', 'precio'] }) : [],
-    idsCombo.length > 0 ? Combo.findAll({ where: { id: idsCombo }, attributes: ['id', 'precio'] }) : [],
+    idsProducto.length > 0 ? Producto.findAll({ where: { id: idsProducto, sucursal_id }, attributes: ['id', 'precio'] }) : [],
+    idsCombo.length > 0 ? Combo.findAll({ where: { id: idsCombo, sucursal_id }, attributes: ['id', 'precio'] }) : [],
   ]);
   const preciosProducto = new Map(productos.map((p) => [p.id, parseFloat(p.precio)]));
   const preciosCombo = new Map(combos.map((c) => [c.id, parseFloat(c.precio)]));

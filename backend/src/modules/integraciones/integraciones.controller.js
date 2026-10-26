@@ -33,7 +33,7 @@ async function validarCupon(req, res, next) {
     if (!codigo || typeof codigo !== 'string') {
       return res.status(400).json({ ok: false, mensaje: 'codigo es requerido' });
     }
-    res.json({ ok: true, datos: await svc.validarCupon({ codigo, items }) });
+    res.json({ ok: true, datos: await svc.validarCupon(req.sucursal_id, { codigo, items }) });
   } catch (err) { next(err); }
 }
 
