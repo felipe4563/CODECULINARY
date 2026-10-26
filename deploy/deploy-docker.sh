@@ -75,6 +75,10 @@ main() {
     echo "$NUEVAS" | sed 's/^/    /'
     echo "  Respaldá la base primero y aplicá cada una, por ejemplo:"
     echo "    docker compose exec -T db sh -c 'mysql -uroot -p\"\$MYSQL_ROOT_PASSWORD\" \"\$MYSQL_DATABASE\"' < backend/database/migrations/<archivo>.sql"
+    # La imagen no trae database/ (.dockerignore): se monta la carpeta del repo.
+    echo "  Justo después de la 053 (catálogo por sucursal) corré una sola vez el script de datos"
+    echo "  (node database/scripts/migrar-catalogo-por-sucursal.js), por ejemplo:"
+    echo "    TAG=${TAG} docker compose run --rm --no-deps -v \"\$PWD/backend/database/scripts:/app/database/scripts:ro\" backend node database/scripts/migrar-catalogo-por-sucursal.js"
   fi
 
   echo "==> Limpiando imágenes viejas de este proyecto..."
