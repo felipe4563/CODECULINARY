@@ -108,6 +108,9 @@ async function copiarCatalogo(req, res, next) {
     if (!origen_id || !destino_id) {
       return res.status(400).json({ ok: false, mensaje: 'origen_id y destino_id son requeridos' });
     }
+    if ([categoria_ids, producto_ids, combo_ids].some((v) => v !== undefined && !Array.isArray(v))) {
+      return res.status(400).json({ ok: false, mensaje: 'categoria_ids, producto_ids y combo_ids deben ser listas' });
+    }
     const { creados, omitidos } = await copiarCatalogoSvc({ origen_id, destino_id, categoria_ids, producto_ids, combo_ids });
     if (creados.productos || creados.combos) emitir('productos:actualizado', { tipo: 'copiado' });
     res.json({ ok: true, datos: { creados, omitidos } });

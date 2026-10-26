@@ -227,6 +227,15 @@ describe('Copiar catálogo entre sucursales', () => {
       expect(res.body.mensaje).toBe('La sucursal origen y destino deben ser distintas');
     });
 
+    it('categoria_ids, producto_ids o combo_ids que no son listas → 400', async () => {
+      for (const campo of ['categoria_ids', 'producto_ids', 'combo_ids']) {
+        const res = await request(app).post('/api/v1/productos/copiar').set(auth(ctx.tokenGlobal))
+          .send({ origen_id: ctx.sucursalA.id, destino_id: ctx.sucursalB.id, [campo]: '5' });
+        expect(res.status).toBe(400);
+        expect(res.body.mensaje).toBe('categoria_ids, producto_ids y combo_ids deben ser listas');
+      }
+    });
+
     it('el global copia y recibe creados y omitidos', async () => {
       const cat = await Categoria.create({ sucursal_id: ctx.sucursalA.id, nombre: 'Cat Ruta' });
       await Producto.create({ sucursal_id: ctx.sucursalA.id, categoria_id: cat.id, nombre: 'Prod Ruta', precio: 10 });
