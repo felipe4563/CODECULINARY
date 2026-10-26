@@ -4,8 +4,9 @@ import { Download, Layers, ShoppingCart, DollarSign, Trophy } from 'lucide-react
 import { getReporteVentasProductos, getReporteVentasResumen } from '../../../api/reportes';
 import { useAuth } from '../../../hooks/useAuth';
 import { useAuthStore } from '../../../store/authStore';
+import { useSucursalCatalogo } from '../../../store/catalogoSucursalStore';
 import { exportarPDF } from '../utils/exportarPDF';
-import { FiltroFechas, StatCard, Skeleton, bs, fecha, hoy, inicioMes } from '../shared';
+import { FiltroFechas, StatCard, Skeleton, bs, fecha, hoy, inicioMes, nombreConSucursal } from '../shared';
 
 const puestoClase = (i) =>
   i === 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400'
@@ -36,6 +37,7 @@ function ProductoCard({ producto, i, maxCantidad, pct }) {
 export default function TabProductos({ empresa, logo, direccion, telefono }) {
   const { usuario } = useAuth();
   const accesoTodas = useAuthStore((s) => s.usuario?.sucursal_activa?.id == null);
+  const { esGlobal } = useSucursalCatalogo();
   const [filtroSucursal, setFiltroSucursal] = useState('todas');
   const [desde, setDesde] = useState(inicioMes());
   const [hasta, setHasta] = useState(hoy());
@@ -56,7 +58,10 @@ export default function TabProductos({ empresa, logo, direccion, telefono }) {
   });
   const sucursales = resumen?.filtros?.sucursales ?? [];
 
-  const productos = data;
+  const productos = useMemo(
+    () => data.map((p) => ({ ...p, nombre: nombreConSucursal(p, esGlobal) })),
+    [data, esGlobal]
+  );
 
   const stats = useMemo(() => {
     const ingresoTotal = productos.reduce((s, p) => s + p.monto, 0);

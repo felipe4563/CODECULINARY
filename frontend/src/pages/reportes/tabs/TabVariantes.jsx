@@ -4,8 +4,9 @@ import { Download, Layers, ShoppingCart, DollarSign, Trophy } from 'lucide-react
 import { getReporteVentasVariantes, getReporteVentasResumen } from '../../../api/reportes';
 import { useAuth } from '../../../hooks/useAuth';
 import { useAuthStore } from '../../../store/authStore';
+import { useSucursalCatalogo } from '../../../store/catalogoSucursalStore';
 import { exportarPDF } from '../utils/exportarPDF';
-import { FiltroFechas, StatCard, Skeleton, bs, fecha, hoy, inicioMes } from '../shared';
+import { FiltroFechas, StatCard, Skeleton, bs, fecha, hoy, inicioMes, nombreConSucursal } from '../shared';
 
 const puestoClase = (i) =>
   i === 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400'
@@ -39,6 +40,7 @@ function VarianteCard({ variante, i, maxCantidad, pct }) {
 export default function TabVariantes({ empresa, logo, direccion, telefono }) {
   const { usuario } = useAuth();
   const accesoTodas = useAuthStore((s) => s.usuario?.sucursal_activa?.id == null);
+  const { esGlobal } = useSucursalCatalogo();
   const [filtroSucursal, setFiltroSucursal] = useState('todas');
   const [desde, setDesde] = useState(inicioMes());
   const [hasta, setHasta] = useState(hoy());
@@ -48,10 +50,14 @@ export default function TabVariantes({ empresa, logo, direccion, telefono }) {
     sucursal_id: accesoTodas && filtroSucursal !== 'todas' ? filtroSucursal : undefined,
   };
 
-  const { data: variantes = [], isLoading } = useQuery({
+  const { data: datos = [], isLoading } = useQuery({
     queryKey: ['reporte-ventas-variantes', filtrosApi],
     queryFn: () => getReporteVentasVariantes(filtrosApi),
   });
+  const variantes = useMemo(
+    () => datos.map((v) => ({ ...v, nombre: nombreConSucursal(v, esGlobal) })),
+    [datos, esGlobal]
+  );
 
   const { data: resumen } = useQuery({
     queryKey: ['reporte-ventas-resumen', filtrosApi],

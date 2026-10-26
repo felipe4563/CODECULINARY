@@ -137,8 +137,10 @@ async function ventasProductos(filtros = {}, alcance) {
   const filas = await DetallePedido.findAll({
     include: [
       { model: Pedido, attributes: [], where, required: true },
-      { model: Producto, as: 'producto', attributes: ['nombre'], required: false },
-      { model: Combo, as: 'combo', attributes: ['nombre'], required: false },
+      // Con catálogo por sucursal dos productos pueden llamarse igual: se
+      // agrega la sucursal de cada uno para distinguirlos.
+      { model: Producto, as: 'producto', attributes: ['nombre'], required: false, include: [{ ...INCLUDE_SUCURSAL, attributes: ['nombre'] }] },
+      { model: Combo, as: 'combo', attributes: ['nombre'], required: false, include: [{ ...INCLUDE_SUCURSAL, attributes: ['nombre'] }] },
     ],
     attributes: [
       'producto_id',
@@ -151,7 +153,10 @@ async function ventasProductos(filtros = {}, alcance) {
       [fn('SUM', literal('`DetallePedido`.`cantidad` * `DetallePedido`.`precio`')), 'monto'],
       [literal("MAX(CASE WHEN `DetallePedido`.`peso` IS NOT NULL THEN 'kg' ELSE 'un' END)"), 'unidad'],
     ],
-    group: ['DetallePedido.producto_id', 'DetallePedido.combo_id', 'producto.nombre', 'combo.nombre'],
+    group: [
+      'DetallePedido.producto_id', 'DetallePedido.combo_id', 'producto.nombre', 'combo.nombre',
+      'producto->sucursal.nombre', 'combo->sucursal.nombre',
+    ],
     order: [[literal('cantidad'), 'DESC']],
     raw: true,
   });
@@ -160,6 +165,7 @@ async function ventasProductos(filtros = {}, alcance) {
     id: f.producto_id ?? f.combo_id,
     tipo: f.producto_id ? 'producto' : 'combo',
     nombre: f['producto.nombre'] ?? f['combo.nombre'] ?? '(eliminado)',
+    sucursal_nombre: f['producto.sucursal.nombre'] ?? f['combo.sucursal.nombre'] ?? null,
     cantidad: parseFloat(f.cantidad || 0),
     monto: parseFloat(f.monto || 0),
     unidad: f.unidad || 'un',
@@ -214,8 +220,8 @@ async function ventasVariantes(filtros = {}, alcance) {
   const detalles = await DetallePedido.findAll({
     include: [
       { model: Pedido, attributes: [], where, required: true },
-      { model: Producto, as: 'producto', attributes: ['id', 'nombre'], required: false },
-      { model: Combo, as: 'combo', attributes: ['id', 'nombre'], required: false },
+      { model: Producto, as: 'producto', attributes: ['id', 'nombre'], required: false, include: [{ ...INCLUDE_SUCURSAL, attributes: ['nombre'] }] },
+      { model: Combo, as: 'combo', attributes: ['id', 'nombre'], required: false, include: [{ ...INCLUDE_SUCURSAL, attributes: ['nombre'] }] },
       { model: Opcion, as: 'opciones', attributes: ['id', 'nombre'], through: { attributes: [] } },
       {
         model: DetallePedidoComboOpcion, as: 'combo_opciones', required: false,
@@ -239,6 +245,7 @@ async function ventasVariantes(filtros = {}, alcance) {
       const conOpciones = _esLineaCombo(d) ? (d.combo_opciones || []).length > 0 : (d.opciones || []).length > 0;
       mapa.set(clave, {
         clave, nombre: _nombreVariante(d), unidad: esPesable ? 'kg' : 'un',
+        sucursal_nombre: (_esLineaCombo(d) ? d.combo?.sucursal?.nombre : d.producto?.sucursal?.nombre) ?? null,
         conOpciones, cantidad: 0, monto: 0, ventas: 0,
       });
     }

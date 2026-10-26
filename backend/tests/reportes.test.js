@@ -295,6 +295,15 @@ describe('GET /api/v1/reportes/ventas/productos', () => {
     // monto: (2 * 8) + (3 * 5) = 16 + 15 = 31
     expect(fila.monto).toBe(31);
   });
+
+  test('cada fila trae el nombre de la sucursal del producto', async () => {
+    const res = await request(app)
+      .get('/api/v1/reportes/ventas/productos')
+      .set('Authorization', `Bearer ${token}`);
+    const sucursal = await Sucursal.findByPk(producto.sucursal_id);
+    const fila = res.body.datos.find(p => p.id === producto.id && p.tipo === 'producto');
+    expect(fila.sucursal_nombre).toBe(sucursal.nombre);
+  });
 });
 
 describe('GET /api/v1/reportes/ventas/variantes', () => {
@@ -369,6 +378,10 @@ describe('GET /api/v1/reportes/ventas/variantes', () => {
     expect(conOpciones.cantidad).toBe(2);
     expect(conOpciones.ventas).toBe(2);
     expect(conOpciones.monto).toBe(24);
+
+    const sucursal = await Sucursal.findByPk(producto.sucursal_id);
+    expect(sinOpciones.sucursal_nombre).toBe(sucursal.nombre);
+    expect(conOpciones.sucursal_nombre).toBe(sucursal.nombre);
   });
 });
 
@@ -432,6 +445,8 @@ describe('GET /api/v1/reportes/ventas/variantes — combos con opciones por prod
     expect(filaGrande.monto).toBe(23);
     expect(filaChica.cantidad).toBe(1);
     expect(filaChica.monto).toBe(20);
+    const sucursal = await Sucursal.findByPk(combo.sucursal_id);
+    expect(filaGrande.sucursal_nombre).toBe(sucursal.nombre);
   });
 });
 
