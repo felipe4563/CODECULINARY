@@ -46,16 +46,18 @@ function init(server) {
       // cajas) mandan un único `caja_id` en vez de `caja_ids`.
       const idsFinal = Array.isArray(caja_ids) && caja_ids.length ? caja_ids : (caja_id ? [caja_id] : []);
       agentesConectados.set(socket.id, { sucursal_id, caja_ids: idsFinal, conectado_en: Date.now() });
+      console.log(`Agente de impresión conectado: ${socket.id} (sucursal ${sucursal_id}, cajas ${idsFinal.join(',') || '-'})`);
       if (idsFinal.length) {
         idsFinal.forEach((id) => emitir('agente:estado', { caja_id: id, conectado: true }, sucursal_id));
       } else {
         emitir('agente:estado', { caja_id: null, conectado: true }, sucursal_id);
       }
     });
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (motivo) => {
       console.log('Socket desconectado:', socket.id);
       const info = agentesConectados.get(socket.id);
       if (info) {
+        console.log(`Agente de impresión DESCONECTADO: ${socket.id} (sucursal ${info.sucursal_id}, cajas ${info.caja_ids.join(',') || '-'}, motivo: ${motivo})`);
         agentesConectados.delete(socket.id);
         if (info.caja_ids.length) {
           info.caja_ids.forEach((id) => emitir('agente:estado', { caja_id: id, conectado: false }, info.sucursal_id));

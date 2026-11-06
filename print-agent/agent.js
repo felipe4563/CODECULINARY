@@ -272,6 +272,36 @@ socket.on('print:cocina', async function(datos) {
   catch (err) { console.error('[' + ts() + '] ERROR cocina (socket): ' + err.message); }
 });
 
+// Reconexión forzada pedida desde el dashboard (POST /reconectar, abajo):
+// corta el socket y lo vuelve a abrir en vez de esperar al próximo reintento
+// automático, por si quedó trabado. Resuelve con el resultado del primer
+// intento (o con timeout), para que el dashboard pueda mostrarlo.
+const TIMEOUT_RECONEXION_MS = 8000;
+
+function reconectarSocket() {
+  return new Promise(function(resolve) {
+    var terminado = false;
+    function fin(resultado) {
+      if (terminado) return;
+      terminado = true;
+      clearTimeout(timer);
+      socket.off('connect', alConectar);
+      socket.off('connect_error', alFallar);
+      resolve(resultado);
+    }
+    function alConectar() { fin({ conectado: true }); }
+    function alFallar(e) { fin({ conectado: false, error: e.message }); }
+    var timer = setTimeout(function() {
+      fin({ conectado: false, error: 'el servidor no respondió en ' + (TIMEOUT_RECONEXION_MS / 1000) + ' s' });
+    }, TIMEOUT_RECONEXION_MS);
+    socket.on('connect', alConectar);
+    socket.on('connect_error', alFallar);
+    console.log('[' + ts() + '] ↻ Reconexión forzada pedida desde el dashboard');
+    socket.disconnect();
+    socket.connect();
+  });
+}
+
 // ── Canal 2: HTTP local (principal — el navegador de ESTA PC llama directo, sin Internet) ──
 // Solo escucha en 127.0.0.1: nadie fuera de esta máquina puede llegar a este puerto.
 
@@ -298,7 +328,7 @@ function origenPermitido(req) {
 
 function enviarCors(req, res) {
   res.setHeader('Access-Control-Allow-Origin', origenPermitido(req));
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   // Chrome exige esta cabecera para permitir que una página https:// (red pública)
   // le hable a 127.0.0.1 (red privada) — "Private Network Access".
@@ -358,9 +388,18 @@ const servidorLocal = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === 'POST' && pathname === '/reconectar') {
+    const resultado = await reconectarSocket();
+    if (resultado.conectado) console.log('[' + ts() + '] ✓ Reconexión forzada OK');
+    else console.log('[' + ts() + '] ✗ Reconexión forzada falló: ' + resultado.error);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, conectado: resultado.conectado, error: resultado.error || null, servidor: config.servidor }));
+    return;
+  }
+
   if (req.method === 'GET' && req.url === '/salud') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, sucursal_id: config.sucursal_id || null }));
+    res.end(JSON.stringify({ ok: true, sucursal_id: config.sucursal_id || null, caja_ids: cajaIds, conectado: socket.connected }));
     return;
   }
 

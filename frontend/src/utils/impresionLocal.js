@@ -13,9 +13,9 @@ import { useImpresionStore } from '../store/impresionStore';
 const PUERTO_AGENTE_LOCAL = 4321;
 const TIMEOUT_MS = 1500;
 
-function postConTimeout(url, body) {
+function postConTimeout(url, body, timeoutMs = TIMEOUT_MS) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   return fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -133,4 +133,23 @@ export function imprimirCierreLocal(reporte, config) {
   postConTimeout(`${base}/imprimir/cierre`, { reporte, config }).catch(() => {
     imprimirTicketCierreCaja(reporte, config);
   });
+}
+
+// Botón "Reconectar" del dashboard: le pide al agente de ESTA PC que corte y
+// rehaga su socket.io con el servidor. El agente espera hasta 8 s el primer
+// intento, así que acá se le da más margen que a una impresión. Devuelve:
+// - { estado: 'reconectado' }
+// - { estado: 'sin_servidor', error }  el agente corre pero no llega al servidor
+// - { estado: 'agente_viejo' }         agente instalado antes de existir /reconectar
+// - { estado: 'sin_agente' }           no hay agente corriendo en esta PC
+export async function reconectarAgenteLocal() {
+  const base = `http://127.0.0.1:${PUERTO_AGENTE_LOCAL}`;
+  try {
+    const res = await postConTimeout(`${base}/reconectar`, {}, 12_000);
+    if (res.status === 404) return { estado: 'agente_viejo' };
+    const datos = await res.json();
+    return datos.conectado ? { estado: 'reconectado' } : { estado: 'sin_servidor', error: datos.error };
+  } catch {
+    return { estado: 'sin_agente' };
+  }
 }
