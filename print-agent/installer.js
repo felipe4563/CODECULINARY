@@ -274,6 +274,10 @@ function showConfigForm(defaults, sucursales, instalado) {
   const outFile     = path.join(os.tmpdir(), `agente_cfg_${Date.now()}.txt`);
   const defCaja     = defaults.impresora_caja   || '';
   const defCocina   = defaults.impresora_cocina || '';
+  // Índice en el combo de ancho: 0 = 80mm (por defecto), 1 = 58mm (rollos de 55/58mm).
+  const esAngosto   = (a) => ['58mm', '55mm'].includes(String(a || '').toLowerCase());
+  const idxAnchoCaja   = esAngosto(defaults.ancho_caja) ? 1 : 0;
+  const idxAnchoCocina = esAngosto(defaults.ancho_cocina) ? 1 : 0;
   const outFileSafe = outFile.replace(/\\/g, '\\\\');
   const subtitulo   = instalado
     ? 'El agente ya esta instalado. Puede actualizar la configuracion o desinstalarlo.'
@@ -371,11 +375,25 @@ $lblCaja.Size     = New-Object System.Drawing.Size(300, 20)
 $cbCaja = New-Object System.Windows.Forms.ComboBox
 $cbCaja.Font          = New-Object System.Drawing.Font("Segoe UI", 9)
 $cbCaja.Location      = New-Object System.Drawing.Point(190, 168)
-$cbCaja.Size          = New-Object System.Drawing.Size(450, 26)
+$cbCaja.Size          = New-Object System.Drawing.Size(320, 26)
 $cbCaja.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDown
 foreach ($p in $printers) { $cbCaja.Items.Add($p) | Out-Null }
 $cbCaja.Text = "${defCaja}"
 if ($cbCaja.Text -eq "" -and $cbCaja.Items.Count -gt 0) { $cbCaja.SelectedIndex = 0 }
+
+$lblAnchoCaja = New-Object System.Windows.Forms.Label
+$lblAnchoCaja.Text     = "Papel:"
+$lblAnchoCaja.Font     = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$lblAnchoCaja.Location = New-Object System.Drawing.Point(520, 146)
+$lblAnchoCaja.Size     = New-Object System.Drawing.Size(120, 20)
+
+$cbAnchoCaja = New-Object System.Windows.Forms.ComboBox
+$cbAnchoCaja.Font          = New-Object System.Drawing.Font("Segoe UI", 9)
+$cbAnchoCaja.Location      = New-Object System.Drawing.Point(520, 168)
+$cbAnchoCaja.Size          = New-Object System.Drawing.Size(120, 26)
+$cbAnchoCaja.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+$cbAnchoCaja.Items.AddRange(@("80 mm", "58 / 55 mm"))
+$cbAnchoCaja.SelectedIndex = ${idxAnchoCaja}
 
 $lblCocina = New-Object System.Windows.Forms.Label
 $lblCocina.Text     = "Impresora de Cocina (comandas):"
@@ -386,11 +404,25 @@ $lblCocina.Size     = New-Object System.Drawing.Size(300, 20)
 $cbCocina = New-Object System.Windows.Forms.ComboBox
 $cbCocina.Font          = New-Object System.Drawing.Font("Segoe UI", 9)
 $cbCocina.Location      = New-Object System.Drawing.Point(190, 232)
-$cbCocina.Size          = New-Object System.Drawing.Size(450, 26)
+$cbCocina.Size          = New-Object System.Drawing.Size(320, 26)
 $cbCocina.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDown
 foreach ($p in $printers) { $cbCocina.Items.Add($p) | Out-Null }
 $cbCocina.Text = "${defCocina}"
 if ($cbCocina.Text -eq "" -and $cbCocina.Items.Count -gt 0) { $cbCocina.SelectedIndex = 0 }
+
+$lblAnchoCocina = New-Object System.Windows.Forms.Label
+$lblAnchoCocina.Text     = "Papel:"
+$lblAnchoCocina.Font     = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$lblAnchoCocina.Location = New-Object System.Drawing.Point(520, 210)
+$lblAnchoCocina.Size     = New-Object System.Drawing.Size(120, 20)
+
+$cbAnchoCocina = New-Object System.Windows.Forms.ComboBox
+$cbAnchoCocina.Font          = New-Object System.Drawing.Font("Segoe UI", 9)
+$cbAnchoCocina.Location      = New-Object System.Drawing.Point(520, 232)
+$cbAnchoCocina.Size          = New-Object System.Drawing.Size(120, 26)
+$cbAnchoCocina.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+$cbAnchoCocina.Items.AddRange(@("80 mm", "58 / 55 mm"))
+$cbAnchoCocina.SelectedIndex = ${idxAnchoCocina}
 
 $sep2 = New-Object System.Windows.Forms.Panel
 $sep2.BackColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
@@ -418,8 +450,8 @@ $btnInstalar.DialogResult = [System.Windows.Forms.DialogResult]::OK
 $form.Controls.AddRange(@(
   $lblTitulo, $lblSub, $sep1,
   $lblSucursal, $cbSucursal,
-  $lblCaja, $cbCaja,
-  $lblCocina, $cbCocina,
+  $lblCaja, $cbCaja, $lblAnchoCaja, $cbAnchoCaja,
+  $lblCocina, $cbCocina, $lblAnchoCocina, $cbAnchoCocina,
   $sep2, $btnCancelar, $btnInstalar
 ))
 $form.AcceptButton = $btnInstalar
@@ -430,7 +462,7 @@ ${btnDesinstalarPS}
 $result = $form.ShowDialog()
 
 if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
-  $lines = @("OK", $cbSucursal.SelectedIndex, $cbCaja.Text, $cbCocina.Text)
+  $lines = @("OK", $cbSucursal.SelectedIndex, $cbCaja.Text, $cbCocina.Text, $cbAnchoCaja.SelectedIndex, $cbAnchoCocina.SelectedIndex)
   [System.IO.File]::WriteAllLines("${outFileSafe}", $lines)
 } elseif (-not [System.IO.File]::Exists("${outFileSafe}")) {
   [System.IO.File]::WriteAllText("${outFileSafe}", "CANCEL")
@@ -463,6 +495,8 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
       sucursal_id:      sucursalElegida.id,
       impresora_caja:   (raw[2] || '').trim(),
       impresora_cocina: (raw[3] || '').trim(),
+      ancho_caja:       (raw[4] || '').trim() === '1' ? '58mm' : '80mm',
+      ancho_cocina:     (raw[5] || '').trim() === '1' ? '58mm' : '80mm',
     };
   } catch { return 'CANCEL'; }
 }
@@ -948,7 +982,10 @@ async function main() {
     install({
       servidor, sucursal_id: resultado.sucursal_id,
       impresora_caja: resultado.impresora_caja, impresora_cocina: resultado.impresora_cocina,
+      ancho_caja: resultado.ancho_caja, ancho_cocina: resultado.ancho_cocina,
       caja_ids,
+      // Se conserva lo que ya tuviera la instalación (no se elige en el formulario).
+      ...(defaults.codepage ? { codepage: defaults.codepage } : {}),
     });
   } catch (err) {
     showMessage('Error inesperado', `El instalador encontró un error:\n${err.message}`, true);

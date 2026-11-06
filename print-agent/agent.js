@@ -158,7 +158,7 @@ async function imprimirCaja(datos, origen, forzar) {
   reservar('caja', pid);
   console.log('[' + ts() + '] >> print:caja  Pedido #' + pid + ' (' + origen + (forzar ? ', forzado' : '') + ')');
   try {
-    await printRaw(config.impresora_caja, buildCaja(datos));
+    await printRaw(config.impresora_caja, buildCaja(datos, COLS_CAJA));
     console.log('[' + ts() + '] OK Caja impreso');
   } catch (err) {
     liberar('caja', pid);
@@ -180,7 +180,7 @@ async function imprimirCocina(datos, origen, forzar) {
   reservar('cocina', pid);
   console.log('[' + ts() + '] >> print:cocina Pedido #' + pid + ' (' + origen + (forzar ? ', forzado' : '') + ')');
   try {
-    await printRaw(config.impresora_cocina, buildCocina(datos));
+    await printRaw(config.impresora_cocina, buildCocina(datos, COLS_COCINA));
     console.log('[' + ts() + '] OK Cocina impreso');
   } catch (err) {
     liberar('cocina', pid);
@@ -194,7 +194,7 @@ async function imprimirCocina(datos, origen, forzar) {
 // cada cierre es un evento único.
 async function imprimirCierre(datos, origen) {
   console.log('[' + ts() + '] >> print:cierre Sesión #' + (datos.reporte && datos.reporte.sesion ? datos.reporte.sesion.id : '?') + ' (' + origen + ')');
-  await printRaw(config.impresora_caja, buildCierre(datos));
+  await printRaw(config.impresora_caja, buildCierre(datos, COLS_CAJA));
   console.log('[' + ts() + '] OK Cierre impreso');
 }
 
@@ -382,7 +382,19 @@ servidorLocal.listen(PUERTO_LOCAL, '127.0.0.1', () => {
 
 // ── ESC/POS ──────────────────────────────────────────────────────────────────
 
-const COLS = 48;
+// Ancho del papel, por impresora ("ancho_caja" / "ancho_cocina" en
+// config.json): 80mm = 48 columnas, 58mm (rollos de 55/57/58mm) = 32
+// columnas, con la fuente estándar (Font A). Sin configurar → 80mm, como
+// era siempre antes de existir esta opción.
+const COLUMNAS_POR_ANCHO = { '80mm': 48, '58mm': 32, '55mm': 32 };
+
+function columnasPara(ancho) {
+  return COLUMNAS_POR_ANCHO[String(ancho || '80mm').toLowerCase()] || 48;
+}
+
+const COLS_CAJA   = columnasPara(config.ancho_caja);
+const COLS_COCINA = columnasPara(config.ancho_cocina);
+console.log('Papel    : caja ' + (COLS_CAJA === 48 ? '80mm' : '58mm') + ' (' + COLS_CAJA + ' col), cocina ' + (COLS_COCINA === 48 ? '80mm' : '58mm') + ' (' + COLS_COCINA + ' col)');
 
 // Tres formas de mandar tildes/ñ, elegibles con "codepage" en config.json.
 // Muchas impresoras térmicas clon no respetan la tabla PC850 tal como la
@@ -438,7 +450,7 @@ function _opcionesPorProducto(comboOpciones) {
 }
 
 class Esc {
-  constructor() { this.b = []; }
+  constructor(cols) { this.b = []; this.COLS = cols || 48; }
   raw(bytes)  { this.b.push(...bytes); return this; }
   init()      { return this.raw([0x1B, 0x40]); }
   charset()   { return this.raw([0x1B, 0x74, TABLA_ESC_T[CODEPAGE]]); }
@@ -452,6 +464,9 @@ class Esc {
   dbl()       { return this.raw([0x1D, 0x21, 0x11]); }
   dblH()      { return this.raw([0x1D, 0x21, 0x01]); }
   dblW()      { return this.raw([0x1D, 0x21, 0x10]); }
+  // Texto destacado de un ítem: doble alto y ancho en 80mm; en 58mm solo doble
+  // alto, porque a doble ancho entran 16 letras y los nombres se cortan.
+  destacado() { return this.COLS >= 48 ? this.dbl() : this.dblH(); }
   text(s) {
     var str = String(s != null ? s : '');
     if (CODEPAGE === 'ascii') str = quitarAcentos(str);
@@ -464,18 +479,18 @@ class Esc {
     return this;
   }
   line(s)  { return this.text(s != null ? s : '').lf(); }
-  rule(c)  { var ch = c || '-'; return this.line(ch.repeat(COLS)); }
+  rule(c)  { var ch = c || '-'; return this.line(ch.repeat(this.COLS)); }
   cols(left, right) {
     var r  = String(right != null ? right : '');
     var l  = String(left  != null ? left  : '');
-    const lw = COLS - r.length;
+    const lw = this.COLS - r.length;
     const lp = l.length > lw ? l.substring(0, lw - 1) + '.' : l.padEnd(lw);
     return this.line(lp + r);
   }
   build() { return Buffer.from(this.b); }
 }
 
-function buildCaja(data) {
+function buildCaja(data, cols) {
   var pedido      = data.pedido;
   var metodo_pago = data.metodo_pago;
   var cfg         = data.config || {};
@@ -507,7 +522,7 @@ function buildCaja(data) {
   var descuentoPuntos = Math.max(0, subtotalLineas - descuento - descuentoCupon + propina - total);
   var hayAjustes      = descuento > 0 || descuentoCupon > 0 || descuentoPuntos > 0 || propina > 0;
 
-  var t = new Esc();
+  var t = new Esc(cols);
   t.init().charset();
 
   // ── Encabezado ────────────────────────────────────────────────────────────
@@ -536,7 +551,7 @@ function buildCaja(data) {
   t.rule('-');
 
   // ── Items ─────────────────────────────────────────────────────────────────
-  t.left().line('Cant  Descripcion                      Importe');
+  t.left().cols('Cant  Descripcion', 'Importe');
   t.rule('-');
   var detalles = pedido.detalles || [];
   for (var i = 0; i < detalles.length; i++) {
@@ -611,10 +626,17 @@ function buildCaja(data) {
   return t.build();
 }
 
-function buildCocina(data) {
+// Precio unitario + subtotal de un ítem de cocina. En 80mm queda igual que
+// siempre; en 58mm no entra en una línea, así que se alinea a dos columnas.
+function lineaPrecioCocina(t, precio, subtotal) {
+  if (t.COLS >= 48) t.left().line('     ' + precio + '       Sub: ' + subtotal);
+  else t.left().cols('  ' + precio, 'Sub: ' + subtotal);
+}
+
+function buildCocina(data, cols) {
   var pedido   = data.pedido;
   var cfg      = data.config || {};
-  var t        = new Esc();
+  var t        = new Esc(cols);
   var esLlevar = pedido.tipo === 'llevar';
   var esDelivery = pedido.tipo === 'delivery';
   var nLevar   = pedido.numero_llevar != null ? pedido.numero_llevar : pedido.id;
@@ -665,13 +687,13 @@ function buildCocina(data) {
     if (d2.peso != null) {
       var pesoKg2   = parseFloat(d2.peso).toFixed(3);
       var precioKg2 = parseFloat((d2.producto && d2.producto.precio) || 0).toFixed(2);
-      t.left().dbl().bold(true).line(pesoKg2 + 'kg  ' + prod2).normal().bold(false);
-      t.left().line('     ' + sym + ' ' + precioKg2 + '/kg       Sub: ' + sym + ' ' + sub2);
+      t.left().destacado().bold(true).line(pesoKg2 + 'kg  ' + prod2).normal().bold(false);
+      lineaPrecioCocina(t, sym + ' ' + precioKg2 + '/kg', sym + ' ' + sub2);
     } else {
       var qty2 = d2.cantidad;
       var pu2  = parseFloat(d2.precio).toFixed(2);
-      t.left().dbl().bold(true).line(qty2 + '  ' + prod2).normal().bold(false);
-      t.left().line('     ' + sym + ' ' + pu2 + ' c/u       Sub: ' + sym + ' ' + sub2);
+      t.left().destacado().bold(true).line(qty2 + '  ' + prod2).normal().bold(false);
+      lineaPrecioCocina(t, sym + ' ' + pu2 + ' c/u', sym + ' ' + sub2);
     }
     if (esCombo2 && d2.combo.productos && d2.combo.productos.length) {
       var opcionesPorProducto2 = _opcionesPorProducto(d2.combo_opciones);
@@ -706,7 +728,7 @@ function buildCocina(data) {
   return t.build();
 }
 
-function buildCierre(data) {
+function buildCierre(data, cols) {
   var reporte = data.reporte;
   var cfg     = data.config || {};
   var sesion  = reporte.sesion;
@@ -732,7 +754,7 @@ function buildCierre(data) {
     return new Date(f).toLocaleString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   }
 
-  var t = new Esc();
+  var t = new Esc(cols);
   t.init().charset();
 
   // ── Encabezado ────────────────────────────────────────────────────────────
@@ -751,7 +773,7 @@ function buildCierre(data) {
   // ── Productos vendidos ────────────────────────────────────────────────────
   t.left().bold(true).line('PRODUCTOS VENDIDOS').bold(false);
   if (productosVendidos.length) {
-    t.left().line('Cant  Producto                      Total');
+    t.left().cols('Cant  Producto', 'Total');
     t.rule('-');
     for (var i = 0; i < productosVendidos.length; i++) {
       var p = productosVendidos[i];
