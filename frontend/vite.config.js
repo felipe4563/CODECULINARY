@@ -132,7 +132,12 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: true,   // escucha en 0.0.0.0, expone la IP local
-      port: 5173,
+      // Puerto propio (no el 5173 por defecto): en esta PC conviven otros
+      // proyectos Vite, y Windows deja que uno tome 0.0.0.0:5173 y otro
+      // [::1]:5173 sin error, así que `localhost` terminaba abriendo otro
+      // sistema. strictPort hace que falle en vez de compartirlo en silencio.
+      port: 5174,
+      strictPort: true,
     },
   };
 });
