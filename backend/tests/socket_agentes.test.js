@@ -1,7 +1,7 @@
 // backend/tests/socket_agentes.test.js
 const http = require('http');
 const { io: ioClient } = require('socket.io-client');
-const { init, estadoAgentes } = require('../src/socket');
+const { init, estadoAgentes, desconexionesAgentes } = require('../src/socket');
 
 describe('socket.js — estado de agentes de impresión', () => {
   let server, port, clientes = [];
@@ -53,5 +53,19 @@ describe('socket.js — estado de agentes de impresión', () => {
 
     expect(evento).toEqual({ caja_id: null, conectado: false });
     expect(estadoAgentes().find((a) => a.sucursal_id === 5151)).toBeUndefined();
+  });
+
+  it('al desconectarse registra la hora de la caída por cada caja del agente', async () => {
+    const agente = await conectarCliente();
+    agente.emit('agente:conectado', { sucursal_id: 6161, caja_ids: [881, 882] });
+    await new Promise((r) => setTimeout(r, 150));
+
+    const antes = Date.now();
+    agente.disconnect();
+    await new Promise((r) => setTimeout(r, 150));
+
+    const { desconexiones } = desconexionesAgentes();
+    expect(desconexiones.get(881)).toBeGreaterThanOrEqual(antes);
+    expect(desconexiones.get(882)).toBeGreaterThanOrEqual(antes);
   });
 });

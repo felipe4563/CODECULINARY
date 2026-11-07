@@ -14,6 +14,27 @@ const MENSAJES = {
   sin_agente: { tono: 'aviso', texto: 'No hay un agente de impresión funcionando en esta PC. Ábrelo desde su acceso directo o reinicia la PC (arranca solo al iniciar).' },
 };
 
+// "hace 5 min", "hace 3 h", "hace 2 días". El backend manda desde cuándo
+// está caída cada caja; con desde_inicio_servidor solo sabe que es "al
+// menos" desde que arrancó (se reinició y ese agente nunca volvió), de ahí
+// el "más de".
+function duracion(iso, ahora) {
+  const min = Math.max(0, Math.floor((ahora - new Date(iso).getTime()) / 60_000));
+  if (min < 1) return null;
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h} h`;
+  const d = Math.floor(h / 24);
+  return `${d} ${d === 1 ? 'día' : 'días'}`;
+}
+
+function textoDesconexion(agente, ahora) {
+  if (!agente.desconectado_desde) return 'Desconectado';
+  const dur = duracion(agente.desconectado_desde, ahora);
+  if (!dur) return 'Desconectado hace un momento';
+  return `Desconectado hace ${agente.desde_inicio_servidor ? 'más de ' : ''}${dur}`;
+}
+
 function mensajeDe(resultado) {
   if (resultado.estado === 'sin_servidor') {
     return { tono: 'aviso', texto: `El agente está abierto pero no logra conectarse al servidor${resultado.error ? ` (${resultado.error})` : ''}. Revisa la conexión a Internet de esta PC.` };
@@ -25,6 +46,12 @@ export default function EstadoAgentesImpresion() {
   const qc = useQueryClient();
   const [reconectando, setReconectando] = useState(false);
   const [mensaje, setMensaje] = useState(null);
+  // Re-render cada minuto para que el "hace X" avance sin esperar al refetch.
+  const [ahora, setAhora] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setAhora(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
   const { data: agentes = [], isLoading } = useQuery({
     queryKey: ['estado-agentes'],
     queryFn: () => getEstadoAgentes(),
@@ -83,8 +110,11 @@ export default function EstadoAgentesImpresion() {
                 <CheckCircle2 className="w-3.5 h-3.5" /> Conectado
               </span>
             ) : (
-              <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium shrink-0">
-                <AlertTriangle className="w-3.5 h-3.5" /> Desconectado
+              <span
+                className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium shrink-0"
+                title={a.desconectado_desde ? `Sin conexión desde ${new Date(a.desconectado_desde).toLocaleString('es-BO')}` : undefined}
+              >
+                <AlertTriangle className="w-3.5 h-3.5" /> {textoDesconexion(a, ahora)}
               </span>
             )}
           </div>

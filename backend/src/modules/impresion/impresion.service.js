@@ -1,5 +1,5 @@
 const { Caja, Sucursal } = require('../../models');
-const { estadoAgentes } = require('../../socket');
+const { estadoAgentes, desconexionesAgentes } = require('../../socket');
 
 async function obtenerEstadoAgentes(alcance) {
   const where = { modo_impresion: 'fisica', activo: 1 };
@@ -16,13 +16,24 @@ async function obtenerEstadoAgentes(alcance) {
     estadoAgentes().map((a) => a.caja_id).filter((id) => id != null)
   );
 
-  return cajas.map((c) => ({
-    caja_id: c.id,
-    caja_nombre: c.nombre,
-    sucursal_id: c.sucursal_id,
-    sucursal_nombre: c.sucursal ? c.sucursal.nombre : null,
-    conectado: conectados.has(c.id),
-  }));
+  const { desconexiones, servidor_iniciado_en } = desconexionesAgentes();
+
+  return cajas.map((c) => {
+    const conectado = conectados.has(c.id);
+    // Sin registro de caída desde que arrancó el servidor: se informa el
+    // arranque como cota mínima (desde_inicio_servidor → "hace más de X").
+    const registrada = desconexiones.get(c.id);
+    const desde = conectado ? null : (registrada ?? servidor_iniciado_en);
+    return {
+      caja_id: c.id,
+      caja_nombre: c.nombre,
+      sucursal_id: c.sucursal_id,
+      sucursal_nombre: c.sucursal ? c.sucursal.nombre : null,
+      conectado,
+      desconectado_desde: desde == null ? null : new Date(desde).toISOString(),
+      desde_inicio_servidor: !conectado && registrada == null,
+    };
+  });
 }
 
 module.exports = { obtenerEstadoAgentes };

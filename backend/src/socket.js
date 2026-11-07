@@ -10,6 +10,16 @@ let _io = null;
 // puntos de cobro).
 const agentesConectados = new Map();
 
+// caja_id -> timestamp (ms) de la última vez que se cayó el agente de esa
+// caja. Sirve para que el dashboard muestre "desconectado hace 3 h" y se
+// distinga un corte de segundos de una PC apagada desde la noche. Vive en
+// memoria: tras reiniciar el servidor (deploy, pm2 reload) se pierde, y para
+// las cajas sin registro se usa servidorIniciadoEn como cota ("al menos
+// desde que arrancó el servidor") — los agentes vivos se reconectan en
+// segundos tras un reinicio, así que la cota casi nunca queda corta.
+const ultimasDesconexiones = new Map();
+const servidorIniciadoEn = Date.now();
+
 function init(server) {
   const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
     .split(',')
@@ -59,6 +69,8 @@ function init(server) {
       if (info) {
         console.log(`Agente de impresión DESCONECTADO: ${socket.id} (sucursal ${info.sucursal_id}, cajas ${info.caja_ids.join(',') || '-'}, motivo: ${motivo})`);
         agentesConectados.delete(socket.id);
+        const ahora = Date.now();
+        info.caja_ids.forEach((id) => ultimasDesconexiones.set(id, ahora));
         if (info.caja_ids.length) {
           info.caja_ids.forEach((id) => emitir('agente:estado', { caja_id: id, conectado: false }, info.sucursal_id));
         } else {
@@ -96,4 +108,8 @@ function estadoAgentes() {
   return filas;
 }
 
-module.exports = { init, emitir, estadoAgentes };
+function desconexionesAgentes() {
+  return { desconexiones: ultimasDesconexiones, servidor_iniciado_en: servidorIniciadoEn };
+}
+
+module.exports = { init, emitir, estadoAgentes, desconexionesAgentes };
