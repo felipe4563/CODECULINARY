@@ -33,3 +33,5 @@ api_personas/
 # Simulador de la app de pedidos externa — herramienta de pruebas local, no
 # es parte del producto.
 frontend/public/simulador-app-externa.html
+# Binario y metadatos del agente de impresión publicados por el script de release
+backend/agente-dist/
