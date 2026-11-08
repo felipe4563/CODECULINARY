@@ -56,11 +56,22 @@ process.on('unhandledRejection', function(reason) {
 // garantiza indivisible, así solo uno de los dos puede ganar la carrera.
 const LOCK_FILE = path.join(CONFIG_DIR, 'agente.lock');
 
-function procesoVivo(pid) {
+// ¿El PID del lock es un agente vivo? No alcanza con que el PID exista:
+// si la PC se apagó de golpe (corte de luz, apagado forzado) el lock queda
+// con el PID de ayer, y al prender Windows REUTILIZA esos números — el PID
+// viejo suele pertenecer ahora a otro programa (un servicio, el antivirus).
+// Antes eso bastaba para que el agente creyera que ya había otro corriendo y
+// se cerrara, y la vigía repetía lo mismo cada 2 min todo el día ("ayer
+// funcionaba, hoy no"). Por eso se compara también el nombre del ejecutable
+// con el propio (agente-impresion.exe en producción, node.exe en dev).
+function esAgenteVivo(pid) {
   try {
-    // En Windows, tasklist devuelve la línea solo si el proceso existe
-    const out = execSync('tasklist /FI "PID eq ' + pid + '" /NH', { encoding: 'utf8' });
-    return out.includes(String(pid));
+    const out = execSync('tasklist /FI "PID eq ' + pid + '" /FO CSV /NH', { encoding: 'utf8' });
+    const propio = path.basename(process.execPath).toLowerCase();
+    return out.split(/\r?\n/).some(function(linea) {
+      const campos = linea.split('","').map(function(c) { return c.replace(/^"|"$/g, '').trim(); });
+      return campos.length > 1 && campos[1] === String(pid) && campos[0].toLowerCase() === propio;
+    });
   } catch { return false; }
 }
 
@@ -75,7 +86,8 @@ function tomarLock() {
     // en ese caso el PID ya no corresponde a nadie y es seguro tomar el lock.
     let pidViejo = NaN;
     try { pidViejo = parseInt(readFileSync(LOCK_FILE, 'utf8').trim(), 10); } catch {}
-    if (!isNaN(pidViejo) && procesoVivo(pidViejo)) return false;
+    if (!isNaN(pidViejo) && esAgenteVivo(pidViejo)) return false;
+    console.log('.. Lock abandonado (PID ' + (isNaN(pidViejo) ? '?' : pidViejo) + ' ya no es un agente) — se toma de nuevo');
     try { unlinkSync(LOCK_FILE); } catch {}
     try {
       writeFileSync(LOCK_FILE, String(process.pid), { encoding: 'utf8', flag: 'wx' });
@@ -278,8 +290,14 @@ socket.on('print:cocina', async function(datos) {
 // intento (o con timeout), para que el dashboard pueda mostrarlo.
 const TIMEOUT_RECONEXION_MS = 8000;
 
-function reconectarSocket() {
-  return new Promise(function(resolve) {
+// Si ya hay una reconexión en curso (p. ej. la vigía justo disparó y alguien
+// aprieta el botón del dashboard), se devuelve la misma promesa en vez de
+// cortar el socket por segunda vez a mitad del intento.
+let reconexionEnCurso = null;
+
+function reconectarSocket(motivo) {
+  if (reconexionEnCurso) return reconexionEnCurso;
+  reconexionEnCurso = new Promise(function(resolve) {
     var terminado = false;
     function fin(resultado) {
       if (terminado) return;
@@ -287,6 +305,7 @@ function reconectarSocket() {
       clearTimeout(timer);
       socket.off('connect', alConectar);
       socket.off('connect_error', alFallar);
+      reconexionEnCurso = null;
       resolve(resultado);
     }
     function alConectar() { fin({ conectado: true }); }
@@ -296,11 +315,64 @@ function reconectarSocket() {
     }, TIMEOUT_RECONEXION_MS);
     socket.on('connect', alConectar);
     socket.on('connect_error', alFallar);
-    console.log('[' + ts() + '] ↻ Reconexión forzada pedida desde el dashboard');
+    console.log('[' + ts() + '] ↻ Reconexión forzada (' + motivo + ')');
     socket.disconnect();
     socket.connect();
   });
+  return reconexionEnCurso;
 }
+
+// ── Vigía de conexión ─────────────────────────────────────────────────────────
+// socket.io ya reintenta solo, pero hay casos donde el reintento se traba:
+// típicamente una laptop/PC que despierta de suspensión con la conexión
+// "muerta" o con el backoff de reintentos colgado. Cada 30 s se revisa:
+// - si lleva más de 2 min sin conexión → se fuerza la reconexión (lo mismo
+//   que el botón del dashboard), y se vuelve a intentar cada 2 min;
+// - si entre una revisión y otra pasó mucho más tiempo del esperado, la PC
+//   estuvo suspendida → se fuerza la reconexión de inmediato, sin esperar.
+// Además, una vez por hora se deja una línea "♥ activo" en el log: si un
+// cliente dice que no imprimió, el log muestra desde qué hora el agente dejó
+// de estar vivo (no hay ♥) o de estar conectado (♥ con "conectado: no").
+const VIGIA_INTERVALO_MS      = 30 * 1000;
+const VIGIA_SIN_CONEXION_MS   = 2 * 60 * 1000;
+const VIGIA_SALTO_SUSPENSION  = 90 * 1000;   // un tick de 30 s que tardó >90 s
+const LATIDO_INTERVALO_MS     = 60 * 60 * 1000;
+
+const agenteIniciadoEn = Date.now();
+let sinConexionDesde = Date.now(); // arranca sin conexión hasta el primer connect
+let ultimoTick = Date.now();
+let ultimoLatido = Date.now();
+
+socket.on('connect', function() { sinConexionDesde = null; });
+socket.on('disconnect', function() { if (sinConexionDesde == null) sinConexionDesde = Date.now(); });
+
+function minutos(ms) { return Math.round(ms / 60000); }
+
+setInterval(function() {
+  const ahora = Date.now();
+  const desdeUltimoTick = ahora - ultimoTick;
+  ultimoTick = ahora;
+
+  if (desdeUltimoTick > VIGIA_SALTO_SUSPENSION) {
+    console.log('[' + ts() + '] ↯ La PC estuvo suspendida ~' + minutos(desdeUltimoTick) + ' min');
+    reconectarSocket('vigía: la PC volvió de suspensión').then(function(r) {
+      console.log('[' + ts() + '] ' + (r.conectado ? '✓ Reconectado tras suspensión' : '✗ Sin conexión tras suspensión: ' + r.error));
+    });
+    sinConexionDesde = socket.connected ? null : ahora;
+  } else if (!socket.connected && sinConexionDesde != null && ahora - sinConexionDesde > VIGIA_SIN_CONEXION_MS) {
+    reconectarSocket('vigía: sin conexión hace ' + minutos(ahora - sinConexionDesde) + ' min').then(function(r) {
+      if (r.conectado) console.log('[' + ts() + '] ✓ Reconectado por la vigía');
+      else console.log('[' + ts() + '] ✗ La vigía no logró reconectar: ' + r.error);
+    });
+    sinConexionDesde = ahora; // próximo intento forzado en otros 2 min
+  }
+
+  if (ahora - ultimoLatido >= LATIDO_INTERVALO_MS) {
+    ultimoLatido = ahora;
+    console.log('[' + ts() + '] ♥ activo — conectado: ' + (socket.connected ? 'sí' : 'no') +
+      ' (PID ' + process.pid + ', encendido hace ' + Math.floor((ahora - agenteIniciadoEn) / 3600000) + ' h)');
+  }
+}, VIGIA_INTERVALO_MS);
 
 // ── Canal 2: HTTP local (principal — el navegador de ESTA PC llama directo, sin Internet) ──
 // Solo escucha en 127.0.0.1: nadie fuera de esta máquina puede llegar a este puerto.
@@ -389,7 +461,7 @@ const servidorLocal = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && pathname === '/reconectar') {
-    const resultado = await reconectarSocket();
+    const resultado = await reconectarSocket('pedida desde el dashboard');
     if (resultado.conectado) console.log('[' + ts() + '] ✓ Reconexión forzada OK');
     else console.log('[' + ts() + '] ✗ Reconexión forzada falló: ' + resultado.error);
     res.writeHead(200, { 'Content-Type': 'application/json' });
