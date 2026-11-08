@@ -133,22 +133,31 @@ async function descargarAArchivo(fetchImpl, url, destino, inactividadMs) {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     if (!res.body) throw new Error('respuesta sin cuerpo');
     const salida = fs.createWriteStream(destino);
+    // El 'error' se escucha desde el inicio: un fallo de escritura (disco lleno,
+    // archivo bloqueado) no debe quedar sin manejar ni dejar la espera colgada.
+    let falloEscritura = null;
+    let avisarFallo;
+    const fallo = new Promise(function(_, reject) { avisarFallo = reject; });
+    fallo.catch(function() {});
+    salida.on('error', function(e) { falloEscritura = e; avisarFallo(e); });
     const lector = res.body.getReader();
     try {
       for (;;) {
-        const { done, value } = await lector.read();
+        if (falloEscritura) throw falloEscritura;
+        const { done, value } = await Promise.race([lector.read(), fallo]);
         if (done) break;
         reiniciar();
-        if (!salida.write(value)) await new Promise(function(r) { salida.once('drain', r); });
+        if (!salida.write(value)) {
+          await Promise.race([new Promise(function(r) { salida.once('drain', r); }), fallo]);
+        }
       }
+      if (falloEscritura) throw falloEscritura;
+      await Promise.race([new Promise(function(resolve) { salida.end(resolve); }), fallo]);
     } catch (e) {
       salida.destroy();
+      lector.cancel().catch(function() {});
       throw e;
     }
-    await new Promise(function(resolve, reject) {
-      salida.on('error', reject);
-      salida.end(resolve);
-    });
   } finally { clearTimeout(timer); }
 }
 

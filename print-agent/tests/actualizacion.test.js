@@ -205,3 +205,38 @@ test('revisarYDescargar: pendiente viejo (<= actual) se borra', async () => {
     assert.equal(fs.existsSync(rt.pendienteJson), false);
   } finally { await cerrar(s); }
 });
+
+test('revisarYDescargar: falla al escribir el .tmp => error sin lanzar ni colgar', async () => {
+  const s = await servidorAgente({ contenido: crypto.randomBytes(8 * 1024 * 1024) });
+  const dir = dirTemp();
+  try {
+    const rt = act.rutas(dir);
+    // El .tmp es una carpeta: createWriteStream falla (EISDIR).
+    fs.mkdirSync(rt.pendienteExe + '.tmp', { recursive: true });
+    const r = await Promise.race([
+      act.revisarYDescargar({ servidor: s.url, dirBase: dir, versionActual: '1.1.0', log: logNulo }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('colgado')), 5000)),
+    ]);
+    assert.equal(r.estado, 'error');
+    assert.equal(fs.existsSync(rt.pendienteJson), false);
+    assert.equal(fs.existsSync(rt.pendienteExe), false);
+  } finally { await cerrar(s); }
+});
+
+test('revisarYDescargar: 404 en /descargar => error sin pendiente', async () => {
+  const s = await servidorAgente();
+  s.srv.removeAllListeners('request');
+  s.srv.on('request', (req, res) => {
+    if (req.url === '/api/v1/agente/version') {
+      res.setHeader('Content-Type', 'application/json');
+      return res.end(JSON.stringify({ version: '1.2.0', sha256: s.sha, tamano: s.contenido.length, generado_en: 'x' }));
+    }
+    res.statusCode = 404; res.end();
+  });
+  const dir = dirTemp();
+  try {
+    const r = await act.revisarYDescargar({ servidor: s.url, dirBase: dir, versionActual: '1.1.0', log: logNulo });
+    assert.equal(r.estado, 'error');
+    assert.equal(fs.existsSync(act.rutas(dir).pendienteJson), false);
+  } finally { await cerrar(s); }
+});
