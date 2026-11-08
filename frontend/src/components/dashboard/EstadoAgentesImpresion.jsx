@@ -35,6 +35,17 @@ function textoDesconexion(agente, ahora) {
   return `Desconectado hace ${agente.desde_inicio_servidor ? 'más de ' : ''}${dur}`;
 }
 
+// Texto chico junto al estado de una caja conectada. null = nada que mostrar.
+function textoVersion(a) {
+  if (!a.conectado) return null;
+  const partes = [];
+  if (!a.version) partes.push('versión antigua');
+  else if (a.version_pendiente) partes.push(`v${a.version} → v${a.version_pendiente} al reiniciar`);
+  else partes.push(`v${a.version}`);
+  if (a.autoactualizacion === false) partes.push('sin auto-actualización (servidor sin https)');
+  return partes.join(' · ');
+}
+
 function mensajeDe(resultado) {
   if (resultado.estado === 'sin_servidor') {
     return { tono: 'aviso', texto: `El agente está abierto pero no logra conectarse al servidor${resultado.error ? ` (${resultado.error})` : ''}. Revisa la conexión a Internet de esta PC.` };
@@ -106,8 +117,11 @@ export default function EstadoAgentesImpresion() {
               {a.sucursal_nombre ? `${a.sucursal_nombre} — ` : ''}{a.caja_nombre}
             </span>
             {a.conectado ? (
-              <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium shrink-0">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Conectado
+              <span className="flex items-center gap-2 shrink-0">
+                {textoVersion(a) && <span className="text-xs text-muted-foreground">{textoVersion(a)}</span>}
+                <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Conectado
+                </span>
               </span>
             ) : (
               <span

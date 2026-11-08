@@ -50,13 +50,25 @@ function init(server) {
     // print-agent/agent.js) — a diferencia de unirse_sucursal/unirse_caja
     // (que también usan pantallas de staff normales), esto es exclusivo
     // del agente, así que sirve para saber "está vivo" desde el backend.
-    socket.on('agente:conectado', ({ sucursal_id, caja_id, caja_ids } = {}) => {
+    socket.on('agente:conectado', ({ sucursal_id, caja_id, caja_ids, version, version_pendiente, autoactualizacion } = {}) => {
       if (!sucursal_id) return;
       // Compatibilidad: agentes viejos (antes de la selección múltiple de
       // cajas) mandan un único `caja_id` en vez de `caja_ids`.
       const idsFinal = Array.isArray(caja_ids) && caja_ids.length ? caja_ids : (caja_id ? [caja_id] : []);
-      agentesConectados.set(socket.id, { sucursal_id, caja_ids: idsFinal, conectado_en: Date.now() });
-      console.log(`Agente de impresión conectado: ${socket.id} (sucursal ${sucursal_id}, cajas ${idsFinal.join(',') || '-'})`);
+      // Un re-emit del mismo socket (el agente avisa que ya bajó una versión
+      // nueva) actualiza la entrada: una sola fila y conectado_en intacto.
+      // Agentes viejos no mandan version/autoactualizacion → null.
+      const previa = agentesConectados.get(socket.id);
+      agentesConectados.set(socket.id, {
+        sucursal_id,
+        caja_ids: idsFinal,
+        conectado_en: previa ? previa.conectado_en : Date.now(),
+        version: typeof version === 'string' ? version : null,
+        version_pendiente: typeof version_pendiente === 'string' ? version_pendiente : null,
+        autoactualizacion: typeof autoactualizacion === 'boolean' ? autoactualizacion : null,
+      });
+      // Se re-emite agente:estado también en el re-emit: el dashboard refresca la versión.
+      console.log(`Agente de impresión ${previa ? 'actualizó sus datos' : 'conectado'}: ${socket.id} (sucursal ${sucursal_id}, cajas ${idsFinal.join(',') || '-'})`);
       if (idsFinal.length) {
         idsFinal.forEach((id) => emitir('agente:estado', { caja_id: id, conectado: true }, sucursal_id));
       } else {
@@ -99,10 +111,11 @@ function emitir(evento, datos = {}, sucursal_id = null, caja_id = null) {
 function estadoAgentes() {
   const filas = [];
   for (const info of agentesConectados.values()) {
+    const extra = { conectado_en: info.conectado_en, version: info.version, version_pendiente: info.version_pendiente, autoactualizacion: info.autoactualizacion };
     if (info.caja_ids.length) {
-      info.caja_ids.forEach((caja_id) => filas.push({ sucursal_id: info.sucursal_id, caja_id, conectado_en: info.conectado_en }));
+      info.caja_ids.forEach((caja_id) => filas.push({ sucursal_id: info.sucursal_id, caja_id, ...extra }));
     } else {
-      filas.push({ sucursal_id: info.sucursal_id, caja_id: null, conectado_en: info.conectado_en });
+      filas.push({ sucursal_id: info.sucursal_id, caja_id: null, ...extra });
     }
   }
   return filas;

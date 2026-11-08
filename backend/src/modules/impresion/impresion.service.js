@@ -12,14 +12,16 @@ async function obtenerEstadoAgentes(alcance) {
     order: [['sucursal_id', 'ASC'], ['nombre', 'ASC']],
   });
 
-  const conectados = new Set(
-    estadoAgentes().map((a) => a.caja_id).filter((id) => id != null)
-  );
+  const agentesPorCaja = new Map();
+  for (const a of estadoAgentes()) {
+    if (a.caja_id != null) agentesPorCaja.set(a.caja_id, a);
+  }
 
   const { desconexiones, servidor_iniciado_en } = desconexionesAgentes();
 
   return cajas.map((c) => {
-    const conectado = conectados.has(c.id);
+    const agente = agentesPorCaja.get(c.id);
+    const conectado = !!agente;
     // Sin registro de caída desde que arrancó el servidor: se informa el
     // arranque como cota mínima (desde_inicio_servidor → "hace más de X").
     const registrada = desconexiones.get(c.id);
@@ -32,6 +34,10 @@ async function obtenerEstadoAgentes(alcance) {
       conectado,
       desconectado_desde: desde == null ? null : new Date(desde).toISOString(),
       desde_inicio_servidor: !conectado && registrada == null,
+      // null = caja sin agente, o agente viejo que no manda estos campos.
+      version: agente?.version ?? null,
+      version_pendiente: agente?.version_pendiente ?? null,
+      autoactualizacion: agente?.autoactualizacion ?? null,
     };
   });
 }

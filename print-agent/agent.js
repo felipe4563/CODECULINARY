@@ -245,9 +245,22 @@ function motivoNoPertenece(datos) {
   return null;
 }
 
+// Datos que el dashboard muestra de este agente. version_pendiente solo si lo
+// descargado es realmente más nuevo que lo que corre.
+function anunciarAgente() {
+  var pend = act.leerPendiente(CONFIG_DIR);
+  socket.emit('agente:conectado', {
+    sucursal_id: config.sucursal_id || null,
+    caja_ids: cajaIds,
+    version: VERSION,
+    version_pendiente: pend && act.compararVersiones(pend.version, VERSION) > 0 ? pend.version : null,
+    autoactualizacion: act.urlPermitida(config.servidor),
+  });
+}
+
 socket.on('connect', () => {
   console.log(`[${ts()}] ✓ Conectado (id: ${socket.id})`);
-  socket.emit('agente:conectado', { sucursal_id: config.sucursal_id || null, caja_ids: cajaIds });
+  anunciarAgente();
   if (config.sucursal_id) {
     socket.emit('unirse_sucursal', config.sucursal_id);
     console.log(`[${ts()}] → Unido a la sala de la sucursal ${config.sucursal_id} (comandas de cocina)`);
@@ -413,6 +426,7 @@ function revisarActualizacion() {
       }
     }
     ultimoEstadoRevision = r.estado;
+    if (r.estado === 'descargado' && socket.connected) anunciarAgente();
   }).catch(function(e) {
     console.error('[' + ts() + '] ✗ Revisión de actualización: ' + (e && e.message ? e.message : e));
   }).finally(function() { revisionEnCurso = null; });

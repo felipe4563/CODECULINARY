@@ -106,4 +106,18 @@ describe('GET /api/v1/impresion/estado-agentes', () => {
     expect(fila.conectado).toBe(true);
     expect(fila.desconectado_desde).toBeNull();
   });
+
+  it('trae version, version_pendiente y autoactualizacion del agente; sin agente → null', async () => {
+    estadoAgentes.mockReturnValue([{ sucursal_id: sucursal.id, caja_id: cajaFisica.id, conectado_en: Date.now(), version: '1.1.0', version_pendiente: '1.2.0', autoactualizacion: true }]);
+    let res = await request(app).get('/api/v1/impresion/estado-agentes').set('Authorization', `Bearer ${token}`);
+    let fila = res.body.datos.find((a) => a.caja_id === cajaFisica.id);
+    expect(fila).toEqual(expect.objectContaining({ version: '1.1.0', version_pendiente: '1.2.0', autoactualizacion: true }));
+
+    estadoAgentes.mockReturnValue([]);
+    res = await request(app).get('/api/v1/impresion/estado-agentes').set('Authorization', `Bearer ${token}`);
+    fila = res.body.datos.find((a) => a.caja_id === cajaFisica.id);
+    expect(fila.version).toBeNull();
+    expect(fila.version_pendiente).toBeNull();
+    expect(fila.autoactualizacion).toBeNull();
+  });
 });

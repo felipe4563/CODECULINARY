@@ -68,4 +68,28 @@ describe('socket.js — estado de agentes de impresión', () => {
     expect(desconexiones.get(881)).toBeGreaterThanOrEqual(antes);
     expect(desconexiones.get(882)).toBeGreaterThanOrEqual(antes);
   });
+
+  it('guarda versión/pendiente/autoactualización y un re-emit del mismo socket actualiza la fila', async () => {
+    const agente = await conectarCliente();
+    agente.emit('agente:conectado', { sucursal_id: 7171, caja_ids: [991], version: '1.1.0', version_pendiente: null, autoactualizacion: true });
+    await new Promise((r) => setTimeout(r, 150));
+    const antes = estadoAgentes().filter((a) => a.sucursal_id === 7171);
+    expect(antes).toHaveLength(1);
+    expect(antes[0]).toEqual(expect.objectContaining({ version: '1.1.0', version_pendiente: null, autoactualizacion: true }));
+
+    agente.emit('agente:conectado', { sucursal_id: 7171, caja_ids: [991], version: '1.1.0', version_pendiente: '1.2.0', autoactualizacion: true });
+    await new Promise((r) => setTimeout(r, 150));
+    const despues = estadoAgentes().filter((a) => a.sucursal_id === 7171);
+    expect(despues).toHaveLength(1);
+    expect(despues[0].version_pendiente).toBe('1.2.0');
+    expect(despues[0].conectado_en).toBe(antes[0].conectado_en);
+  });
+
+  it('agente viejo sin los campos → version/pendiente/autoactualizacion null', async () => {
+    const agente = await conectarCliente();
+    agente.emit('agente:conectado', { sucursal_id: 7272, caja_id: 992 });
+    await new Promise((r) => setTimeout(r, 150));
+    expect(estadoAgentes().find((a) => a.sucursal_id === 7272)).toEqual(
+      expect.objectContaining({ version: null, version_pendiente: null, autoactualizacion: null }));
+  });
 });
