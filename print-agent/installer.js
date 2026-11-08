@@ -766,11 +766,24 @@ function install(cfg) {
       'utf8'
     );
 
-    // 4. Crear VBScript launcher para iniciar el agente sin ventana visible
+    // 4. Crear VBScript launcher para iniciar el agente sin ventana visible.
+    //    "On Error Resume Next": corre como SYSTEM en la sesión 0, donde un error
+    //    de VBScript abre un cuadro que nadie puede cerrar y deja la tarea
+    //    "En ejecución" para siempre (la vigía ya no relanzaría nunca más).
+    //    Si falta agente-impresion.exe (corte de luz justo entre los dos renames
+    //    de la auto-actualización) pero está el anterior, se lanza el anterior.
+    //    En VBScript la barra invertida no se escapa; solo se duplican las comillas.
+    const vbsStr = (s) => '"' + s.replace(/"/g, '""') + '"';
+    const anteriorExe = path.join(INSTALL_DIR, 'agente-impresion.anterior.exe');
     const vbsPath = path.join(INSTALL_DIR, 'start-agent.vbs');
     writeFileSync(vbsPath,
-      'Set WshShell = CreateObject("WScript.Shell")\n' +
-      'WshShell.Run Chr(34) & "' + dstExe.replace(/\\/g, '\\\\') + '" & Chr(34) & " --service", 0, False\n',
+      'On Error Resume Next\r\n' +
+      'Set fso = CreateObject("Scripting.FileSystemObject")\r\n' +
+      'Set WshShell = CreateObject("WScript.Shell")\r\n' +
+      'exe = ' + vbsStr(dstExe) + '\r\n' +
+      'anterior = ' + vbsStr(anteriorExe) + '\r\n' +
+      'If Not fso.FileExists(exe) And fso.FileExists(anterior) Then exe = anterior\r\n' +
+      'WshShell.Run Chr(34) & exe & Chr(34) & " --service", 0, False\r\n',
       'utf8'
     );
 

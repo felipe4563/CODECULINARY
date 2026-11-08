@@ -26,8 +26,12 @@ function esArranqueDePC(uptimeSegundos) {
 }
 
 // ¿El salto de reloj entre dos latidos indica que la PC estuvo dormida/hibernada? (>= 2 h)
-function esVueltaDeHibernacion(saltoMs) {
-  return saltoMs >= 2 * 3600 * 1000;
+// Además el uptime de Windows (os.uptime(), que SÍ cuenta el tiempo dormida o
+// hibernada) tiene que haber avanzado casi lo mismo (5 min de tolerancia): si
+// solo saltó el reloj (cambio manual de hora, corrección NTP) la PC no durmió
+// y no se reemplaza nada en pleno servicio.
+function esVueltaDeHibernacion(saltoMs, avanceUptimeMs) {
+  return saltoMs >= 2 * 3600 * 1000 && avanceUptimeMs >= saltoMs - 5 * 60 * 1000;
 }
 
 // Solo se descarga de HTTPS, o de HTTP únicamente si es la propia máquina (desarrollo).
@@ -45,6 +49,7 @@ function rutas(dirBase) {
   return {
     exe:           path.join(base, 'agente-impresion.exe'),
     anterior:      path.join(base, 'agente-impresion.anterior.exe'),
+    nuevo:         path.join(base, 'agente-impresion.nuevo.exe'),
     carpeta:       carpeta,
     pendienteExe:  path.join(carpeta, 'agente-impresion.pendiente.exe'),
     pendienteJson: path.join(carpeta, 'pendiente.json'),
@@ -112,12 +117,21 @@ function leerPendiente(dirBase) {
 function esAgenteVivo(pid) {
   try {
     const out = execSync('tasklist /FI "PID eq ' + pid + '" /FO CSV /NH', { encoding: 'utf8' });
-    const propio = path.basename(process.execPath).toLowerCase();
     return out.split(/\r?\n/).some(function(linea) {
       const campos = linea.split('","').map(function(c) { return c.replace(/^"|"$/g, '').trim(); });
-      return campos.length > 1 && campos[1] === String(pid) && campos[0].toLowerCase() === propio;
+      return campos.length > 1 && campos[1] === String(pid) && esImagenDeAgente(campos[0]);
     });
   } catch { return false; }
+}
+
+// ¿Ese nombre de ejecutable es un agente? El propio, agente-impresion.exe, o
+// agente-impresion.anterior.exe: start-agent.vbs lanza el anterior si el exe
+// falta (corte de luz justo entre los dos renames del reemplazo), y ese agente
+// tiene que seguir contando como vivo para el lock (si no, habría dos).
+function esImagenDeAgente(nombre) {
+  const n = String(nombre).toLowerCase();
+  return n === path.basename(process.execPath).toLowerCase() ||
+    n === 'agente-impresion.exe' || n === 'agente-impresion.anterior.exe';
 }
 
 function borrarSilencioso(ruta) { try { fs.unlinkSync(ruta); } catch {} }
@@ -192,38 +206,118 @@ async function pendienteAplicable(dirBase, versionActual) {
 
 function esperar(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
+// Copia `origen` a `destino` y fuerza los datos al disco (fsync) antes de
+// devolver: un corte de luz justo después no deja una copia a medio escribir.
+function copiarConFsync(origen, destino) {
+  fs.copyFileSync(origen, destino);
+  const fd = fs.openSync(destino, 'r+');
+  try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+}
+
+// Restauración de agente-impresion.anterior.exe → agente-impresion.exe que
+// falló (p. ej. el antivirus tiene tomado el archivo) y sigue reintentándose.
+let restauracionActiva = null;
+
+function restauracionPendiente() { return restauracionActiva !== null; }
+
+// Reintenta cada `intervaloMs` (30 s) devolver el exe anterior a su lugar hasta
+// lograrlo, para que la PC no vuelva a arrancar con la versión que falló. Cada
+// error distinto se loguea una vez, y el éxito también. Devuelve una promesa que
+// se cumple al restaurar (o enseguida si no hay anterior que restaurar).
+function restaurarEnSegundoPlano(dirBase, opciones) {
+  if (restauracionActiva) return restauracionActiva;
+  const o = opciones || {};
+  const r = rutas(dirBase);
+  const log = o.log || function() {};
+  const renombrar = o.renombrar || fs.renameSync;
+  const intervaloMs = o.intervaloMs != null ? o.intervaloMs : 30000;
+  let ultimoError = null;
+  let terminar;
+  restauracionActiva = new Promise(function(resolve) { terminar = resolve; });
+  const promesa = restauracionActiva;
+  function fin() { restauracionActiva = null; terminar(); }
+  function intento() {
+    if (!fs.existsSync(r.anterior)) return fin();
+    try {
+      renombrar(r.anterior, r.exe);
+      log('✓ agente-impresion.exe restaurado a la versión anterior');
+      return fin();
+    } catch (e) {
+      const msg = (e && e.message) || String(e);
+      if (msg !== ultimoError) log('✗ No se pudo restaurar agente-impresion.anterior.exe (' + msg + '); se reintenta cada ' + Math.round(intervaloMs / 1000) + ' s');
+      ultimoError = msg;
+    }
+    setTimeout(intento, intervaloMs);
+  }
+  intento();
+  return promesa;
+}
+
 // Reemplaza agente-impresion.exe por el pendiente, lanza el nuevo y espera a que
 // /salud responda con la versión nueva. Si no lo hace a tiempo: vuelta atrás
 // (mata el nuevo, restaura el exe anterior y anota la versión como fallida).
 // Quien llama debe haber liberado agente.lock y el puerto 4321 antes.
+//
+// El exe nunca queda a medio escribir: el pendiente se copia primero a
+// agente-impresion.nuevo.exe (misma carpeta), se fuerza al disco y se vuelve a
+// verificar su hash; recién entonces se hacen dos renames (exe → anterior,
+// nuevo → exe). Un corte de luz en ese instante deja, a lo sumo, el exe
+// ausente con el anterior al lado (start-agent.vbs lanza entonces el anterior).
 async function reemplazarYLanzar(opts) {
   const dirBase = opts.dirBase, versionNueva = opts.versionNueva;
   const timeoutMs = opts.timeoutMs != null ? opts.timeoutMs : 60000;
   const intervaloMs = opts.intervaloMs != null ? opts.intervaloMs : 2000;
+  const esperaRestaurarMs = opts.esperaRestaurarMs != null ? opts.esperaRestaurarMs : 250;
+  const renombrar = opts.renombrar || fs.renameSync;
   const log = opts.log || function() {};
   const r = rutas(dirBase);
 
-  // 1. Windows deja renombrar un exe en uso, pero no sobrescribirlo.
+  // Mientras no se haya podido devolver el exe anterior a su lugar, no se toca nada más.
+  if (restauracionPendiente()) return { ok: false, error: 'hay una restauración del exe anterior en curso' };
+
+  // 1. Copia preparada junto al exe, ya en disco y verificada. Hasta acá el exe
+  //    actual no se tocó: cualquier fallo deja todo como estaba y no marca la
+  //    versión como fallida (se reintenta al próximo arranque).
+  borrarSilencioso(r.nuevo);
+  try {
+    copiarConFsync(r.pendienteExe, r.nuevo);
+  } catch (e) {
+    borrarSilencioso(r.nuevo);
+    return { ok: false, error: 'no se pudo copiar el pendiente: ' + e.message };
+  }
+  const pend = leerPendiente(dirBase);
+  if (!pend || pend.version !== versionNueva || !(await verificarArchivo(r.nuevo, pend.sha256, pend.tamano))) {
+    borrarSilencioso(r.nuevo);
+    return { ok: false, error: 'la copia preparada no coincide con el hash/tamaño esperado' };
+  }
+
+  // 2. Windows deja renombrar un exe en uso, pero no sobrescribirlo.
   try {
     borrarSilencioso(r.anterior);
-    fs.renameSync(r.exe, r.anterior);
+    renombrar(r.exe, r.anterior);
   } catch (e) {
+    borrarSilencioso(r.nuevo);
     return { ok: false, error: 'no se pudo apartar el exe actual: ' + e.message };
   }
 
   // Devuelve el exe anterior a su lugar. El nuevo recién matado puede tardar un
-  // instante en soltar el archivo: se reintenta unos segundos.
+  // instante en soltar el archivo: se reintenta unos segundos; si aun así no se
+  // puede, se sigue intentando en segundo plano cada 30 s.
+  let restauracion = null;
   async function restaurar() {
     for (let i = 0; i < 40; i++) {
-      try { fs.renameSync(r.anterior, r.exe); return true; } catch {}
-      await esperar(250);
+      try { renombrar(r.anterior, r.exe); return true; } catch {}
+      await esperar(esperaRestaurarMs);
     }
+    restauracion = restaurarEnSegundoPlano(dirBase, { log: log, renombrar: renombrar, intervaloMs: opts.intervaloRestauracionMs });
     return false;
   }
 
-  try { fs.copyFileSync(r.pendienteExe, r.exe); } catch (e) {
+  try { renombrar(r.nuevo, r.exe); } catch (e) {
     const restaurado = await restaurar();
-    return { ok: false, error: 'no se pudo copiar el pendiente: ' + e.message + (restaurado ? '' : ' (¡no se pudo restaurar el exe anterior!)') };
+    borrarSilencioso(r.nuevo);
+    return { ok: false, restauracion: restauracion,
+      error: 'no se pudo poner la versión nueva en su lugar: ' + e.message + (restaurado ? '' : ' (¡no se pudo restaurar el exe anterior!)') };
   }
 
   let error = null;
@@ -253,9 +347,9 @@ async function reemplazarYLanzar(opts) {
   const restaurado = await restaurar();
   marcarFallida(dirBase, versionNueva);
   borrarPendiente(r);
-  if (!restaurado) error += ' — ¡no se pudo restaurar agente-impresion.anterior.exe!';
+  if (!restaurado) error += ' — ¡no se pudo restaurar agente-impresion.anterior.exe! (se reintenta en segundo plano)';
   log('✗ Actualización ' + versionNueva + ' falló (' + error + '); se vuelve a la versión anterior y no se reintentará');
-  return { ok: false, error: error };
+  return { ok: false, error: error, restauracion: restauracion };
 }
 
 // Al arrancar el agente (antes de tomar agente.lock y abrir el puerto): si la PC
@@ -431,7 +525,8 @@ async function revisarYDescargar(opts) {
 module.exports = {
   compararVersiones, esArranqueDePC, esVueltaDeHibernacion, urlPermitida,
   rutas, sha256Archivo, verificarArchivo, leerFallidas, marcarFallida,
-  leerPendiente, esAgenteVivo, revisarYDescargar,
+  leerPendiente, esAgenteVivo, esImagenDeAgente, revisarYDescargar,
   pidDelLock, agenteVivoSegunLock, borrarLockSiEsMio, tomarLockAplicando, soltarLockAplicando,
   pendienteCandidato, pendienteAplicable, reemplazarYLanzar, alArrancar, lanzadorReal,
+  restaurarEnSegundoPlano, restauracionPendiente,
 };

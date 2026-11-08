@@ -348,6 +348,7 @@ const LATIDO_INTERVALO_MS     = 60 * 60 * 1000;
 const agenteIniciadoEn = Date.now();
 let sinConexionDesde = Date.now(); // arranca sin conexión hasta el primer connect
 let ultimoTick = Date.now();
+let ultimoUptimeSeg = os.uptime(); // incluye el tiempo dormida/hibernada (ver esVueltaDeHibernacion)
 let ultimoLatido = Date.now();
 
 socket.on('connect', function() { sinConexionDesde = null; });
@@ -365,6 +366,9 @@ setInterval(function() {
   const ahora = Date.now();
   const desdeUltimoTick = ahora - ultimoTick;
   ultimoTick = ahora;
+  const uptimeSeg = os.uptime();
+  const avanceUptimeMs = (uptimeSeg - ultimoUptimeSeg) * 1000;
+  ultimoUptimeSeg = uptimeSeg;
 
   // Mientras se reemplaza el exe, el socket y el puerto están cerrados a
   // propósito: la vigía no debe reabrirlos.
@@ -375,8 +379,10 @@ setInterval(function() {
     // Volver de hibernación >= 2 h cuenta como "prender la PC" (Inicio rápido de
     // Windows: "Apagar" hiberna y la tarea de arranque no se dispara). Solo en el
     // exe (en dev no hay nada que reemplazar) y solo con un pendiente de una
-    // versión mayor; el hash se verifica en aplicarTrasHibernacion.
-    const candidato = (process.pkg && act.esVueltaDeHibernacion(desdeUltimoTick))
+    // versión mayor; el hash se verifica en aplicarTrasHibernacion. Un salto
+    // solo del reloj (cambio de hora, NTP) no cuenta: el uptime no avanzó.
+    // Tampoco mientras se sigue restaurando el exe anterior de un fallo previo.
+    const candidato = (process.pkg && act.esVueltaDeHibernacion(desdeUltimoTick, avanceUptimeMs) && !act.restauracionPendiente())
       ? act.pendienteCandidato(CONFIG_DIR, VERSION) : null;
     if (candidato) aplicarTrasHibernacion();
     else reconectarTrasSuspension();
@@ -456,11 +462,53 @@ async function esperarSinImpresiones() {
 // Vuelve a ser el agente normal (tras una vuelta atrás o un error a mitad).
 function reanudarComoAgente() {
   if (!tomarLock()) {
+    if (act.restauracionPendiente()) {
+      // Sin puerto ni socket (no atiende), solo termina de devolver el exe
+      // anterior a su lugar para que la PC no arranque con la versión fallida.
+      console.log('[' + ts() + '] .. Otro agente tomó el lock mientras se actualizaba — este solo termina de restaurar el exe anterior y se retira.');
+      act.restaurarEnSegundoPlano(CONFIG_DIR).then(function() { process.exit(0); });
+      return;
+    }
     console.log('[' + ts() + '] .. Otro agente tomó el lock mientras se actualizaba — este se retira.');
     process.exit(0);
   }
-  if (!servidorLocal.listening) servidorLocal.listen(PUERTO_LOCAL, '127.0.0.1');
+  escucharTrasReanudar(1);
   if (!socket.connected) socket.connect();
+}
+
+// Reabre el puerto local tras una vuelta atrás. Si sigue ocupado (p. ej. el
+// agente nuevo, recién matado, todavía no lo soltó) se reintenta 5 veces cada
+// 2 s; si no hay caso, el agente se cierra (soltando agente.lock) para que la
+// vigía lo relance limpio, en vez de quedar vivo con el lock y sin puerto.
+const REANUDAR_INTENTOS_ESCUCHA = 5;
+const REANUDAR_ESPERA_ESCUCHA_MS = 2000;
+
+function escucharTrasReanudar(intento) {
+  if (servidorLocal.listening) return;
+  function alFallar(err) {
+    servidorLocal.removeListener('listening', alEscuchar);
+    if (err.code !== 'EADDRINUSE') return;
+    if (intento >= REANUDAR_INTENTOS_ESCUCHA) {
+      if (act.restauracionPendiente()) {
+        // Cerrarse ahora haría que la vigía relance el exe que falló (y, en uso,
+        // ya no se podría restaurar). Se queda con el lock y el socket, y vuelve
+        // a probar el puerto cuando el exe anterior esté de nuevo en su lugar.
+        console.error('[' + ts() + '] ✗ El puerto ' + PUERTO_LOCAL + ' sigue ocupado tras ' + intento + ' intentos — se reintenta cuando se restaure el exe anterior');
+        act.restaurarEnSegundoPlano(CONFIG_DIR).then(function() { escucharTrasReanudar(1); });
+        return;
+      }
+      console.error('[' + ts() + '] ✗ El puerto ' + PUERTO_LOCAL + ' sigue ocupado tras ' + intento + ' intentos — el agente se cierra para que la vigía lo relance');
+      process.exit(1);
+    }
+    setTimeout(function() { escucharTrasReanudar(intento + 1); }, REANUDAR_ESPERA_ESCUCHA_MS);
+  }
+  function alEscuchar() {
+    servidorLocal.removeListener('error', alFallar);
+    console.log('[' + ts() + '] ✓ Servidor local escuchando de nuevo en http://127.0.0.1:' + PUERTO_LOCAL);
+  }
+  servidorLocal.once('error', alFallar);
+  servidorLocal.once('listening', alEscuchar);
+  servidorLocal.listen(PUERTO_LOCAL, '127.0.0.1');
 }
 
 async function aplicarTrasHibernacion() {

@@ -62,5 +62,15 @@ async function arrancarServicio() {
   // simultáneo está reemplazando el exe — este se retira sin tocar el puerto.
   if (resultado === 'otro_aplicando') log('.. Otro arranque está aplicando la actualización — este se retira.');
   if (resultado === 'aplicado' || resultado === 'otro_aplicando') process.exit(0);
+
+  // Vuelta atrás cuyo exe anterior no se pudo devolver a su lugar: la
+  // restauración sigue en segundo plano (cada 30 s) mientras este proceso
+  // atiende como agente. Si ya hay otro agente atendiendo, este no atiende y
+  // solo termina de restaurar antes de retirarse.
+  if (act.restauracionPendiente() && act.agenteVivoSegunLock(path.join(dirBase, 'agente.lock'))) {
+    log('.. Ya hay un agente activo — este solo termina de restaurar el exe anterior y se retira.');
+    await act.restaurarEnSegundoPlano(dirBase);
+    process.exit(0);
+  }
   require('./agent');
 }

@@ -111,28 +111,31 @@ export default function EstadoAgentesImpresion() {
         )}
       </div>
       <div className="space-y-1.5">
-        {agentes.map((a) => (
-          <div key={a.caja_id} className="flex items-center justify-between text-xs gap-2">
-            <span className="text-muted-foreground truncate">
-              {a.sucursal_nombre ? `${a.sucursal_nombre} — ` : ''}{a.caja_nombre}
-            </span>
-            {a.conectado ? (
-              <span className="flex items-center gap-2 shrink-0">
-                {textoVersion(a) && <span className="text-xs text-muted-foreground">{textoVersion(a)}</span>}
-                <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Conectado
+        {agentes.map((a) => {
+          const version = textoVersion(a);
+          return (
+            <div key={a.caja_id} className="flex items-center justify-between text-xs gap-2">
+              <span className="text-muted-foreground truncate">
+                {a.sucursal_nombre ? `${a.sucursal_nombre} — ` : ''}{a.caja_nombre}
+              </span>
+              {a.conectado ? (
+                <span className="flex items-center gap-2 shrink-0">
+                  {version && <span className="text-xs text-muted-foreground">{version}</span>}
+                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Conectado
+                  </span>
                 </span>
-              </span>
-            ) : (
-              <span
-                className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium shrink-0"
-                title={a.desconectado_desde ? `Sin conexión desde ${new Date(a.desconectado_desde).toLocaleString('es-BO')}` : undefined}
-              >
-                <AlertTriangle className="w-3.5 h-3.5" /> {textoDesconexion(a, ahora)}
-              </span>
-            )}
-          </div>
-        ))}
+              ) : (
+                <span
+                  className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium shrink-0"
+                  title={a.desconectado_desde ? `Sin conexión desde ${new Date(a.desconectado_desde).toLocaleString('es-BO')}` : undefined}
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" /> {textoDesconexion(a, ahora)}
+                </span>
+              )}
+            </div>
+          );
+        })}
       </div>
       {mensaje && (
         <p className={`mt-3 text-xs ${mensaje.tono === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>

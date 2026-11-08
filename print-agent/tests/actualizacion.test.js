@@ -19,9 +19,14 @@ test('esArranqueDePC', () => {
   assert.equal(act.esArranqueDePC(900), false);
 });
 
-test('esVueltaDeHibernacion', () => {
-  assert.equal(act.esVueltaDeHibernacion(2 * 3600 * 1000), true);
-  assert.equal(act.esVueltaDeHibernacion(2 * 3600 * 1000 - 1), false);
+test('esVueltaDeHibernacion: salto de reloj >= 2 h Y el uptime avanzó lo mismo (-5 min)', () => {
+  const H = 3600 * 1000, M = 60 * 1000;
+  assert.equal(act.esVueltaDeHibernacion(2 * H, 2 * H), true);
+  assert.equal(act.esVueltaDeHibernacion(2 * H - 1, 2 * H), false);
+  assert.equal(act.esVueltaDeHibernacion(5 * H, 5 * H - 5 * M), true);  // tolerancia de 5 min
+  // Cambio manual de hora / corrección NTP: el reloj salta pero la PC no durmió.
+  assert.equal(act.esVueltaDeHibernacion(3 * H, 30 * 1000), false);
+  assert.equal(act.esVueltaDeHibernacion(3 * H, 3 * H - 5 * M - 1), false);
 });
 
 test('urlPermitida', () => {
@@ -43,6 +48,7 @@ test('rutas', () => {
   assert.equal(r.pendienteJson, path.join(d, 'actualizacion', 'pendiente.json'));
   assert.equal(r.fallidasJson, path.join(d, 'actualizacion', 'fallidas.json'));
   assert.equal(r.aplicandoLock, path.join(d, 'actualizacion', 'aplicando.lock'));
+  assert.equal(r.nuevo, path.join(d, 'agente-impresion.nuevo.exe'));
 });
 
 test('verificarArchivo', async () => {
@@ -450,4 +456,137 @@ test('alArrancar: agente nuevo con aplicando.lock ajeno vivo => sin_cambios', as
   const f = falsos('1.2.0');
   assert.equal(await act.alArrancar(opcionesArranque(dir, f, { versionActual: '1.2.0' })), 'sin_cambios');
   assert.equal(f.lanzados.length, 0);
+});
+
+// ---- Final review: copia preparada + fsync, restauración en segundo plano ----
+
+// Envuelve fs.renameSync para registrar (y opcionalmente hacer fallar) cada rename.
+function renombradorEspia(debeFallar) {
+  const e = { llamadas: [] };
+  e.renombrar = (de, a) => {
+    e.llamadas.push([path.basename(de), path.basename(a)]);
+    if (debeFallar && debeFallar(de, a)) { const err = new Error('EBUSY: simulado'); err.code = 'EBUSY'; throw err; }
+    fs.renameSync(de, a);
+  };
+  return e;
+}
+
+test('reemplazarYLanzar: copia a .nuevo.exe y el exe solo cambia por dos renames (nuevo ya completo)', async () => {
+  const { dir, r } = escenarioPendiente();
+  fs.writeFileSync(r.nuevo, 'sobrante de un intento anterior');
+  const f = falsos('1.2.0');
+  let nuevoAlRenombrar = null;
+  const e = renombradorEspia((de) => { if (de === r.nuevo) nuevoAlRenombrar = fs.readFileSync(r.nuevo, 'utf8'); return false; });
+  const res = await act.reemplazarYLanzar(Object.assign({ dirBase: dir, versionNueva: '1.2.0', renombrar: e.renombrar }, f, rapido));
+  assert.equal(res.ok, true);
+  assert.deepEqual(e.llamadas, [
+    ['agente-impresion.exe', 'agente-impresion.anterior.exe'],
+    ['agente-impresion.nuevo.exe', 'agente-impresion.exe'],
+  ]);
+  assert.equal(nuevoAlRenombrar, 'nuevo'); // la copia ya estaba completa antes de tocar el exe
+  assert.equal(fs.readFileSync(r.exe, 'utf8'), 'nuevo');
+  assert.equal(fs.readFileSync(r.anterior, 'utf8'), 'viejo');
+  assert.equal(fs.existsSync(r.nuevo), false);
+});
+
+test('reemplazarYLanzar: el pendiente desapareció antes de copiar => exe intacto, sin marcar fallida', async () => {
+  const { dir, r } = escenarioPendiente();
+  fs.writeFileSync(r.anterior, 'anterior-previo');
+  fs.unlinkSync(r.pendienteExe);
+  const f = falsos('1.2.0');
+  const res = await act.reemplazarYLanzar(Object.assign({ dirBase: dir, versionNueva: '1.2.0' }, f, rapido));
+  assert.equal(res.ok, false);
+  assert.equal(fs.readFileSync(r.exe, 'utf8'), 'viejo');
+  assert.equal(fs.readFileSync(r.anterior, 'utf8'), 'anterior-previo'); // ni se tocó
+  assert.equal(fs.existsSync(r.nuevo), false);
+  assert.equal(f.lanzados.length, 0);
+  assert.deepEqual(act.leerFallidas(dir), []);
+});
+
+test('reemplazarYLanzar: la copia preparada no coincide con el sha => se aborta sin tocar el exe', async () => {
+  const { dir, r } = escenarioPendiente();
+  fs.writeFileSync(r.anterior, 'anterior-previo');
+  fs.writeFileSync(r.pendienteExe, 'nueva'); // mismo tamaño, otro contenido
+  const f = falsos('1.2.0');
+  const res = await act.reemplazarYLanzar(Object.assign({ dirBase: dir, versionNueva: '1.2.0' }, f, rapido));
+  assert.equal(res.ok, false);
+  assert.equal(fs.readFileSync(r.exe, 'utf8'), 'viejo');
+  assert.equal(fs.readFileSync(r.anterior, 'utf8'), 'anterior-previo');
+  assert.equal(fs.existsSync(r.nuevo), false);
+  assert.equal(f.lanzados.length, 0);
+  assert.deepEqual(act.leerFallidas(dir), []);
+});
+
+test('reemplazarYLanzar: falla el rename nuevo→exe => exe anterior restaurado, sin marcar fallida', async () => {
+  const { dir, r } = escenarioPendiente();
+  const f = falsos('1.2.0');
+  const e = renombradorEspia((de) => de === r.nuevo);
+  const res = await act.reemplazarYLanzar(Object.assign({ dirBase: dir, versionNueva: '1.2.0', renombrar: e.renombrar }, f, rapido));
+  assert.equal(res.ok, false);
+  assert.equal(fs.readFileSync(r.exe, 'utf8'), 'viejo');
+  assert.equal(fs.existsSync(r.nuevo), false);
+  assert.equal(f.lanzados.length, 0);
+  assert.deepEqual(act.leerFallidas(dir), []);
+});
+
+test('reemplazarYLanzar: restauración que falla sigue en segundo plano hasta lograrlo', async () => {
+  const { dir, r } = escenarioPendiente();
+  const f = falsos(null);
+  let fallosRestaurar = 0;
+  const e = renombradorEspia((de, a) => {
+    if (de === r.anterior && a === r.exe && fallosRestaurar < 45) { fallosRestaurar++; return true; }
+    return false;
+  });
+  const logs = [];
+  const res = await act.reemplazarYLanzar(Object.assign({ dirBase: dir, versionNueva: '1.2.0' }, f, rapido, {
+    renombrar: e.renombrar, esperaRestaurarMs: 1, intervaloRestauracionMs: 5, log: (m) => logs.push(m),
+  }));
+  assert.equal(res.ok, false);
+  assert.ok(act.leerFallidas(dir).includes('1.2.0'));
+  assert.equal(act.restauracionPendiente(), true);
+  assert.ok(res.restauracion && typeof res.restauracion.then === 'function');
+  await res.restauracion;
+  assert.equal(fallosRestaurar, 45);
+  assert.equal(fs.readFileSync(r.exe, 'utf8'), 'viejo');
+  assert.equal(fs.existsSync(r.anterior), false);
+  assert.equal(act.restauracionPendiente(), false);
+  assert.equal(logs.filter((m) => m.includes('No se pudo restaurar')).length, 1); // cada fallo distinto, una vez
+  assert.equal(logs.filter((m) => m.includes('restaurado')).length, 1);
+});
+
+test('reemplazarYLanzar: no se aplica nada mientras hay una restauración pendiente', async () => {
+  const a = escenarioPendiente();
+  fs.writeFileSync(a.r.anterior, 'viejo');
+  let destrabar = false;
+  const prom = act.restaurarEnSegundoPlano(a.dir, {
+    intervaloMs: 5, renombrar: (de, hacia) => { if (!destrabar) throw new Error('EBUSY'); fs.renameSync(de, hacia); },
+  });
+  const b = escenarioPendiente();
+  const f = falsos('1.2.0');
+  const res = await act.reemplazarYLanzar(Object.assign({ dirBase: b.dir, versionNueva: '1.2.0' }, f, rapido));
+  assert.equal(res.ok, false);
+  assert.equal(f.lanzados.length, 0);
+  assert.equal(fs.readFileSync(b.r.exe, 'utf8'), 'viejo');
+  destrabar = true;
+  await prom;
+  assert.equal(act.restauracionPendiente(), false);
+});
+
+test('restaurarEnSegundoPlano: sin anterior no hay nada que restaurar', async () => {
+  const dir = dirTemp();
+  fs.writeFileSync(act.rutas(dir).exe, 'x');
+  let llamadas = 0;
+  await act.restaurarEnSegundoPlano(dir, { intervaloMs: 5, renombrar: () => { llamadas++; } });
+  assert.equal(llamadas, 0);
+  assert.equal(act.restauracionPendiente(), false);
+});
+
+// start-agent.vbs lanza agente-impresion.anterior.exe si falta el exe (corte de
+// luz entre los dos renames): ese proceso también es un agente para el lock.
+test('esImagenDeAgente: el exe, el anterior y el propio cuentan; otro programa no', () => {
+  assert.equal(act.esImagenDeAgente('agente-impresion.exe'), true);
+  assert.equal(act.esImagenDeAgente('AGENTE-IMPRESION.ANTERIOR.EXE'), true);
+  assert.equal(act.esImagenDeAgente(path.basename(process.execPath)), true);
+  assert.equal(act.esImagenDeAgente('svchost.exe'), false);
+  assert.equal(act.esImagenDeAgente('agente-impresion.nuevo.exe'), false);
 });
