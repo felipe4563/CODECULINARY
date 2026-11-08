@@ -120,8 +120,99 @@ function esAgenteVivo(pid) {
   } catch { return false; }
 }
 
+function borrarSilencioso(ruta) { try { fs.unlinkSync(ruta); } catch {} }
+
+// Descarga `url` a `destino` en streaming. Sin tope total: solo corta si pasan
+// `inactividadMs` sin recibir datos.
+async function descargarAArchivo(fetchImpl, url, destino, inactividadMs) {
+  const ctrl = new AbortController();
+  let timer = setTimeout(function() { ctrl.abort(); }, inactividadMs);
+  const reiniciar = function() { clearTimeout(timer); timer = setTimeout(function() { ctrl.abort(); }, inactividadMs); };
+  try {
+    const res = await fetchImpl(url, { signal: ctrl.signal });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.body) throw new Error('respuesta sin cuerpo');
+    const salida = fs.createWriteStream(destino);
+    const lector = res.body.getReader();
+    try {
+      for (;;) {
+        const { done, value } = await lector.read();
+        if (done) break;
+        reiniciar();
+        if (!salida.write(value)) await new Promise(function(r) { salida.once('drain', r); });
+      }
+    } catch (e) {
+      salida.destroy();
+      throw e;
+    }
+    await new Promise(function(resolve, reject) {
+      salida.on('error', reject);
+      salida.end(resolve);
+    });
+  } finally { clearTimeout(timer); }
+}
+
+// Consulta al servidor si hay una versión más nueva y, de haberla, la deja
+// descargada y verificada como pendiente. NUNCA reemplaza el exe en uso.
+async function revisarYDescargar(opts) {
+  const servidor = opts.servidor, dirBase = opts.dirBase, versionActual = opts.versionActual;
+  const log = opts.log || function() {};
+  const fetchImpl = opts.fetchImpl || fetch;
+  if (!urlPermitida(servidor)) return { estado: 'sin_https' };
+  const r = rutas(dirBase);
+  const base = String(servidor).replace(/\/+$/, '');
+  try {
+    // Un pendiente que ya no sirve (versión <= la actual) se descarta.
+    let pend = leerPendiente(dirBase);
+    if (pend && compararVersiones(pend.version, versionActual) <= 0) {
+      borrarSilencioso(r.pendienteExe);
+      borrarSilencioso(r.pendienteJson);
+      pend = null;
+    }
+
+    const ctrl = new AbortController();
+    const t = setTimeout(function() { ctrl.abort(); }, 10000);
+    let info;
+    try {
+      const res = await fetchImpl(base + '/api/v1/agente/version', { signal: ctrl.signal });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      info = await res.json();
+    } finally { clearTimeout(t); }
+    if (!info || typeof info.version !== 'string' || typeof info.sha256 !== 'string' || typeof info.tamano !== 'number') {
+      throw new Error('respuesta de versión inválida');
+    }
+
+    if (compararVersiones(info.version, versionActual) <= 0) return { estado: 'al_dia', version: info.version };
+    if (leerFallidas(dirBase).indexOf(info.version) !== -1) return { estado: 'fallida', version: info.version };
+
+    if (pend && pend.version === info.version && await verificarArchivo(r.pendienteExe, pend.sha256, pend.tamano)) {
+      return { estado: 'ya_pendiente', version: info.version };
+    }
+
+    log('Descargando actualización ' + info.version + '...');
+    fs.mkdirSync(r.carpeta, { recursive: true });
+    const tmp = r.pendienteExe + '.tmp';
+    borrarSilencioso(tmp);
+    try {
+      await descargarAArchivo(fetchImpl, base + '/api/v1/agente/descargar', tmp, 30000);
+      if (!(await verificarArchivo(tmp, info.sha256, info.tamano))) throw new Error('la descarga no coincide con el hash/tamaño esperado');
+      borrarSilencioso(r.pendienteJson);
+      fs.renameSync(tmp, r.pendienteExe);
+      fs.writeFileSync(r.pendienteJson, JSON.stringify({ version: info.version, sha256: info.sha256, tamano: info.tamano }), 'utf8');
+    } catch (e) {
+      borrarSilencioso(tmp);
+      throw e;
+    }
+    log('Actualización ' + info.version + ' descargada; se aplicará al prender la PC');
+    return { estado: 'descargado', version: info.version };
+  } catch (e) {
+    const causa = (e && e.cause && e.cause.code) ? ' (' + e.cause.code + ')' : '';
+    return { estado: 'error', error: ((e && e.message) || String(e)) + causa };
+  }
+}
+
 module.exports = {
   compararVersiones, esArranqueDePC, esVueltaDeHibernacion, urlPermitida,
   rutas, sha256Archivo, verificarArchivo, leerFallidas, marcarFallida,
-  leerPendiente, esAgenteVivo,
+  leerPendiente, esAgenteVivo, revisarYDescargar,
 };

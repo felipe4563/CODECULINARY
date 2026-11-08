@@ -19,6 +19,9 @@ git pull origin main
 echo "==> Instalando dependencias del backend..."
 cd backend && npm install --omit=dev && cd ..
 
+echo "==> Publicando agente de impresión..."
+if (cd print-agent && npm ci && npm run publicar); then echo "    agente publicado"; else echo "    AVISO: no se pudo construir el agente; se sigue ofreciendo la versión anterior"; fi
+
 echo "==> Construyendo frontend..."
 cd frontend && npm install && npm run build && cd ..
 

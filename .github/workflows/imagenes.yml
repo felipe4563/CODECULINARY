@@ -43,6 +43,17 @@ jobs:
         # ghcr.io exige minúsculas (el repo es felipe4563/CODECULINARY).
         run: echo "nombre=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/codeculinary-${{ matrix.servicio }}" >> "$GITHUB_OUTPUT"
 
+      # El backend sirve el .exe del agente de impresión (auto-actualización):
+      # se construye aquí y entra a la imagen en backend/agente-dist.
+      - uses: actions/setup-node@v4
+        if: matrix.servicio == 'backend'
+        with:
+          node-version: 18
+
+      - name: Construir el agente de impresión
+        if: matrix.servicio == 'backend'
+        run: cd print-agent && npm ci && npm run publicar
+
       - uses: docker/build-push-action@v6
         with:
           context: ./${{ matrix.servicio }}

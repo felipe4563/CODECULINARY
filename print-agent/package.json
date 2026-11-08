@@ -8,7 +8,8 @@
     "start": "node index.js --service",
     "dev":   "node agent.js",
     "test":  "node --test",
-    "build": "pkg . --targets node18-win-x64 --output dist/agente-impresion.exe --compress GZip"
+    "build": "pkg . --targets node18-win-x64 --output dist/agente-impresion.exe --compress GZip",
+    "publicar": "node scripts/publicar.js"
   },
   "pkg": {
     "assets": [],
@@ -21,5 +22,8 @@
   "dependencies": {
     "node-windows": "^1.0.0-beta.8",
     "socket.io-client": "^4.7.5"
+  },
+  "devDependencies": {
+    "pkg": "5.8.1"
   }
 }
