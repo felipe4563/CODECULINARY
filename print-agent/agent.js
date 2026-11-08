@@ -4,7 +4,8 @@ const { writeFileSync, unlinkSync, readFileSync, existsSync, appendFileSync, sta
 const path             = require('path');
 const os               = require('os');
 const http             = require('http');
-const { esAgenteVivo } = require('./actualizacion');
+const act              = require('./actualizacion');
+const VERSION          = require('./package.json').version;
 
 // En producción (pkg) lee config junto al .exe; en dev, junto al script
 const CONFIG_DIR = process.pkg
@@ -66,9 +67,8 @@ function tomarLock() {
     // El archivo ya existe. Puede ser un lock vigente (hay que retirarse) o uno
     // abandonado por un proceso que murió sin limpiar (crash, corte de luz) —
     // en ese caso el PID ya no corresponde a nadie y es seguro tomar el lock.
-    let pidViejo = NaN;
-    try { pidViejo = parseInt(readFileSync(LOCK_FILE, 'utf8').trim(), 10); } catch {}
-    if (!isNaN(pidViejo) && esAgenteVivo(pidViejo)) return false;
+    if (act.agenteVivoSegunLock(LOCK_FILE)) return false;
+    const pidViejo = act.pidDelLock(LOCK_FILE);
     console.log('.. Lock abandonado (PID ' + (isNaN(pidViejo) ? '?' : pidViejo) + ' ya no es un agente) — se toma de nuevo');
     try { unlinkSync(LOCK_FILE); } catch {}
     try {
@@ -86,7 +86,9 @@ if (!tomarLock()) {
   process.exit(0);
 }
 
-process.on('exit',    function() { try { unlinkSync(LOCK_FILE); } catch {} });
+// Solo se borra el lock si sigue siendo de este proceso: tras aplicar una
+// actualización, el agente viejo termina cuando el nuevo ya tomó el suyo.
+process.on('exit',    function() { act.borrarLockSiEsMio(LOCK_FILE, process.pid); });
 process.on('SIGINT',  function() { process.exit(0); });
 process.on('SIGTERM', function() { process.exit(0); });
 
@@ -101,7 +103,7 @@ try {
   process.exit(1);
 }
 
-console.log('=== Agente de impresión térmica ===');
+console.log('=== Agente de impresión térmica v' + VERSION + ' ===');
 console.log(`Servidor : ${config.servidor}`);
 console.log(`Caja     : ${config.impresora_caja}`);
 console.log(`Cocina   : ${config.impresora_cocina}`);
@@ -138,6 +140,16 @@ function liberar(tipo, pedidoId) {
   impresos.delete(tipo + ':' + pedidoId);
 }
 
+// Impresiones físicas en curso: antes de reemplazar el exe (vuelta de
+// hibernación con actualización pendiente) se espera a que no quede ninguna.
+let impresionesEnCurso = 0;
+
+async function imprimirContando(impresora, buffer) {
+  impresionesEnCurso++;
+  try { return await printRaw(impresora, buffer); }
+  finally { impresionesEnCurso--; }
+}
+
 async function imprimirCaja(datos, origen, forzar) {
   var pid = datos.pedido ? datos.pedido.id : '?';
   var motivo = motivoNoPertenece(datos);
@@ -152,7 +164,7 @@ async function imprimirCaja(datos, origen, forzar) {
   reservar('caja', pid);
   console.log('[' + ts() + '] >> print:caja  Pedido #' + pid + ' (' + origen + (forzar ? ', forzado' : '') + ')');
   try {
-    await printRaw(config.impresora_caja, buildCaja(datos, COLS_CAJA));
+    await imprimirContando(config.impresora_caja, buildCaja(datos, COLS_CAJA));
     console.log('[' + ts() + '] OK Caja impreso');
   } catch (err) {
     liberar('caja', pid);
@@ -174,7 +186,7 @@ async function imprimirCocina(datos, origen, forzar) {
   reservar('cocina', pid);
   console.log('[' + ts() + '] >> print:cocina Pedido #' + pid + ' (' + origen + (forzar ? ', forzado' : '') + ')');
   try {
-    await printRaw(config.impresora_cocina, buildCocina(datos, COLS_COCINA));
+    await imprimirContando(config.impresora_cocina, buildCocina(datos, COLS_COCINA));
     console.log('[' + ts() + '] OK Cocina impreso');
   } catch (err) {
     liberar('cocina', pid);
@@ -188,7 +200,7 @@ async function imprimirCocina(datos, origen, forzar) {
 // cada cierre es un evento único.
 async function imprimirCierre(datos, origen) {
   console.log('[' + ts() + '] >> print:cierre Sesión #' + (datos.reporte && datos.reporte.sesion ? datos.reporte.sesion.id : '?') + ' (' + origen + ')');
-  await printRaw(config.impresora_caja, buildCierre(datos, COLS_CAJA));
+  await imprimirContando(config.impresora_caja, buildCierre(datos, COLS_CAJA));
   console.log('[' + ts() + '] OK Cierre impreso');
 }
 
@@ -330,16 +342,31 @@ socket.on('disconnect', function() { if (sinConexionDesde == null) sinConexionDe
 
 function minutos(ms) { return Math.round(ms / 60000); }
 
+function reconectarTrasSuspension() {
+  reconectarSocket('vigía: la PC volvió de suspensión').then(function(r) {
+    console.log('[' + ts() + '] ' + (r.conectado ? '✓ Reconectado tras suspensión' : '✗ Sin conexión tras suspensión: ' + r.error));
+  });
+}
+
 setInterval(function() {
   const ahora = Date.now();
   const desdeUltimoTick = ahora - ultimoTick;
   ultimoTick = ahora;
 
+  // Mientras se reemplaza el exe, el socket y el puerto están cerrados a
+  // propósito: la vigía no debe reabrirlos.
+  if (aplicandoActualizacion) return;
+
   if (desdeUltimoTick > VIGIA_SALTO_SUSPENSION) {
     console.log('[' + ts() + '] ↯ La PC estuvo suspendida ~' + minutos(desdeUltimoTick) + ' min');
-    reconectarSocket('vigía: la PC volvió de suspensión').then(function(r) {
-      console.log('[' + ts() + '] ' + (r.conectado ? '✓ Reconectado tras suspensión' : '✗ Sin conexión tras suspensión: ' + r.error));
-    });
+    // Volver de hibernación >= 2 h cuenta como "prender la PC" (Inicio rápido de
+    // Windows: "Apagar" hiberna y la tarea de arranque no se dispara). Solo en el
+    // exe (en dev no hay nada que reemplazar) y solo con un pendiente de una
+    // versión mayor; el hash se verifica en aplicarTrasHibernacion.
+    const candidato = (process.pkg && act.esVueltaDeHibernacion(desdeUltimoTick))
+      ? act.pendienteCandidato(CONFIG_DIR, VERSION) : null;
+    if (candidato) aplicarTrasHibernacion();
+    else reconectarTrasSuspension();
     sinConexionDesde = socket.connected ? null : ahora;
   } else if (!socket.connected && sinConexionDesde != null && ahora - sinConexionDesde > VIGIA_SIN_CONEXION_MS) {
     reconectarSocket('vigía: sin conexión hace ' + minutos(ahora - sinConexionDesde) + ' min').then(function(r) {
@@ -355,6 +382,112 @@ setInterval(function() {
       ' (PID ' + process.pid + ', encendido hace ' + Math.floor((ahora - agenteIniciadoEn) / 3600000) + ' h)');
   }
 }, VIGIA_INTERVALO_MS);
+
+// ── Auto-actualización ───────────────────────────────────────────────────────
+// Revisa ~60 s después de arrancar y luego cada 6 h si el servidor publica una
+// versión más nueva; si la hay, la deja descargada y verificada como pendiente.
+// Nunca reemplaza el exe aquí: eso solo pasa al prender la PC (index.js) o al
+// volver de hibernación (vigía).
+const REVISION_PRIMERA_MS   = 60 * 1000;
+const REVISION_INTERVALO_MS = 6 * 3600 * 1000;
+
+let aplicandoActualizacion = false;
+let revisionEnCurso = null;
+let ultimoEstadoRevision = null;
+let ultimoErrorRevision = null;
+
+function revisarActualizacion() {
+  if (aplicandoActualizacion || revisionEnCurso) return;
+  revisionEnCurso = act.revisarYDescargar({
+    servidor: config.servidor, dirBase: CONFIG_DIR, versionActual: VERSION,
+    log: function(m) { console.log('[' + ts() + '] ' + m); },
+  }).then(function(r) {
+    // Solo se loguean los cambios: un servidor caído no llena el log cada 6 h.
+    if (r.estado === 'error') {
+      if (r.error !== ultimoErrorRevision) console.log('[' + ts() + '] ✗ No se pudo revisar si hay actualización: ' + r.error);
+      ultimoErrorRevision = r.error;
+    } else {
+      ultimoErrorRevision = null;
+      if (r.estado === 'sin_https' && ultimoEstadoRevision !== 'sin_https') {
+        console.log('[' + ts() + '] .. Auto-actualización desactivada: el servidor no usa https (' + config.servidor + ')');
+      }
+    }
+    ultimoEstadoRevision = r.estado;
+  }).catch(function(e) {
+    console.error('[' + ts() + '] ✗ Revisión de actualización: ' + (e && e.message ? e.message : e));
+  }).finally(function() { revisionEnCurso = null; });
+}
+
+setTimeout(revisarActualizacion, REVISION_PRIMERA_MS);
+setInterval(revisarActualizacion, REVISION_INTERVALO_MS);
+
+function cerrarServidorLocal() {
+  return new Promise(function(resolve) {
+    if (!servidorLocal.listening) return resolve();
+    // close() suelta el puerto en el acto; su callback espera a que terminen las
+    // conexiones abiertas (keep-alive del navegador), por eso el tope de 5 s.
+    servidorLocal.close(function() { resolve(); });
+    if (servidorLocal.closeIdleConnections) servidorLocal.closeIdleConnections();
+    setTimeout(resolve, 5000);
+  });
+}
+
+async function esperarSinImpresiones() {
+  const limite = Date.now() + 2 * 60 * 1000;
+  while (impresionesEnCurso > 0 && Date.now() < limite) {
+    await new Promise(function(r) { setTimeout(r, 200); });
+  }
+}
+
+// Vuelve a ser el agente normal (tras una vuelta atrás o un error a mitad).
+function reanudarComoAgente() {
+  if (!tomarLock()) {
+    console.log('[' + ts() + '] .. Otro agente tomó el lock mientras se actualizaba — este se retira.');
+    process.exit(0);
+  }
+  if (!servidorLocal.listening) servidorLocal.listen(PUERTO_LOCAL, '127.0.0.1');
+  if (!socket.connected) socket.connect();
+}
+
+async function aplicarTrasHibernacion() {
+  aplicandoActualizacion = true;
+  let detenido = false;
+  try {
+    if (revisionEnCurso) await revisionEnCurso; // no copiar un pendiente a medio descargar
+    const pend = await act.pendienteAplicable(CONFIG_DIR, VERSION);
+    if (!pend) {
+      console.log('[' + ts() + '] .. La actualización pendiente no pasó la verificación — se descartó');
+      return reconectarTrasSuspension();
+    }
+    if (!act.tomarLockAplicando(CONFIG_DIR)) {
+      console.log('[' + ts() + '] .. Otro proceso está aplicando la actualización');
+      return reconectarTrasSuspension();
+    }
+    let res;
+    try {
+      console.log('[' + ts() + '] ⇪ Volvió de hibernación: aplicando actualización ' + VERSION + ' → ' + pend.version + '...');
+      detenido = true;
+      socket.disconnect();
+      await cerrarServidorLocal();
+      await esperarSinImpresiones();
+      if (servidorLocal.closeAllConnections) servidorLocal.closeAllConnections();
+      act.borrarLockSiEsMio(LOCK_FILE, process.pid);
+      res = await act.reemplazarYLanzar(Object.assign({
+        dirBase: CONFIG_DIR, versionNueva: pend.version,
+        log: function(m) { console.log('[' + ts() + '] ' + m); },
+      }, act.lanzadorReal({ puerto: PUERTO_LOCAL })));
+    } finally {
+      act.soltarLockAplicando(CONFIG_DIR);
+    }
+    if (res.ok) process.exit(0); // ya atiende la versión nueva (el exit no toca su agente.lock)
+    reanudarComoAgente();
+  } catch (e) {
+    console.error('[' + ts() + '] ✗ Error al aplicar la actualización: ' + (e && e.message ? e.message : e));
+    if (detenido) reanudarComoAgente();
+  } finally {
+    aplicandoActualizacion = false;
+  }
+}
 
 // ── Canal 2: HTTP local (principal — el navegador de ESTA PC llama directo, sin Internet) ──
 // Solo escucha en 127.0.0.1: nadie fuera de esta máquina puede llegar a este puerto.
@@ -453,7 +586,7 @@ const servidorLocal = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && req.url === '/salud') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, sucursal_id: config.sucursal_id || null, caja_ids: cajaIds, conectado: socket.connected }));
+    res.end(JSON.stringify({ ok: true, version: VERSION, sucursal_id: config.sucursal_id || null, caja_ids: cajaIds, conectado: socket.connected }));
     return;
   }
 

@@ -122,6 +122,214 @@ function esAgenteVivo(pid) {
 
 function borrarSilencioso(ruta) { try { fs.unlinkSync(ruta); } catch {} }
 
+// PID escrito en un archivo de lock, o NaN si no existe o no es un número.
+function pidDelLock(lockPath) {
+  try { return parseInt(fs.readFileSync(lockPath, 'utf8').trim(), 10); } catch { return NaN; }
+}
+
+// ¿Hay un agente vivo dueño de este lock? (PID existe Y es un agente, ver esAgenteVivo)
+function agenteVivoSegunLock(lockPath) {
+  const pid = pidDelLock(lockPath);
+  return !isNaN(pid) && esAgenteVivo(pid);
+}
+
+// Borra el lock solo si es de este proceso. Tras un reemplazo exitoso el agente
+// viejo termina DESPUÉS de que el nuevo tomó agente.lock: si lo borrara sin
+// mirar, la vigía lanzaría un segundo agente (impresiones duplicadas).
+function borrarLockSiEsMio(lockPath, pid) {
+  try {
+    if (fs.readFileSync(lockPath, 'utf8').trim() === String(pid)) fs.unlinkSync(lockPath);
+  } catch {}
+}
+
+// Lock "estoy aplicando una actualización", para que dos arranques simultáneos
+// (tarea de arranque + vigía) no reemplacen el exe a la vez. Mismo esquema que
+// agente.lock: flag 'wx' (indivisible) y un lock abandonado solo se retoma si
+// su PID ya no es un agente (Windows reutiliza PIDs tras reiniciar).
+function tomarLockAplicando(dirBase) {
+  const r = rutas(dirBase);
+  const escribir = function() { fs.writeFileSync(r.aplicandoLock, String(process.pid), { encoding: 'utf8', flag: 'wx' }); };
+  try { fs.mkdirSync(r.carpeta, { recursive: true }); } catch {}
+  try { escribir(); return true; } catch (e) { if (e.code !== 'EEXIST') return false; }
+  if (agenteVivoSegunLock(r.aplicandoLock)) return false;
+  borrarSilencioso(r.aplicandoLock);
+  try { escribir(); return true; } catch { return false; }
+}
+
+function soltarLockAplicando(dirBase) {
+  borrarLockSiEsMio(rutas(dirBase).aplicandoLock, process.pid);
+}
+
+function borrarPendiente(r) {
+  borrarSilencioso(r.pendienteExe);
+  borrarSilencioso(r.pendienteJson);
+}
+
+// Chequeo barato (sin hash): el pendiente.json describe una versión mayor a la
+// actual y que no falló antes. Si sobra (versión <= actual o ya fallida) se borra.
+function pendienteCandidato(dirBase, versionActual) {
+  const pend = leerPendiente(dirBase);
+  if (!pend) return null;
+  if (compararVersiones(pend.version, versionActual) <= 0 || leerFallidas(dirBase).indexOf(pend.version) !== -1) {
+    borrarPendiente(rutas(dirBase));
+    return null;
+  }
+  return pend;
+}
+
+// Pendiente listo para aplicar: candidato + archivo con el hash/tamaño esperado.
+// Uno corrupto o truncado se borra (se volverá a descargar en la próxima revisión).
+async function pendienteAplicable(dirBase, versionActual) {
+  const pend = pendienteCandidato(dirBase, versionActual);
+  if (!pend) return null;
+  const r = rutas(dirBase);
+  if (!(await verificarArchivo(r.pendienteExe, pend.sha256, pend.tamano))) {
+    borrarPendiente(r);
+    return null;
+  }
+  return pend;
+}
+
+function esperar(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+
+// Reemplaza agente-impresion.exe por el pendiente, lanza el nuevo y espera a que
+// /salud responda con la versión nueva. Si no lo hace a tiempo: vuelta atrás
+// (mata el nuevo, restaura el exe anterior y anota la versión como fallida).
+// Quien llama debe haber liberado agente.lock y el puerto 4321 antes.
+async function reemplazarYLanzar(opts) {
+  const dirBase = opts.dirBase, versionNueva = opts.versionNueva;
+  const timeoutMs = opts.timeoutMs != null ? opts.timeoutMs : 60000;
+  const intervaloMs = opts.intervaloMs != null ? opts.intervaloMs : 2000;
+  const log = opts.log || function() {};
+  const r = rutas(dirBase);
+
+  // 1. Windows deja renombrar un exe en uso, pero no sobrescribirlo.
+  try {
+    borrarSilencioso(r.anterior);
+    fs.renameSync(r.exe, r.anterior);
+  } catch (e) {
+    return { ok: false, error: 'no se pudo apartar el exe actual: ' + e.message };
+  }
+
+  // Devuelve el exe anterior a su lugar. El nuevo recién matado puede tardar un
+  // instante en soltar el archivo: se reintenta unos segundos.
+  async function restaurar() {
+    for (let i = 0; i < 40; i++) {
+      try { fs.renameSync(r.anterior, r.exe); return true; } catch {}
+      await esperar(250);
+    }
+    return false;
+  }
+
+  try { fs.copyFileSync(r.pendienteExe, r.exe); } catch (e) {
+    const restaurado = await restaurar();
+    return { ok: false, error: 'no se pudo copiar el pendiente: ' + e.message + (restaurado ? '' : ' (¡no se pudo restaurar el exe anterior!)') };
+  }
+
+  let error = null;
+  try {
+    opts.lanzar(r.exe);
+  } catch (e) { error = 'no se pudo lanzar la versión nueva: ' + e.message; }
+
+  if (!error) {
+    const limite = Date.now() + timeoutMs;
+    let ultima = null;
+    for (;;) {
+      try { ultima = await opts.consultarSalud(); } catch { ultima = null; }
+      if (ultima === versionNueva) {
+        borrarPendiente(r);
+        log('✓ Actualización ' + versionNueva + ' aplicada');
+        return { ok: true };
+      }
+      if (Date.now() >= limite) break;
+      await esperar(intervaloMs);
+    }
+    error = 'la versión ' + versionNueva + ' no respondió en ' + Math.round(timeoutMs / 1000) + ' s' +
+      (ultima ? ' (respondió ' + ultima + ')' : '');
+  }
+
+  // Vuelta atrás.
+  try { await opts.matarNuevo(); } catch {}
+  const restaurado = await restaurar();
+  marcarFallida(dirBase, versionNueva);
+  borrarPendiente(r);
+  if (!restaurado) error += ' — ¡no se pudo restaurar agente-impresion.anterior.exe!';
+  log('✗ Actualización ' + versionNueva + ' falló (' + error + '); se vuelve a la versión anterior y no se reintentará');
+  return { ok: false, error: error };
+}
+
+// Al arrancar el agente (antes de tomar agente.lock y abrir el puerto): si la PC
+// recién prendió y hay un pendiente verificado de una versión mayor, lo aplica.
+async function alArrancar(opts) {
+  const dirBase = opts.dirBase, versionActual = opts.versionActual;
+  if (opts.agenteVivo()) return 'sin_cambios';
+  if (!esArranqueDePC(opts.uptimeSeg)) return 'sin_cambios';
+  // Antes del lock: el agente nuevo, lanzado por quien aplica (que tiene el
+  // lock tomado mientras espera su /salud), debe seguir de largo y atender.
+  if (!pendienteCandidato(dirBase, versionActual)) return 'sin_cambios';
+  if (!tomarLockAplicando(dirBase)) return 'otro_aplicando';
+  try {
+    // Re-chequeo con el lock en mano: otro arranque pudo terminar de aplicar
+    // justo antes (agente nuevo ya vivo, pendiente ya consumido).
+    if (opts.agenteVivo()) return 'sin_cambios';
+    const pend = await pendienteAplicable(dirBase, versionActual);
+    if (!pend) return 'sin_cambios';
+    (opts.log || function() {})('Aplicando actualización ' + versionActual + ' → ' + pend.version + '...');
+    const res = await reemplazarYLanzar(Object.assign({}, opts, { versionNueva: pend.version }));
+    return res.ok ? 'aplicado' : 'sin_cambios';
+  } finally {
+    soltarLockAplicando(dirBase);
+  }
+}
+
+// Dependencias reales de reemplazarYLanzar (lanzar el exe nuevo, consultar su
+// /salud, matarlo). Compartidas por index.js (arranque) y agent.js (hibernación).
+function lanzadorReal(opciones) {
+  const o = opciones || {};
+  const { spawn } = require('child_process');
+  const http = require('http');
+  const puerto = o.puerto || 4321;
+  let hijo = null;
+  return {
+    lanzar: function(rutaExe) {
+      // pkg parchea spawn y SIEMPRE agrega PKG_EXECPATH=<exe propio> al entorno
+      // del hijo. Como el exe nuevo vive en la MISMA ruta que el viejo, el hijo
+      // creería que lo invocaron "como node" y tomaría '--service' como el
+      // script a ejecutar. Este Proxy ignora esa asignación y el hijo arranca
+      // como un agente normal.
+      const base = Object.assign({}, process.env);
+      delete base.PKG_EXECPATH;
+      const env = new Proxy(base, {
+        set: function(t, k, v) { if (k !== 'PKG_EXECPATH') t[k] = v; return true; },
+      });
+      hijo = spawn(rutaExe, ['--service'], {
+        cwd: path.dirname(rutaExe), env: env, detached: true, stdio: 'ignore', windowsHide: true,
+      });
+      hijo.on('error', function() {}); // un fallo al lanzar se ve como "/salud no responde"
+      hijo.unref();
+    },
+    consultarSalud: function() {
+      return new Promise(function(resolve) {
+        const req = http.get({ host: '127.0.0.1', port: puerto, path: '/salud', timeout: 2000 }, function(res) {
+          let cuerpo = '';
+          res.setEncoding('utf8');
+          res.on('data', function(d) { cuerpo += d; });
+          res.on('end', function() {
+            try { const j = JSON.parse(cuerpo); resolve(typeof j.version === 'string' ? j.version : null); }
+            catch { resolve(null); }
+          });
+          res.on('error', function() { resolve(null); });
+        });
+        req.on('timeout', function() { req.destroy(); resolve(null); });
+        req.on('error', function() { resolve(null); });
+      });
+    },
+    matarNuevo: function() {
+      if (hijo && hijo.pid) { try { process.kill(hijo.pid); } catch {} }
+    },
+  };
+}
+
 // Descarga `url` a `destino` en streaming. Sin tope total: solo corta si pasan
 // `inactividadMs` sin recibir datos.
 async function descargarAArchivo(fetchImpl, url, destino, inactividadMs) {
@@ -224,4 +432,6 @@ module.exports = {
   compararVersiones, esArranqueDePC, esVueltaDeHibernacion, urlPermitida,
   rutas, sha256Archivo, verificarArchivo, leerFallidas, marcarFallida,
   leerPendiente, esAgenteVivo, revisarYDescargar,
+  pidDelLock, agenteVivoSegunLock, borrarLockSiEsMio, tomarLockAplicando, soltarLockAplicando,
+  pendienteCandidato, pendienteAplicable, reemplazarYLanzar, alArrancar, lanzadorReal,
 };

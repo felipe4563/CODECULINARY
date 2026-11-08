@@ -240,3 +240,214 @@ test('revisarYDescargar: 404 en /descargar => error sin pendiente', async () => 
     assert.equal(fs.existsSync(act.rutas(dir).pendienteJson), false);
   } finally { await cerrar(s); }
 });
+
+// ---- reemplazarYLanzar / alArrancar ----
+
+// Carpeta con agente-impresion.exe='viejo' y un pendiente 'nuevo' válido (1.2.0).
+function escenarioPendiente(opciones) {
+  const o = Object.assign({ version: '1.2.0', shaMal: false }, opciones);
+  const dir = dirTemp();
+  const r = act.rutas(dir);
+  fs.writeFileSync(r.exe, 'viejo');
+  fs.mkdirSync(r.carpeta, { recursive: true });
+  fs.writeFileSync(r.pendienteExe, 'nuevo');
+  const sha = o.shaMal ? 'b'.repeat(64) : crypto.createHash('sha256').update('nuevo').digest('hex');
+  fs.writeFileSync(r.pendienteJson, JSON.stringify({ version: o.version, sha256: sha, tamano: 5 }));
+  return { dir, r };
+}
+
+function falsos(respuestaSalud) {
+  const f = { lanzados: [], matados: 0 };
+  f.lanzar = (exe) => { f.lanzados.push(exe); };
+  f.consultarSalud = async () => (typeof respuestaSalud === 'function' ? respuestaSalud() : respuestaSalud);
+  f.matarNuevo = () => { f.matados++; };
+  return f;
+}
+
+const rapido = { timeoutMs: 300, intervaloMs: 20, log: () => {} };
+
+test('reemplazarYLanzar: salud responde la versión nueva => ok', async () => {
+  const { dir, r } = escenarioPendiente();
+  const f = falsos('1.2.0');
+  const res = await act.reemplazarYLanzar(Object.assign({ dirBase: dir, versionNueva: '1.2.0' }, f, rapido));
+  assert.equal(res.ok, true);
+  assert.deepEqual(f.lanzados, [r.exe]);
+  assert.equal(fs.readFileSync(r.exe, 'utf8'), 'nuevo');
+  assert.equal(fs.readFileSync(r.anterior, 'utf8'), 'viejo');
+  assert.equal(fs.existsSync(r.pendienteExe), false);
+  assert.equal(fs.existsSync(r.pendienteJson), false);
+  assert.equal(f.matados, 0);
+});
+
+test('reemplazarYLanzar: salud nunca responde => vuelta atrás', async () => {
+  const { dir, r } = escenarioPendiente();
+  const f = falsos(null);
+  const res = await act.reemplazarYLanzar(Object.assign({ dirBase: dir, versionNueva: '1.2.0' }, f, rapido));
+  assert.equal(res.ok, false);
+  assert.equal(fs.readFileSync(r.exe, 'utf8'), 'viejo');
+  assert.equal(f.matados, 1);
+  assert.ok(act.leerFallidas(dir).includes('1.2.0'));
+  assert.equal(fs.existsSync(r.pendienteExe), false);
+  assert.equal(fs.existsSync(r.pendienteJson), false);
+});
+
+test('reemplazarYLanzar: responde la versión vieja => se trata como fallo', async () => {
+  const { dir, r } = escenarioPendiente();
+  const f = falsos('1.1.0');
+  const res = await act.reemplazarYLanzar(Object.assign({ dirBase: dir, versionNueva: '1.2.0' }, f, rapido));
+  assert.equal(res.ok, false);
+  assert.equal(fs.readFileSync(r.exe, 'utf8'), 'viejo');
+  assert.equal(f.matados, 1);
+  assert.ok(act.leerFallidas(dir).includes('1.2.0'));
+});
+
+test('reemplazarYLanzar: consultarSalud que lanza error cuenta como sin respuesta', async () => {
+  const { dir, r } = escenarioPendiente();
+  const f = falsos(() => { throw new Error('ECONNREFUSED'); });
+  const res = await act.reemplazarYLanzar(Object.assign({ dirBase: dir, versionNueva: '1.2.0' }, f, rapido));
+  assert.equal(res.ok, false);
+  assert.equal(fs.readFileSync(r.exe, 'utf8'), 'viejo');
+});
+
+test('reemplazarYLanzar: lanzar que lanza error => vuelta atrás', async () => {
+  const { dir, r } = escenarioPendiente();
+  const f = falsos('1.2.0');
+  f.lanzar = () => { throw new Error('spawn EACCES'); };
+  const res = await act.reemplazarYLanzar(Object.assign({ dirBase: dir, versionNueva: '1.2.0' }, f, rapido));
+  assert.equal(res.ok, false);
+  assert.equal(fs.readFileSync(r.exe, 'utf8'), 'viejo');
+  assert.ok(act.leerFallidas(dir).includes('1.2.0'));
+});
+
+function opcionesArranque(dir, f, extra) {
+  return Object.assign({ dirBase: dir, versionActual: '1.1.0', uptimeSeg: 60, agenteVivo: () => false }, f, rapido, extra);
+}
+
+test('alArrancar: aplica en arranque de PC con pendiente válido', async () => {
+  const { dir, r } = escenarioPendiente();
+  const f = falsos('1.2.0');
+  assert.equal(await act.alArrancar(opcionesArranque(dir, f)), 'aplicado');
+  assert.equal(fs.readFileSync(r.exe, 'utf8'), 'nuevo');
+  assert.equal(fs.existsSync(r.aplicandoLock), false);
+});
+
+test('alArrancar: fallo al aplicar => sin_cambios, exe viejo y lock liberado', async () => {
+  const { dir, r } = escenarioPendiente();
+  const f = falsos(null);
+  assert.equal(await act.alArrancar(opcionesArranque(dir, f)), 'sin_cambios');
+  assert.equal(fs.readFileSync(r.exe, 'utf8'), 'viejo');
+  assert.equal(fs.existsSync(r.aplicandoLock), false);
+});
+
+test('alArrancar: PC encendida hace rato => sin_cambios sin lanzar', async () => {
+  const { dir, r } = escenarioPendiente();
+  const f = falsos('1.2.0');
+  assert.equal(await act.alArrancar(opcionesArranque(dir, f, { uptimeSeg: 3600 })), 'sin_cambios');
+  assert.equal(f.lanzados.length, 0);
+  assert.equal(fs.readFileSync(r.exe, 'utf8'), 'viejo');
+});
+
+test('alArrancar: el agente nuevo (versión = pendiente) no vuelve a aplicar', async () => {
+  const { dir, r } = escenarioPendiente();
+  const f = falsos('1.2.0');
+  assert.equal(await act.alArrancar(opcionesArranque(dir, f, { versionActual: '1.2.0' })), 'sin_cambios');
+  assert.equal(f.lanzados.length, 0);
+  assert.equal(fs.readFileSync(r.exe, 'utf8'), 'viejo');
+});
+
+test('alArrancar: ya hay un agente vivo => sin_cambios', async () => {
+  const { dir } = escenarioPendiente();
+  const f = falsos('1.2.0');
+  assert.equal(await act.alArrancar(opcionesArranque(dir, f, { agenteVivo: () => true })), 'sin_cambios');
+  assert.equal(f.lanzados.length, 0);
+});
+
+test('alArrancar: aplicando.lock de un proceso vivo => otro_aplicando', async () => {
+  const { dir, r } = escenarioPendiente();
+  fs.writeFileSync(r.aplicandoLock, String(process.pid));
+  const f = falsos('1.2.0');
+  assert.equal(await act.alArrancar(opcionesArranque(dir, f)), 'otro_aplicando');
+  assert.equal(f.lanzados.length, 0);
+  assert.equal(fs.readFileSync(r.aplicandoLock, 'utf8'), String(process.pid)); // no se toca el lock ajeno
+  assert.equal(fs.readFileSync(r.exe, 'utf8'), 'viejo');
+});
+
+test('alArrancar: aplicando.lock abandonado (PID muerto) se toma y se aplica', async () => {
+  const { dir, r } = escenarioPendiente();
+  fs.writeFileSync(r.aplicandoLock, '999999');
+  const f = falsos('1.2.0');
+  assert.equal(await act.alArrancar(opcionesArranque(dir, f)), 'aplicado');
+  assert.equal(fs.existsSync(r.aplicandoLock), false);
+});
+
+test('alArrancar: pendiente con sha distinto => sin_cambios y pendiente borrado', async () => {
+  const { dir, r } = escenarioPendiente({ shaMal: true });
+  const f = falsos('1.2.0');
+  assert.equal(await act.alArrancar(opcionesArranque(dir, f)), 'sin_cambios');
+  assert.equal(f.lanzados.length, 0);
+  assert.equal(fs.existsSync(r.pendienteExe), false);
+  assert.equal(fs.existsSync(r.pendienteJson), false);
+  assert.equal(fs.readFileSync(r.exe, 'utf8'), 'viejo');
+});
+
+test('alArrancar: pendiente con versión <= actual => sin_cambios y pendiente borrado', async () => {
+  const { dir, r } = escenarioPendiente({ version: '1.0.0' });
+  const f = falsos('1.0.0');
+  assert.equal(await act.alArrancar(opcionesArranque(dir, f)), 'sin_cambios');
+  assert.equal(f.lanzados.length, 0);
+  assert.equal(fs.existsSync(r.pendienteExe), false);
+  assert.equal(fs.existsSync(r.pendienteJson), false);
+});
+
+test('alArrancar: pendiente de una versión ya fallida => sin_cambios sin lanzar', async () => {
+  const { dir, r } = escenarioPendiente();
+  act.marcarFallida(dir, '1.2.0');
+  const f = falsos('1.2.0');
+  assert.equal(await act.alArrancar(opcionesArranque(dir, f)), 'sin_cambios');
+  assert.equal(f.lanzados.length, 0);
+  assert.equal(fs.existsSync(r.pendienteExe), false);
+});
+
+test('alArrancar: sin pendiente => sin_cambios', async () => {
+  const dir = dirTemp();
+  fs.writeFileSync(act.rutas(dir).exe, 'viejo');
+  const f = falsos('1.2.0');
+  assert.equal(await act.alArrancar(opcionesArranque(dir, f)), 'sin_cambios');
+  assert.equal(f.lanzados.length, 0);
+});
+
+test('agenteVivoSegunLock', () => {
+  const dir = dirTemp();
+  const lock = path.join(dir, 'agente.lock');
+  assert.equal(act.agenteVivoSegunLock(lock), false); // no existe
+  fs.writeFileSync(lock, 'basura');
+  assert.equal(act.agenteVivoSegunLock(lock), false);
+  fs.writeFileSync(lock, '999999');
+  assert.equal(act.agenteVivoSegunLock(lock), false);
+  fs.writeFileSync(lock, String(process.pid));
+  assert.equal(act.agenteVivoSegunLock(lock), true);
+});
+
+// Review Focus 2: el agente viejo que termina tras un reemplazo exitoso no
+// debe borrar el agente.lock que ya tomó el nuevo.
+test('borrarLockSiEsMio: solo borra el lock si tiene el PID propio', () => {
+  const dir = dirTemp();
+  const lock = path.join(dir, 'agente.lock');
+  fs.writeFileSync(lock, '12345');
+  act.borrarLockSiEsMio(lock, 999);
+  assert.equal(fs.existsSync(lock), true); // es del agente nuevo: no se toca
+  fs.writeFileSync(lock, '999');
+  act.borrarLockSiEsMio(lock, 999);
+  assert.equal(fs.existsSync(lock), false);
+  act.borrarLockSiEsMio(lock, 999); // no existe: no lanza
+});
+
+// El agente nuevo arranca mientras el viejo aún tiene aplicando.lock (esperando
+// su /salud): no debe retirarse como "otro_aplicando", sino seguir y atender.
+test('alArrancar: agente nuevo con aplicando.lock ajeno vivo => sin_cambios', async () => {
+  const { dir, r } = escenarioPendiente();
+  fs.writeFileSync(r.aplicandoLock, String(process.pid));
+  const f = falsos('1.2.0');
+  assert.equal(await act.alArrancar(opcionesArranque(dir, f, { versionActual: '1.2.0' })), 'sin_cambios');
+  assert.equal(f.lanzados.length, 0);
+});
