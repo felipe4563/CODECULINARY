@@ -4,6 +4,7 @@ const { writeFileSync, unlinkSync, readFileSync, existsSync, appendFileSync, sta
 const path             = require('path');
 const os               = require('os');
 const http             = require('http');
+const { esAgenteVivo } = require('./actualizacion');
 
 // En producción (pkg) lee config junto al .exe; en dev, junto al script
 const CONFIG_DIR = process.pkg
@@ -55,25 +56,6 @@ process.on('unhandledRejection', function(reason) {
 // archivo falla si ya existe, en un único paso que el sistema operativo
 // garantiza indivisible, así solo uno de los dos puede ganar la carrera.
 const LOCK_FILE = path.join(CONFIG_DIR, 'agente.lock');
-
-// ¿El PID del lock es un agente vivo? No alcanza con que el PID exista:
-// si la PC se apagó de golpe (corte de luz, apagado forzado) el lock queda
-// con el PID de ayer, y al prender Windows REUTILIZA esos números — el PID
-// viejo suele pertenecer ahora a otro programa (un servicio, el antivirus).
-// Antes eso bastaba para que el agente creyera que ya había otro corriendo y
-// se cerrara, y la vigía repetía lo mismo cada 2 min todo el día ("ayer
-// funcionaba, hoy no"). Por eso se compara también el nombre del ejecutable
-// con el propio (agente-impresion.exe en producción, node.exe en dev).
-function esAgenteVivo(pid) {
-  try {
-    const out = execSync('tasklist /FI "PID eq ' + pid + '" /FO CSV /NH', { encoding: 'utf8' });
-    const propio = path.basename(process.execPath).toLowerCase();
-    return out.split(/\r?\n/).some(function(linea) {
-      const campos = linea.split('","').map(function(c) { return c.replace(/^"|"$/g, '').trim(); });
-      return campos.length > 1 && campos[1] === String(pid) && campos[0].toLowerCase() === propio;
-    });
-  } catch { return false; }
-}
 
 function tomarLock() {
   try {

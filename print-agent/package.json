@@ -1,18 +1,20 @@
 {
   "name": "print-agent",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Agente de impresión térmica para restaurante",
   "main": "index.js",
   "bin": "index.js",
   "scripts": {
     "start": "node index.js --service",
     "dev":   "node agent.js",
+    "test":  "node --test",
     "build": "pkg . --targets node18-win-x64 --output dist/agente-impresion.exe --compress GZip"
   },
   "pkg": {
     "assets": [],
     "scripts": [
       "agent.js",
+      "actualizacion.js",
       "installer.js"
     ]
   },
