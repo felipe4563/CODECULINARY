@@ -405,25 +405,41 @@ setInterval(function() {
 // ── Auto-actualización ───────────────────────────────────────────────────────
 // Revisa ~60 s después de arrancar y luego cada 6 h si el servidor publica una
 // versión más nueva; si la hay, la deja descargada y verificada como pendiente.
+// Si la revisión o la descarga fallan (típico justo al prender la PC, con la
+// red todavía inestable), reintenta a los 15 min en vez de esperar 6 h.
 // Nunca reemplaza el exe aquí: eso solo pasa al prender la PC (index.js) o al
 // volver de hibernación (vigía).
-const REVISION_PRIMERA_MS   = 60 * 1000;
-const REVISION_INTERVALO_MS = 6 * 3600 * 1000;
+const REVISION_PRIMERA_MS     = 60 * 1000;
+const REVISION_INTERVALO_MS   = 6 * 3600 * 1000;
+const REVISION_REINTENTO_MS   = 15 * 60 * 1000;
 
 let aplicandoActualizacion = false;
 let revisionEnCurso = null;
 let ultimoEstadoRevision = null;
 let ultimoErrorRevision = null;
 
+// Cada revisión agenda la siguiente: 15 min si falló, 6 h si no.
+function agendarRevision(ms) {
+  setTimeout(revisarActualizacion, ms);
+}
+
 function revisarActualizacion() {
-  if (aplicandoActualizacion || revisionEnCurso) return;
+  // Ya hay una revisión en curso: ella misma agenda la siguiente (no se
+  // duplica el ciclo).
+  if (revisionEnCurso) return;
+  if (aplicandoActualizacion) {
+    agendarRevision(REVISION_REINTENTO_MS);
+    return;
+  }
+  let siguiente = REVISION_INTERVALO_MS;
   revisionEnCurso = act.revisarYDescargar({
     servidor: config.servidor, dirBase: CONFIG_DIR, versionActual: VERSION,
     log: function(m) { console.log('[' + ts() + '] ' + m); },
   }).then(function(r) {
-    // Solo se loguean los cambios: un servidor caído no llena el log cada 6 h.
+    // Solo se loguean los cambios: un servidor caído no llena el log cada 15 min.
     if (r.estado === 'error') {
-      if (r.error !== ultimoErrorRevision) console.log('[' + ts() + '] ✗ No se pudo revisar si hay actualización: ' + r.error);
+      siguiente = REVISION_REINTENTO_MS;
+      if (r.error !== ultimoErrorRevision) console.log('[' + ts() + '] ✗ No se pudo revisar si hay actualización: ' + r.error + ' — se reintenta cada 15 min');
       ultimoErrorRevision = r.error;
     } else {
       ultimoErrorRevision = null;
@@ -434,12 +450,15 @@ function revisarActualizacion() {
     ultimoEstadoRevision = r.estado;
     if (r.estado === 'descargado' && socket.connected) anunciarAgente();
   }).catch(function(e) {
+    siguiente = REVISION_REINTENTO_MS;
     console.error('[' + ts() + '] ✗ Revisión de actualización: ' + (e && e.message ? e.message : e));
-  }).finally(function() { revisionEnCurso = null; });
+  }).finally(function() {
+    revisionEnCurso = null;
+    agendarRevision(siguiente);
+  });
 }
 
-setTimeout(revisarActualizacion, REVISION_PRIMERA_MS);
-setInterval(revisarActualizacion, REVISION_INTERVALO_MS);
+agendarRevision(REVISION_PRIMERA_MS);
 
 function cerrarServidorLocal() {
   return new Promise(function(resolve) {

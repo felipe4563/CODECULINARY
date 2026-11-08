@@ -1,10 +1,15 @@
 // Punto de entrada — modo instalador o modo agente
 
-// Silencia el ExperimentalWarning del Fetch API global (usado por el
-// instalador para consultar sucursales) — no aporta nada al usuario final.
-process.on('warning', (warning) => {
-  if (warning.name !== 'ExperimentalWarning') console.warn(warning);
-});
+// Silencia el ExperimentalWarning del Fetch API global de Node 18 (lo usan el
+// instalador y la auto-actualización) — no aporta nada y en agente.log salía
+// como "ERROR:", confundiendo al leerlo. Un listener de 'warning' no alcanza
+// (Node lo imprime igual), así que se filtra en process.emitWarning.
+const emitWarningOriginal = process.emitWarning;
+process.emitWarning = function (warning, ...args) {
+  const tipo = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].type);
+  if (tipo === 'ExperimentalWarning' || (warning && warning.name === 'ExperimentalWarning')) return;
+  return emitWarningOriginal.call(process, warning, ...args);
+};
 
 const args = process.argv.slice(2);
 
