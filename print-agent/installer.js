@@ -139,38 +139,114 @@ function elevateAndRestart() {
 const SIDEBAR_ANCHO = 170;
 const PASOS_WIZARD = [
   { n: 1, label: 'Servidor' },
-  { n: 2, label: 'Configuracion' },
+  { n: 2, label: 'Configuración' },
   { n: 3, label: 'Cajas' },
 ];
 
-// Genera el panel lateral azul con los 3 pasos del wizard, resaltando el
-// paso actual. `alturaForm` es el alto total del form (el panel ocupa toda
-// la altura). Se agrega directo a $form en el PS generado.
+// Estilos visuales compartidos por los 3 pasos del asistente (solo
+// apariencia). Se inyectan al principio de cada script PowerShell: fuentes,
+// paleta y funciones que dan estilo a los botones, para que los tres
+// formularios se vean iguales sin repetir propiedades en cada uno.
+const VERSION_AGENTE = (() => { try { return require('./package.json').version; } catch { return ''; } })();
+
+function _estilosPS() {
+  return `
+[System.Windows.Forms.Application]::EnableVisualStyles()
+$fTitulo  = New-Object System.Drawing.Font("Segoe UI Semibold", 15)
+$fSub     = New-Object System.Drawing.Font("Segoe UI", 9.5)
+$fLabel   = New-Object System.Drawing.Font("Segoe UI Semibold", 9.5)
+$fInput   = New-Object System.Drawing.Font("Segoe UI", 10)
+$fBoton   = New-Object System.Drawing.Font("Segoe UI Semibold", 9.5)
+$fMarca   = New-Object System.Drawing.Font("Segoe UI Semibold", 10.5)
+$fVersion = $fSub
+$fPaso    = New-Object System.Drawing.Font("Segoe UI", 10)
+$fPasoAct = New-Object System.Drawing.Font("Segoe UI Semibold", 10)
+
+$cTitulo        = [System.Drawing.Color]::FromArgb(15, 23, 42)
+$cSub           = [System.Drawing.Color]::FromArgb(100, 116, 139)
+$cLabel         = [System.Drawing.Color]::FromArgb(51, 65, 85)
+$cLinea         = [System.Drawing.Color]::FromArgb(226, 232, 240)
+$cBorde         = [System.Drawing.Color]::FromArgb(203, 213, 225)
+$cPrimario      = [System.Drawing.Color]::FromArgb(37, 99, 235)
+$cPrimarioHover = [System.Drawing.Color]::FromArgb(29, 78, 216)
+$cPeligro       = [System.Drawing.Color]::FromArgb(220, 38, 38)
+$cLateral       = [System.Drawing.Color]::FromArgb(15, 23, 42)
+$cPasoInactivo  = [System.Drawing.Color]::FromArgb(148, 163, 184)
+$cPasoHecho     = [System.Drawing.Color]::FromArgb(134, 239, 172)
+
+function Estilo-Primario($b) {
+  $b.Font = $fBoton; $b.BackColor = $cPrimario; $b.ForeColor = [System.Drawing.Color]::White
+  $b.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+  $b.FlatAppearance.BorderSize = 0
+  $b.FlatAppearance.MouseOverBackColor = $cPrimarioHover
+  $b.Cursor = [System.Windows.Forms.Cursors]::Hand
+}
+function Estilo-Secundario($b) {
+  $b.Font = $fBoton; $b.BackColor = [System.Drawing.Color]::White; $b.ForeColor = $cLabel
+  $b.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+  $b.FlatAppearance.BorderColor = $cBorde
+  $b.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(241, 245, 249)
+  $b.Cursor = [System.Windows.Forms.Cursors]::Hand
+}
+function Estilo-Peligro($b) {
+  $b.Font = $fBoton; $b.BackColor = [System.Drawing.Color]::White; $b.ForeColor = $cPeligro
+  $b.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+  $b.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(252, 165, 165)
+  $b.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(254, 242, 242)
+  $b.Cursor = [System.Windows.Forms.Cursors]::Hand
+}
+`;
+}
+
+// Panel lateral oscuro: marca y versión arriba, y los 3 pasos del asistente.
+// El paso actual va en blanco con una barra de acento a la izquierda; los ya
+// hechos llevan una marca verde. `alturaForm` es el alto total del form.
 function _sidebarPS(pasoActual, alturaForm) {
   const itemsPS = PASOS_WIZARD.map((p) => {
     const activo = p.n === pasoActual;
     const completado = p.n < pasoActual;
-    const marcador = completado ? 'OK' : String(p.n) + '.';
-    const colorTexto = activo
-      ? '[System.Drawing.Color]::White'
-      : '[System.Drawing.Color]::FromArgb(147, 173, 227)';
-    const fontStyle = activo ? '[System.Drawing.FontStyle]::Bold' : '[System.Drawing.FontStyle]::Regular';
-    const y = 40 + (p.n - 1) * 42;
-    return `
+    const marcador = completado ? '✓' : String(p.n);
+    const colorTexto = activo ? '[System.Drawing.Color]::White' : (completado ? '$cPasoHecho' : '$cPasoInactivo');
+    const fuente = activo ? '$fPasoAct' : '$fPaso';
+    const y = 84 + (p.n - 1) * 38;
+    const acento = activo ? `
+$acento${p.n} = New-Object System.Windows.Forms.Panel
+$acento${p.n}.BackColor = $cPrimario
+$acento${p.n}.Location  = New-Object System.Drawing.Point(0, ${y})
+$acento${p.n}.Size      = New-Object System.Drawing.Size(4, 28)
+$panelLateral.Controls.Add($acento${p.n})` : '';
+    return `${acento}
 $lblPaso${p.n} = New-Object System.Windows.Forms.Label
-$lblPaso${p.n}.Text      = "${marcador}  ${p.label}"
-$lblPaso${p.n}.Font      = New-Object System.Drawing.Font("Segoe UI", 10, ${fontStyle})
+$lblPaso${p.n}.Text      = "${marcador}    ${p.label}"
+$lblPaso${p.n}.Font      = ${fuente}
 $lblPaso${p.n}.ForeColor = ${colorTexto}
-$lblPaso${p.n}.Location  = New-Object System.Drawing.Point(20, ${y})
-$lblPaso${p.n}.Size      = New-Object System.Drawing.Size(140, 26)
+$lblPaso${p.n}.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+$lblPaso${p.n}.Location  = New-Object System.Drawing.Point(22, ${y})
+$lblPaso${p.n}.Size      = New-Object System.Drawing.Size(140, 28)
 $panelLateral.Controls.Add($lblPaso${p.n})`;
   }).join('');
 
   return `
 $panelLateral = New-Object System.Windows.Forms.Panel
-$panelLateral.BackColor = [System.Drawing.Color]::FromArgb(30, 64, 175)
+$panelLateral.BackColor = $cLateral
 $panelLateral.Location  = New-Object System.Drawing.Point(0, 0)
 $panelLateral.Size      = New-Object System.Drawing.Size(${SIDEBAR_ANCHO}, ${alturaForm})
+
+$lblMarca = New-Object System.Windows.Forms.Label
+$lblMarca.Text      = "Agente de impresión"
+$lblMarca.Font      = $fMarca
+$lblMarca.ForeColor = [System.Drawing.Color]::White
+$lblMarca.Location  = New-Object System.Drawing.Point(20, 20)
+$lblMarca.Size      = New-Object System.Drawing.Size(150, 22)
+$panelLateral.Controls.Add($lblMarca)
+
+$lblVersion = New-Object System.Windows.Forms.Label
+$lblVersion.Text      = "${VERSION_AGENTE ? 'v' + VERSION_AGENTE : ''}"
+$lblVersion.Font      = $fVersion
+$lblVersion.ForeColor = $cPasoInactivo
+$lblVersion.Location  = New-Object System.Drawing.Point(20, 42)
+$lblVersion.Size      = New-Object System.Drawing.Size(140, 18)
+$panelLateral.Controls.Add($lblVersion)
 ${itemsPS}
 $form.Controls.Add($panelLateral)
 `;
@@ -184,9 +260,10 @@ function pedirServidor(defaults) {
   const ps = `
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+${_estilosPS()}
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text            = "Agente de Impresion Termica - Paso 1 de 3"
+$form.Text            = "Agente de impresión térmica — Paso 1 de 3"
 $form.ClientSize      = New-Object System.Drawing.Size(670, 210)
 $form.StartPosition   = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
@@ -195,51 +272,48 @@ $form.MinimizeBox     = $false
 $form.BackColor       = [System.Drawing.Color]::White
 ${_sidebarPS(1, 210)}
 $lblTitulo = New-Object System.Windows.Forms.Label
-$lblTitulo.Text      = "Configuracion del Agente de Impresion"
-$lblTitulo.Font      = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
-$lblTitulo.Location  = New-Object System.Drawing.Point(190, 18)
-$lblTitulo.Size      = New-Object System.Drawing.Size(450, 28)
-$lblTitulo.ForeColor = [System.Drawing.Color]::FromArgb(30, 64, 175)
+$lblTitulo.Text      = "Configura el agente de impresión"
+$lblTitulo.Font      = $fTitulo
+$lblTitulo.Location  = New-Object System.Drawing.Point(188, 14)
+$lblTitulo.Size      = New-Object System.Drawing.Size(460, 34)
+$lblTitulo.ForeColor = $cTitulo
 
 $lblSub = New-Object System.Windows.Forms.Label
 $lblSub.Text      = "Ingresa la URL del servidor para buscar las sucursales disponibles."
-$lblSub.Font      = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$lblSub.Font      = $fSub
 $lblSub.Location  = New-Object System.Drawing.Point(190, 48)
 $lblSub.Size      = New-Object System.Drawing.Size(450, 34)
-$lblSub.ForeColor = [System.Drawing.Color]::FromArgb(100, 100, 100)
+$lblSub.ForeColor = $cSub
 
 $lblServidor = New-Object System.Windows.Forms.Label
-$lblServidor.Text     = "URL del Servidor:"
-$lblServidor.Font     = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$lblServidor.Text     = "URL del servidor"
+$lblServidor.Font     = $fLabel
+$lblServidor.ForeColor = $cLabel
 $lblServidor.Location = New-Object System.Drawing.Point(190, 84)
 $lblServidor.Size     = New-Object System.Drawing.Size(200, 20)
 
 $tbServidor = New-Object System.Windows.Forms.TextBox
 $tbServidor.Text     = "${defServidor}"
-$tbServidor.Font     = New-Object System.Drawing.Font("Segoe UI", 9)
+$tbServidor.Font     = $fInput
 $tbServidor.Location = New-Object System.Drawing.Point(190, 106)
 $tbServidor.Size     = New-Object System.Drawing.Size(450, 26)
 
 $btnCancelar = New-Object System.Windows.Forms.Button
 $btnCancelar.Text         = "Cancelar"
-$btnCancelar.Font         = New-Object System.Drawing.Font("Segoe UI", 9)
 $btnCancelar.Location     = New-Object System.Drawing.Point(418, 146)
 $btnCancelar.Size         = New-Object System.Drawing.Size(100, 34)
-$btnCancelar.FlatStyle    = [System.Windows.Forms.FlatStyle]::Flat
 $btnCancelar.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
 
 $btnSiguiente = New-Object System.Windows.Forms.Button
-$btnSiguiente.Text         = "  Buscar >"
-$btnSiguiente.Font         = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$btnSiguiente.BackColor    = [System.Drawing.Color]::FromArgb(37, 99, 235)
-$btnSiguiente.ForeColor    = [System.Drawing.Color]::White
-$btnSiguiente.FlatStyle    = [System.Windows.Forms.FlatStyle]::Flat
+$btnSiguiente.Text         = "Buscar"
 $btnSiguiente.Location     = New-Object System.Drawing.Point(528, 146)
 $btnSiguiente.Size         = New-Object System.Drawing.Size(112, 34)
 $btnSiguiente.DialogResult = [System.Windows.Forms.DialogResult]::OK
 
 $form.Controls.AddRange(@($lblTitulo, $lblSub, $lblServidor, $tbServidor, $btnCancelar, $btnSiguiente))
 $form.AcceptButton = $btnSiguiente
+Estilo-Primario $btnSiguiente
+Estilo-Secundario $btnCancelar
 $form.CancelButton = $btnCancelar
 
 $result = $form.ShowDialog()
@@ -252,7 +326,7 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
 `;
 
   const tmpPs = path.join(os.tmpdir(), `agente_srv_form_${Date.now()}.ps1`);
-  writeFileSync(tmpPs, ps, { encoding: 'utf8' });
+  writeFileSync(tmpPs, '\ufeff' + ps, { encoding: 'utf8' });
 
   try {
     execFileSync('powershell.exe',
@@ -280,7 +354,7 @@ function showConfigForm(defaults, sucursales, instalado) {
   const idxAnchoCocina = esAngosto(defaults.ancho_cocina) ? 1 : 0;
   const outFileSafe = outFile.replace(/\\/g, '\\\\');
   const subtitulo   = instalado
-    ? 'El agente ya esta instalado. Puede actualizar la configuracion o desinstalarlo.'
+    ? 'El agente ya está instalado. Puedes actualizar la configuración o desinstalarlo.'
     : 'Elige la sucursal y las impresoras, y presiona Instalar.';
 
   const indiceDefecto = defaults.sucursal_id
@@ -296,16 +370,13 @@ function showConfigForm(defaults, sucursales, instalado) {
     btnDesinstalarPS = '\n'
       + '$btnDesinstalar = New-Object System.Windows.Forms.Button\n'
       + '$btnDesinstalar.Text      = "Desinstalar"\n'
-      + '$btnDesinstalar.Font      = New-Object System.Drawing.Font("Segoe UI", 9)\n'
-      + '$btnDesinstalar.BackColor = [System.Drawing.Color]::FromArgb(220, 38, 38)\n'
-      + '$btnDesinstalar.ForeColor = [System.Drawing.Color]::White\n'
-      + '$btnDesinstalar.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat\n'
       + '$btnDesinstalar.Location  = New-Object System.Drawing.Point(190, 314)\n'
       + '$btnDesinstalar.Size      = New-Object System.Drawing.Size(115, 34)\n'
+      + 'Estilo-Peligro $btnDesinstalar\n'
       + '$btnDesinstalar.Add_Click({\n'
       + '  $confirm = [System.Windows.Forms.MessageBox]::Show(\n'
-      + '    "Desea desinstalar el agente de impresion?",\n'
-      + '    "Confirmar desinstalacion",\n'
+      + '    "¿Deseas desinstalar el agente de impresión?",\n'
+      + '    "Confirmar desinstalación",\n'
       + '    [System.Windows.Forms.MessageBoxButtons]::YesNo,\n'
       + '    [System.Windows.Forms.MessageBoxIcon]::Warning\n'
       + '  )\n'
@@ -320,45 +391,47 @@ function showConfigForm(defaults, sucursales, instalado) {
   const ps = `
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+${_estilosPS()}
 
 $printers = @([System.Drawing.Printing.PrinterSettings]::InstalledPrinters)
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text            = "Agente de Impresion Termica - Paso 2 de 3"
-$form.ClientSize      = New-Object System.Drawing.Size(670, 396)
+$form.Text            = "Agente de impresión térmica — Paso 2 de 3"
+$form.ClientSize      = New-Object System.Drawing.Size(670, 372)
 $form.StartPosition   = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
 $form.MaximizeBox     = $false
 $form.MinimizeBox     = $false
 $form.BackColor       = [System.Drawing.Color]::White
-${_sidebarPS(2, 396)}
+${_sidebarPS(2, 372)}
 $lblTitulo = New-Object System.Windows.Forms.Label
-$lblTitulo.Text      = "Configuracion del Agente de Impresion"
-$lblTitulo.Font      = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
-$lblTitulo.Location  = New-Object System.Drawing.Point(190, 18)
-$lblTitulo.Size      = New-Object System.Drawing.Size(450, 28)
-$lblTitulo.ForeColor = [System.Drawing.Color]::FromArgb(30, 64, 175)
+$lblTitulo.Text      = "Configura el agente de impresión"
+$lblTitulo.Font      = $fTitulo
+$lblTitulo.Location  = New-Object System.Drawing.Point(188, 14)
+$lblTitulo.Size      = New-Object System.Drawing.Size(460, 34)
+$lblTitulo.ForeColor = $cTitulo
 
 $lblSub = New-Object System.Windows.Forms.Label
 $lblSub.Text      = "${subtitulo}"
-$lblSub.Font      = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$lblSub.Font      = $fSub
 $lblSub.Location  = New-Object System.Drawing.Point(190, 48)
-$lblSub.Size      = New-Object System.Drawing.Size(450, 18)
-$lblSub.ForeColor = [System.Drawing.Color]::FromArgb(100, 100, 100)
+$lblSub.Size      = New-Object System.Drawing.Size(450, 20)
+$lblSub.ForeColor = $cSub
 
 $sep1 = New-Object System.Windows.Forms.Panel
-$sep1.BackColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
-$sep1.Location  = New-Object System.Drawing.Point(190, 72)
+$sep1.BackColor = $cLinea
+$sep1.Location  = New-Object System.Drawing.Point(190, 74)
 $sep1.Size      = New-Object System.Drawing.Size(450, 1)
 
 $lblSucursal = New-Object System.Windows.Forms.Label
-$lblSucursal.Text     = "Sucursal:"
-$lblSucursal.Font     = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$lblSucursal.Text     = "Sucursal"
+$lblSucursal.Font     = $fLabel
+$lblSucursal.ForeColor = $cLabel
 $lblSucursal.Location = New-Object System.Drawing.Point(190, 84)
 $lblSucursal.Size     = New-Object System.Drawing.Size(300, 20)
 
 $cbSucursal = New-Object System.Windows.Forms.ComboBox
-$cbSucursal.Font          = New-Object System.Drawing.Font("Segoe UI", 9)
+$cbSucursal.Font          = $fInput
 $cbSucursal.Location      = New-Object System.Drawing.Point(190, 106)
 $cbSucursal.Size          = New-Object System.Drawing.Size(450, 26)
 $cbSucursal.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
@@ -367,13 +440,14 @@ if (${indiceDefecto} -ge 0) { $cbSucursal.SelectedIndex = ${indiceDefecto} }
 elseif ($cbSucursal.Items.Count -gt 0) { $cbSucursal.SelectedIndex = 0 }
 
 $lblCaja = New-Object System.Windows.Forms.Label
-$lblCaja.Text     = "Impresora de Caja (recibos):"
-$lblCaja.Font     = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$lblCaja.Text     = "Impresora de caja (recibos)"
+$lblCaja.Font     = $fLabel
+$lblCaja.ForeColor = $cLabel
 $lblCaja.Location = New-Object System.Drawing.Point(190, 146)
 $lblCaja.Size     = New-Object System.Drawing.Size(300, 20)
 
 $cbCaja = New-Object System.Windows.Forms.ComboBox
-$cbCaja.Font          = New-Object System.Drawing.Font("Segoe UI", 9)
+$cbCaja.Font          = $fInput
 $cbCaja.Location      = New-Object System.Drawing.Point(190, 168)
 $cbCaja.Size          = New-Object System.Drawing.Size(320, 26)
 $cbCaja.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDown
@@ -382,13 +456,14 @@ $cbCaja.Text = "${defCaja}"
 if ($cbCaja.Text -eq "" -and $cbCaja.Items.Count -gt 0) { $cbCaja.SelectedIndex = 0 }
 
 $lblAnchoCaja = New-Object System.Windows.Forms.Label
-$lblAnchoCaja.Text     = "Papel:"
-$lblAnchoCaja.Font     = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$lblAnchoCaja.Text     = "Papel"
+$lblAnchoCaja.Font     = $fLabel
+$lblAnchoCaja.ForeColor = $cLabel
 $lblAnchoCaja.Location = New-Object System.Drawing.Point(520, 146)
 $lblAnchoCaja.Size     = New-Object System.Drawing.Size(120, 20)
 
 $cbAnchoCaja = New-Object System.Windows.Forms.ComboBox
-$cbAnchoCaja.Font          = New-Object System.Drawing.Font("Segoe UI", 9)
+$cbAnchoCaja.Font          = $fInput
 $cbAnchoCaja.Location      = New-Object System.Drawing.Point(520, 168)
 $cbAnchoCaja.Size          = New-Object System.Drawing.Size(120, 26)
 $cbAnchoCaja.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
@@ -396,13 +471,14 @@ $cbAnchoCaja.Items.AddRange(@("80 mm", "58 / 55 mm"))
 $cbAnchoCaja.SelectedIndex = ${idxAnchoCaja}
 
 $lblCocina = New-Object System.Windows.Forms.Label
-$lblCocina.Text     = "Impresora de Cocina (comandas):"
-$lblCocina.Font     = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$lblCocina.Text     = "Impresora de cocina (comandas)"
+$lblCocina.Font     = $fLabel
+$lblCocina.ForeColor = $cLabel
 $lblCocina.Location = New-Object System.Drawing.Point(190, 210)
 $lblCocina.Size     = New-Object System.Drawing.Size(300, 20)
 
 $cbCocina = New-Object System.Windows.Forms.ComboBox
-$cbCocina.Font          = New-Object System.Drawing.Font("Segoe UI", 9)
+$cbCocina.Font          = $fInput
 $cbCocina.Location      = New-Object System.Drawing.Point(190, 232)
 $cbCocina.Size          = New-Object System.Drawing.Size(320, 26)
 $cbCocina.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDown
@@ -411,13 +487,14 @@ $cbCocina.Text = "${defCocina}"
 if ($cbCocina.Text -eq "" -and $cbCocina.Items.Count -gt 0) { $cbCocina.SelectedIndex = 0 }
 
 $lblAnchoCocina = New-Object System.Windows.Forms.Label
-$lblAnchoCocina.Text     = "Papel:"
-$lblAnchoCocina.Font     = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$lblAnchoCocina.Text     = "Papel"
+$lblAnchoCocina.Font     = $fLabel
+$lblAnchoCocina.ForeColor = $cLabel
 $lblAnchoCocina.Location = New-Object System.Drawing.Point(520, 210)
 $lblAnchoCocina.Size     = New-Object System.Drawing.Size(120, 20)
 
 $cbAnchoCocina = New-Object System.Windows.Forms.ComboBox
-$cbAnchoCocina.Font          = New-Object System.Drawing.Font("Segoe UI", 9)
+$cbAnchoCocina.Font          = $fInput
 $cbAnchoCocina.Location      = New-Object System.Drawing.Point(520, 232)
 $cbAnchoCocina.Size          = New-Object System.Drawing.Size(120, 26)
 $cbAnchoCocina.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
@@ -425,24 +502,18 @@ $cbAnchoCocina.Items.AddRange(@("80 mm", "58 / 55 mm"))
 $cbAnchoCocina.SelectedIndex = ${idxAnchoCocina}
 
 $sep2 = New-Object System.Windows.Forms.Panel
-$sep2.BackColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
-$sep2.Location  = New-Object System.Drawing.Point(190, 272)
+$sep2.BackColor = $cLinea
+$sep2.Location  = New-Object System.Drawing.Point(190, 280)
 $sep2.Size      = New-Object System.Drawing.Size(450, 1)
 
 $btnCancelar = New-Object System.Windows.Forms.Button
 $btnCancelar.Text         = "Cancelar"
-$btnCancelar.Font         = New-Object System.Drawing.Font("Segoe UI", 9)
 $btnCancelar.Location     = New-Object System.Drawing.Point(418, 314)
 $btnCancelar.Size         = New-Object System.Drawing.Size(100, 34)
-$btnCancelar.FlatStyle    = [System.Windows.Forms.FlatStyle]::Flat
 $btnCancelar.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
 
 $btnInstalar = New-Object System.Windows.Forms.Button
-$btnInstalar.Text         = "  Instalar"
-$btnInstalar.Font         = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$btnInstalar.BackColor    = [System.Drawing.Color]::FromArgb(37, 99, 235)
-$btnInstalar.ForeColor    = [System.Drawing.Color]::White
-$btnInstalar.FlatStyle    = [System.Windows.Forms.FlatStyle]::Flat
+$btnInstalar.Text         = "Instalar"
 $btnInstalar.Location     = New-Object System.Drawing.Point(528, 314)
 $btnInstalar.Size         = New-Object System.Drawing.Size(112, 34)
 $btnInstalar.DialogResult = [System.Windows.Forms.DialogResult]::OK
@@ -455,6 +526,8 @@ $form.Controls.AddRange(@(
   $sep2, $btnCancelar, $btnInstalar
 ))
 $form.AcceptButton = $btnInstalar
+Estilo-Primario $btnInstalar
+Estilo-Secundario $btnCancelar
 $form.CancelButton = $btnCancelar
 
 ${btnDesinstalarPS}
@@ -470,7 +543,7 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
 `;
 
   const tmpPs = path.join(os.tmpdir(), `agente_form_${Date.now()}.ps1`);
-  writeFileSync(tmpPs, ps, { encoding: 'utf8' });
+  writeFileSync(tmpPs, '\ufeff' + ps, { encoding: 'utf8' });
 
   try {
     execFileSync('powershell.exe',
@@ -520,9 +593,10 @@ function pedirCajas(cajas, defaults) {
   const ps = `
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+${_estilosPS()}
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text            = "Agente de Impresion Termica - Paso 3 de 3"
+$form.Text            = "Agente de impresión térmica — Paso 3 de 3"
 $form.ClientSize      = New-Object System.Drawing.Size(670, 280)
 $form.StartPosition   = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
@@ -531,29 +605,30 @@ $form.MinimizeBox     = $false
 $form.BackColor       = [System.Drawing.Color]::White
 ${_sidebarPS(3, 280)}
 $lblTitulo = New-Object System.Windows.Forms.Label
-$lblTitulo.Text      = "Esta sucursal tiene mas de una caja"
-$lblTitulo.Font      = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
-$lblTitulo.Location  = New-Object System.Drawing.Point(190, 18)
-$lblTitulo.Size      = New-Object System.Drawing.Size(450, 28)
-$lblTitulo.ForeColor = [System.Drawing.Color]::FromArgb(30, 64, 175)
+$lblTitulo.Text      = "Esta sucursal tiene más de una caja"
+$lblTitulo.Font      = $fTitulo
+$lblTitulo.Location  = New-Object System.Drawing.Point(188, 14)
+$lblTitulo.Size      = New-Object System.Drawing.Size(460, 34)
+$lblTitulo.ForeColor = $cTitulo
 
 $lblSub = New-Object System.Windows.Forms.Label
-$lblSub.Text      = "Marca a que caja(s) pertenece esta PC - puede ser mas de una si esta impresora atiende varios puntos de cobro."
-$lblSub.Font      = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$lblSub.Text      = "Marca a qué caja(s) pertenece esta PC. Puede ser más de una si esta impresora atiende varios puntos de cobro."
+$lblSub.Font      = $fSub
 $lblSub.Location  = New-Object System.Drawing.Point(190, 48)
 $lblSub.Size      = New-Object System.Drawing.Size(450, 34)
-$lblSub.ForeColor = [System.Drawing.Color]::FromArgb(100, 100, 100)
+$lblSub.ForeColor = $cSub
 
 $lblCaja = New-Object System.Windows.Forms.Label
-$lblCaja.Text     = "Cajas:"
-$lblCaja.Font     = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$lblCaja.Location = New-Object System.Drawing.Point(190, 84)
+$lblCaja.Text     = "Cajas"
+$lblCaja.Font     = $fLabel
+$lblCaja.ForeColor = $cLabel
+$lblCaja.Location = New-Object System.Drawing.Point(190, 92)
 $lblCaja.Size     = New-Object System.Drawing.Size(200, 20)
 
 $clbCajas = New-Object System.Windows.Forms.CheckedListBox
-$clbCajas.Font          = New-Object System.Drawing.Font("Segoe UI", 9)
-$clbCajas.Location      = New-Object System.Drawing.Point(190, 106)
-$clbCajas.Size          = New-Object System.Drawing.Size(450, 110)
+$clbCajas.Font          = $fInput
+$clbCajas.Location      = New-Object System.Drawing.Point(190, 114)
+$clbCajas.Size          = New-Object System.Drawing.Size(450, 100)
 $clbCajas.CheckOnClick  = $true
 foreach ($n in @(${nombresCajasPS})) { $clbCajas.Items.Add($n) | Out-Null }
 $indicesDefecto = @(${indicesDefectoPS})
@@ -565,18 +640,12 @@ if ($indicesDefecto.Count -gt 0) {
 
 $btnCancelar = New-Object System.Windows.Forms.Button
 $btnCancelar.Text         = "Cancelar"
-$btnCancelar.Font         = New-Object System.Drawing.Font("Segoe UI", 9)
 $btnCancelar.Location     = New-Object System.Drawing.Point(418, 226)
 $btnCancelar.Size         = New-Object System.Drawing.Size(100, 34)
-$btnCancelar.FlatStyle    = [System.Windows.Forms.FlatStyle]::Flat
 $btnCancelar.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
 
 $btnInstalar = New-Object System.Windows.Forms.Button
-$btnInstalar.Text         = "  Instalar"
-$btnInstalar.Font         = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$btnInstalar.BackColor    = [System.Drawing.Color]::FromArgb(37, 99, 235)
-$btnInstalar.ForeColor    = [System.Drawing.Color]::White
-$btnInstalar.FlatStyle    = [System.Windows.Forms.FlatStyle]::Flat
+$btnInstalar.Text         = "Instalar"
 $btnInstalar.Location     = New-Object System.Drawing.Point(528, 226)
 $btnInstalar.Size         = New-Object System.Drawing.Size(112, 34)
 $btnInstalar.Add_Click({
@@ -589,6 +658,8 @@ $btnInstalar.Add_Click({
 })
 
 $form.Controls.AddRange(@($lblTitulo, $lblSub, $lblCaja, $clbCajas, $btnCancelar, $btnInstalar))
+Estilo-Primario $btnInstalar
+Estilo-Secundario $btnCancelar
 $form.CancelButton = $btnCancelar
 
 $result = $form.ShowDialog()
@@ -602,7 +673,7 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
 `;
 
   const tmpPs = path.join(os.tmpdir(), `agente_caja_form_${Date.now()}.ps1`);
-  writeFileSync(tmpPs, ps, { encoding: 'utf8' });
+  writeFileSync(tmpPs, '\ufeff' + ps, { encoding: 'utf8' });
 
   try {
     execFileSync('powershell.exe',
