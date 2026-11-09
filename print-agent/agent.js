@@ -109,6 +109,21 @@ console.log(`Caja     : ${config.impresora_caja}`);
 console.log(`Cocina   : ${config.impresora_cocina}`);
 console.log('===================================');
 
+// Si el exe se instaló desde un archivo descargado (WhatsApp, Drive,
+// navegador), trae la marca "descargado de internet" y las tareas programadas
+// se traban al lanzarlo (ver quitarMarcaInternet en actualizacion.js). El
+// agente corre como SYSTEM, así que se la quita a sí mismo (y al respaldo
+// .anterior.exe): desde el próximo reinicio las tareas vuelven a funcionar,
+// también en cajas instaladas antes de este arreglo.
+if (process.pkg) {
+  const rutasExe = act.rutas(CONFIG_DIR);
+  const quitadas = [rutasExe.exe, rutasExe.anterior].filter(act.quitarMarcaInternet);
+  if (quitadas.length) {
+    console.log('.. Se quitó la marca "descargado de internet" de ' + quitadas.map((r) => path.basename(r)).join(', ') +
+      ' (las tareas programadas ya no se trabarán al arrancar el agente)');
+  }
+}
+
 // ── Deduplicación ────────────────────────────────────────────────────────────
 // El mismo ticket puede llegar por dos canales (socket.io remoto y HTTP local
 // desde el navegador de esta misma PC). Se imprime una sola vez por
